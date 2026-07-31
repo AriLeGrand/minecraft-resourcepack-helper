@@ -1,0 +1,16 @@
+{
+    "name": "minecraft-resourcepack-helper",
+    "displayName": "Minecraft Resource Pack Helper",
+    "description": "Génère l'arborescence, gère les résolutions et exporte automatiquement les textures d'un Resource Pack Minecraft depuis Aseprite.",
+    "version": "1.0.0",
+    "author": {
+        "name": "Ari"
+    },
+    "contributes": {
+        "scripts": [
+            {
+                "path": "./main.lua"
+            }
+        ]
+    }
+}
