@@ -46,16 +46,16 @@ return function(plugin, State, McData, Scanner, Export, Extractor)
 
     local function doExportCurrentSprite(sprite)
         if not sprite then
-            app.alert("Aucun sprite actif.")
+            app.alert("No active sprite.")
             return false
         end
         if State.packPath == "" then
-            app.alert("Renseigne le dossier de destination.")
+            app.alert("Specify the destination folder.")
             return false
         end
         local itemId = dlg.data.itemName
         if not itemId or itemId == "" then
-            app.alert("Renseigne un nom de fichier.")
+            app.alert("Specify a file name.")
             return false
         end
         local exportProfile = currentExportProfile()
@@ -63,10 +63,10 @@ return function(plugin, State, McData, Scanner, Export, Extractor)
         local fullPath = Export.buildTexturePath(State.packPath, exportProfile, catDef, itemId)
         local ok, err = Export.exportSprite(sprite, fullPath)
         if ok then
-            app.alert("Exporté : " .. fullPath)
+            app.alert("Exported: " .. fullPath)
             return true
         else
-            app.alert("Erreur export : " .. tostring(err))
+            app.alert("Export error: " .. tostring(err))
             return false
         end
     end
@@ -76,9 +76,9 @@ return function(plugin, State, McData, Scanner, Export, Extractor)
         local catDef = currentCategoryDef()
         local items = Scanner.scanCategory(State.vanillaPath, profile, catDef)
         local options = items
-        if #options == 0 then options = {"(aucune texture)"} end
+        if #options == 0 then options = {"(no textures)"} end
         dlg:modify {id = "item", options = options}
-        dlg:modify {id = "scanInfo", text = string.format("%d texture(s) disponibles", #items)}
+        dlg:modify {id = "scanInfo", text = string.format("%d texture(s) available", #items)}
         if #items > 0 then
             State.item = items[1]
             dlg:modify {id = "itemName", text = items[1]}
@@ -88,16 +88,16 @@ return function(plugin, State, McData, Scanner, Export, Extractor)
     end
 
     local function doEditItem(itemId, previousItemId)
-        if not itemId or itemId == "" or itemId == "(aucune texture)" then return end
+        if not itemId or itemId == "" or itemId == "(no textures)" then return end
         if isSpriteValid(lastOpenedSprite) then
             if lastOpenedSprite.isModified then
                 local choice = app.alert {
-                    title = "Modifications non sauvegardées",
+                    title = "Unsaved Changes",
                     text = {
-                        "L'image actuelle a été modifiée.",
-                        "Voulez-vous la sauvegarder avant de l'écraser ?"
+                        "The current image has been modified.",
+                        "Do you want to save it before overwriting?"
                     },
-                    buttons = {"Sauvegarder et Exporter", "Ignorer les modifications", "Annuler"}
+                    buttons = {"Save and Export", "Discard Changes", "Cancel"}
                 }
                 if choice == 3 or choice == 0 or choice == nil then
                     State.item = previousItemId
@@ -132,20 +132,20 @@ return function(plugin, State, McData, Scanner, Export, Extractor)
             if fullVanillaPath and app.fs.isFile(fullVanillaPath) then
                 local scale = currentResizeScale(catDef)
                 local spr, openErr = Export.openVanillaResized(fullVanillaPath, scale)
-                if not spr then error(openErr or "Erreur d'ouverture inconnue.") end
+                if not spr then error(openErr or "Unknown opening error.") end
                 newSprite = spr
             else
                 newSprite = Export.createBlankSprite(State.resolution)
             end
             lastOpenedSprite = newSprite
         end)
-        if not ok then app.alert("Impossible d'ouvrir '" .. tostring(itemId) .. "' :" .. tostring(err)) end
+        if not ok then app.alert("Unable to open '" .. tostring(itemId) .. "': " .. tostring(err)) end
     end
 
     local function refreshInstalledVersions()
         local list = Extractor.scanInstalledVersions(State.mcRoot)
         if #list == 0 then
-            dlg:modify {id = "baseVersion", options = {"(aucune version détectée)"}}
+            dlg:modify {id = "baseVersion", options = {"(no versions detected)"}}
         else
             dlg:modify {id = "baseVersion", options = list}
             State.baseVersion = list[#list]
@@ -158,7 +158,7 @@ return function(plugin, State, McData, Scanner, Export, Extractor)
 
     dlg:combobox {
         id = "exportVersion",
-        label = "Version du pack :",
+        label = "Pack Version:",
         option = State.exportVersion,
         options = McData.order,
         onchange = function() State.exportVersion = dlg.data.exportVersion end
@@ -166,7 +166,7 @@ return function(plugin, State, McData, Scanner, Export, Extractor)
 
     dlg:combobox {
         id = "resolution",
-        label = "Résolution :",
+        label = "Resolution:",
         option = tostring(State.resolution),
         options = (function()
             local t = {}
@@ -178,7 +178,7 @@ return function(plugin, State, McData, Scanner, Export, Extractor)
 
     dlg:combobox {
         id = "guiEntityScale",
-        label = "Échelle GUIs / Entités :",
+        label = "GUIs / Entities Scale:",
         option = State.guiEntityScale,
         options = {"1x", "2x", "4x", "6x", "8x", "10x"},
         onchange = function() State.guiEntityScale = dlg.data.guiEntityScale end
@@ -186,21 +186,21 @@ return function(plugin, State, McData, Scanner, Export, Extractor)
 
     dlg:check {
         id = "showSetup",
-        text = "Configuration source (.jar vanilla)",
+        text = "Source Configuration (vanilla .jar)",
         selected = true,
         onclick = function() setGroupVisible(setupWidgetIds, dlg.data.showSetup) end
     }
 
     dlg:entry {
         id = "mcRoot",
-        label = ".minecraft :",
+        label = ".minecraft:",
         text = State.mcRoot,
         onchange = function() State.mcRoot = dlg.data.mcRoot end
     }
 
     dlg:button {
         id = "detectMc",
-        text = "Détecter + scanner mes versions",
+        text = "Detect + Scan Versions",
         onclick = function()
             local detected = Extractor.detectDefaultMinecraftDir()
             if detected ~= "" then
@@ -213,53 +213,53 @@ return function(plugin, State, McData, Scanner, Export, Extractor)
 
     dlg:combobox {
         id = "baseVersion",
-        label = "Version installée à extraire :",
+        label = "Installed Version to Extract:",
         option = State.baseVersion,
-        options = {"(clique sur Détecter)"},
+        options = {"(click Detect)"},
         onchange = function() State.baseVersion = dlg.data.baseVersion end
     }
 
     dlg:button {
         id = "extractBtn",
-        text = "Extraire les textures",
+        text = "Extract Textures",
         onclick = function()
             local ok, result = Extractor.extractTextures(State.mcRoot, State.baseVersion, State.cacheBaseDir)
             if ok then
                 State.vanillaPath = result
-                dlg:modify {id = "extractStatus", text = "✓ Textures extraites avec succès."}
+                dlg:modify {id = "extractStatus", text = "✓ Textures extracted successfully."}
                 refreshItemList()
             else
-                dlg:modify {id = "extractStatus", text = "✗ Échec (voir popup)."}
+                dlg:modify {id = "extractStatus", text = "✗ Failed (see popup)."}
                 app.alert(result)
             end
         end
     }
 
-    dlg:label {id = "extractStatus", label = "", text = "Aucune extraction effectuée."}
+    dlg:label {id = "extractStatus", label = "", text = "No extraction performed."}
 
     dlg:check {
         id = "showDest",
-        text = "Dossier de destination du pack",
+        text = "Pack Destination Folder",
         selected = true,
         onclick = function() setGroupVisible(destWidgetIds, dlg.data.showDest) end
     }
 
     dlg:entry {
         id = "packPath",
-        label = "Destination :",
+        label = "Destination:",
         text = State.packPath,
         onchange = function()
             State.packPath = dlg.data.packPath
             local shortName = app.fs.fileTitle(State.packPath)
-            dlg:modify {id = "packPathShort", text = "Pack actif : " .. (shortName ~= "" and shortName or "(non défini)")}
+            dlg:modify {id = "packPathShort", text = "Active Pack: " .. (shortName ~= "" and shortName or "(not set)")}
         end
     }
 
     dlg:file {
         id = "packBrowse",
         label = "",
-        text = "Parcourir...",
-        title = "Sélectionne un fichier à la racine du pack de destination",
+        text = "Browse...",
+        title = "Select a file at the root of the destination resource pack",
         open = true,
         onchange = function()
             local picked = dlg.data.packBrowse
@@ -267,18 +267,18 @@ return function(plugin, State, McData, Scanner, Export, Extractor)
                 State.packPath = app.fs.filePath(picked)
                 dlg:modify {id = "packPath", text = State.packPath}
                 local shortName = app.fs.fileTitle(State.packPath)
-                dlg:modify {id = "packPathShort", text = "Pack actif : " .. (shortName ~= "" and shortName or "(non défini)")}
+                dlg:modify {id = "packPathShort", text = "Active Pack: " .. (shortName ~= "" and shortName or "(not set)")}
             end
         end
     }
 
-    dlg:label {id = "packPathShort", label = "", text = "Pack actif : (non défini)"}
+    dlg:label {id = "packPathShort", label = "", text = "Active Pack: (not set)"}
 
-    dlg:separator {text = "Catalogue"}
+    dlg:separator {text = "Catalog"}
 
     dlg:combobox {
         id = "category",
-        label = "Catégorie :",
+        label = "Category:",
         option = State.category,
         options = (function()
             local t = {}
@@ -293,9 +293,9 @@ return function(plugin, State, McData, Scanner, Export, Extractor)
 
     dlg:combobox {
         id = "item",
-        label = "Élément :",
+        label = "Element:",
         option = "",
-        options = {"(configure la source ci-dessus)"},
+        options = {"(configure source above)"},
         onchange = function()
             local previousItemId = State.item
             local selected = dlg.data.item
@@ -305,11 +305,11 @@ return function(plugin, State, McData, Scanner, Export, Extractor)
         end
     }
 
-    dlg:label {id = "scanInfo", label = "", text = "0 texture(s) disponibles"}
+    dlg:label {id = "scanInfo", label = "", text = "0 texture(s) available"}
 
     dlg:entry {
         id = "itemName",
-        label = "Nom du fichier :",
+        label = "File Name:",
         text = State.item or ""
     }
 
@@ -317,30 +317,30 @@ return function(plugin, State, McData, Scanner, Export, Extractor)
 
     dlg:button {
         id = "exportBtn",
-        text = "Sauvegarder et Exporter",
+        text = "Save and Export",
         onclick = function() doExportCurrentSprite(app.activeSprite) end
     }
 
     dlg:file {
         id = "packIconFile",
-        label = "Icône (pack.png) :",
-        title = "Choisis une image PNG (idéalement 128x128 ou 256x256)",
+        label = "Icon (pack.png):",
+        title = "Choose a PNG image (ideally 128x128 or 256x256)",
         open = true
     }
 
     dlg:button {
         id = "copyIconBtn",
-        text = "Copier comme pack.png",
+        text = "Copy as pack.png",
         onclick = function()
             if State.packPath == "" then
-                app.alert("Renseigne le dossier de destination.")
+                app.alert("Specify the destination folder.")
                 return
             end
             local ok, result = Export.copyPackIcon(dlg.data.packIconFile, State.packPath)
             if ok then
-                app.alert("pack.png créé : " .. result)
+                app.alert("pack.png created: " .. result)
             else
-                app.alert("Erreur : " .. tostring(result))
+                app.alert("Error: " .. tostring(result))
             end
         end
     }
@@ -349,25 +349,25 @@ return function(plugin, State, McData, Scanner, Export, Extractor)
 
     dlg:entry {
         id = "description",
-        label = "Description :",
+        label = "Description:",
         text = State.description,
         onchange = function() State.description = dlg.data.description end
     }
 
     dlg:button {
         id = "mcmetaBtn",
-        text = "Générer pack.mcmeta",
+        text = "Generate pack.mcmeta",
         onclick = function()
             if State.packPath == "" then
-                app.alert("Renseigne le dossier de destination.")
+                app.alert("Specify the destination folder.")
                 return
             end
             local packFormat = currentExportProfile().pack_format
             local ok, result = Export.generateMcmeta(State.packPath, dlg.data.description, packFormat)
             if ok then
-                app.alert("pack.mcmeta généré (pack_format=" .. packFormat .. ").")
+                app.alert("pack.mcmeta generated (pack_format=" .. packFormat .. ").")
             else
-                app.alert("Erreur : " .. tostring(result))
+                app.alert("Error: " .. tostring(result))
             end
         end
     }

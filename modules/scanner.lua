@@ -27,8 +27,8 @@ local function walk(fullPath, relPath, results)
     end
 end
 
--- folderProfile : table avec les champs block_folder/item_folder/etc,
--- peut venir soit de McData.versions[x] soit de McData.guessFolderStyle(x)
+-- folderProfile: table with block_folder/item_folder/etc fields,
+-- can come either from McData.versions[x] or McData.guessFolderStyle(x)
 function M.scanCategory(vanillaRoot, folderProfile, categoryDef)
     local subfolder = folderProfile[categoryDef.subfolder_field]
     local basePath = app.fs.joinPath(vanillaRoot, "assets", "minecraft", "textures", subfolder)

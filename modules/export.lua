@@ -18,11 +18,11 @@ function M.ensureDirRecursive(path)
     end
 end
 
--- === Point 4 : export "allégé" ===
--- Ne crée QUE le sous-dossier nécessaire pour CETTE texture précise
--- (ex: assets/minecraft/textures/item/), jamais l'arborescence complète.
--- C'est déjà garanti par construction : on ne crée les dossiers que juste
--- avant d'écrire le fichier ciblé, jamais en amont/en bloc.
+-- === Point 4: "Lightweight" export ===
+-- Creates ONLY the subfolder needed for THIS specific texture
+-- (e.g., assets/minecraft/textures/item/), never the full directory tree.
+-- This is already guaranteed by design: folders are created just
+-- before writing the target file, never upstream/in bulk.
 function M.buildTexturePath(packRoot, folderProfile, categoryDef, itemId)
     local subfolder = folderProfile[categoryDef.subfolder_field]
     local fullPath = app.fs.joinPath(packRoot, "assets", "minecraft", "textures", subfolder, itemId .. ".png")
@@ -43,21 +43,21 @@ function M.nearestResize(srcImage, newW, newH)
     return dst
 end
 
--- === Redimensionnement proportionnel (au lieu d'un carré forcé) ===
+-- === Proportional resizing (instead of a forced square) ===
 --
--- Logique :
---   1. On lit width/height RÉELS de l'image vanilla source (pas d'hypothèse
---      de carré 16x16 — une entité peut être 64x32, une GUI 256x256, etc.)
---   2. On calcule un multiplicateur = résolution_choisie / 16
---      (16 = résolution de base vanilla de référence pour TOUTES les
---      catégories : c'est la valeur qui sert d'échelle, pas la taille
---      finale de l'image).
---   3. On multiplie width et height d'origine par ce multiplicateur,
---      SANS jamais forcer une taille carrée.
+-- Logic:
+--   1. Read the ACTUAL width/height of the source vanilla image (no assumption
+--      of a 16x16 square — an entity can be 64x32, a GUI 256x256, etc.)
+--   2. Calculate a multiplier = chosen_resolution / 16
+--      (16 = reference vanilla base resolution for ALL
+--      categories: it's the value used as a scale, not the final
+--      image size).
+--   3. Multiply the original width and height by this multiplier,
+--      WITHOUT ever forcing a square size.
 function M.openVanillaResized(fullPngPath, scale)
     local srcSprite = Sprite {fromFile = fullPngPath}
     if not srcSprite then
-        return nil, "Impossible d'ouvrir le fichier vanilla."
+        return nil, "Unable to open the vanilla file."
     end
 
     local multiplier = tonumber(scale) or 1
@@ -93,7 +93,7 @@ end
 
 function M.exportSprite(sprite, fullPath)
     if not sprite then
-        return false, "Aucun sprite actif."
+        return false, "No active sprite."
     end
     local ok, err =
         pcall(
@@ -116,24 +116,24 @@ function M.generateMcmeta(packRoot, description, packFormat)
     )
     local file, err = io.open(mcmetaPath, "wb")
     if not file then
-        return false, "Impossible d'écrire pack.mcmeta : " .. tostring(err)
+        return false, "Unable to write pack.mcmeta: " .. tostring(err)
     end
     file:write(content)
     file:close()
     return true, mcmetaPath
 end
 
--- === Point 3 : copie de l'icône du pack ===
--- Simple copie binaire (io.open en mode "rb"/"wb"), fonctionne pour n'importe
--- quel PNG. Ne redimensionne PAS l'image : recommande à l'utilisateur de
--- fournir directement une image 128x128 ou 256x256 (pas de garantie de
--- résultat correct sinon, mais Minecraft accepte diverses tailles).
+-- === Point 3: Pack icon copy ===
+-- Simple binary copy (io.open in "rb"/"wb" mode), works for any
+-- PNG. Does NOT resize the image: recommends the user to
+-- provide a 128x128 or 256x256 image directly (otherwise no guarantee
+-- of correct results, though Minecraft accepts various sizes).
 function M.copyPackIcon(sourceImagePath, packRoot)
     if not sourceImagePath or sourceImagePath == "" then
-        return false, "Aucune image sélectionnée."
+        return false, "No image selected."
     end
     if not app.fs.isFile(sourceImagePath) then
-        return false, "Fichier source introuvable."
+        return false, "Source file not found."
     end
 
     M.ensureDirRecursive(packRoot)
@@ -141,14 +141,14 @@ function M.copyPackIcon(sourceImagePath, packRoot)
 
     local srcFile, err1 = io.open(sourceImagePath, "rb")
     if not srcFile then
-        return false, "Lecture impossible : " .. tostring(err1)
+        return false, "Cannot read: " .. tostring(err1)
     end
     local data = srcFile:read("*a")
     srcFile:close()
 
     local dstFile, err2 = io.open(destPath, "wb")
     if not dstFile then
-        return false, "Écriture impossible : " .. tostring(err2)
+        return false, "Cannot write: " .. tostring(err2)
     end
     dstFile:write(data)
     dstFile:close()

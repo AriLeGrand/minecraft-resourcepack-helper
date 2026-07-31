@@ -42,10 +42,10 @@ function M.detectDefaultMinecraftDir()
     return ""
 end
 
--- === NOUVEAU : scan des versions réellement installées ===
--- Utilise app.fs.listFiles + app.fs.isDirectory pour lister les
--- sous-dossiers de .minecraft/versions/, et ne garde que ceux qui
--- contiennent un .jar du même nom (filtre anti-dossiers "poubelle").
+-- === NEW: scan for actually installed versions ===
+-- Uses app.fs.listFiles + app.fs.isDirectory to list
+-- subfolders of .minecraft/versions/, and keeps only those that
+-- contain a .jar of the same name ("trash" folder anti-filter).
 function M.scanInstalledVersions(mcRoot)
     local results = {}
     if not mcRoot or mcRoot == "" then
@@ -105,7 +105,7 @@ local function runExtraction(jarPath, destDir)
     elseif osName == "macos" or osName == "linux" then
         cmd = string.format('unzip -o "%s" "assets/minecraft/textures/*" -d "%s" >/dev/null 2>&1', jarPath, destDir)
     else
-        return false, "Système d'exploitation non reconnu."
+        return false, "Unrecognized operating system."
     end
     local ok = os.execute(cmd)
     return (ok == true) or (ok == 0), cmd
@@ -113,16 +113,16 @@ end
 
 function M.extractTextures(mcRoot, versionFolder, cacheBaseDir)
     if not mcRoot or mcRoot == "" then
-        return false, "Dossier .minecraft non renseigné."
+        return false, ".minecraft folder not specified."
     end
     if not versionFolder or versionFolder == "" then
-        return false, "Aucune version sélectionnée."
+        return false, "No version selected."
     end
 
     local jarPath = M.buildJarPath(mcRoot, versionFolder)
     if not app.fs.isFile(jarPath) then
         return false, string.format(
-            "Fichier .jar introuvable :\n%s\n\nLance cette version au moins une fois via le launcher.",
+            ".jar file not found:\n%s\n\nRun this version at least once through the launcher.",
             jarPath
         )
     end
@@ -132,12 +132,12 @@ function M.extractTextures(mcRoot, versionFolder, cacheBaseDir)
 
     local success, info = runExtraction(jarPath, destDir)
     if not success then
-        return false, "Échec de l'extraction (commande système). Vérifie que 'tar'/'unzip' est disponible."
+        return false, "Extraction failed (system command). Check that 'tar'/'unzip' is available."
     end
 
     local checkPath = app.fs.joinPath(destDir, "assets", "minecraft", "textures")
     if not app.fs.isDirectory(checkPath) then
-        return false, "Extraction terminée mais aucune texture trouvée dans ce .jar."
+        return false, "Extraction completed but no textures found in this .jar."
     end
 
     return true, destDir

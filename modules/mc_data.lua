@@ -1,8 +1,8 @@
 -- modules/mc_data.lua
--- Table de référence des versions Minecraft "curatées" (utilisées pour le
--- pack_format et le format d'export), + une fonction de déduction du format
--- de dossiers (block/blocks) pour n'importe quelle version installée
--- (y compris des versions qui ne sont pas dans notre liste curatée).
+-- Reference table of "curated" Minecraft versions (used for
+-- pack_format and export format), + a folder format deduction function
+-- (block/blocks) for any installed version
+-- (including versions not in our curated list).
 
 local M = {}
 
@@ -15,7 +15,7 @@ M.versions = {
         item_folder = "items",
         gui_folder = "gui",
         entity_folder = "entity",
-        note = "Format 1, valable de 1.6.1 à 1.8.9."
+        note = "Format 1, valid from 1.6.1 to 1.8.9."
     },
     ["1.12.2"] = {
         pack_format = 3,
@@ -23,7 +23,7 @@ M.versions = {
         item_folder = "items",
         gui_folder = "gui",
         entity_folder = "entity",
-        note = "Format 3, dernière version avant la Flattening."
+        note = "Format 3, last version before the Flattening."
     },
     ["1.16.5"] = {
         pack_format = 6,
@@ -31,7 +31,7 @@ M.versions = {
         item_folder = "item",
         gui_folder = "gui",
         entity_folder = "entity",
-        note = "Format 6, valable de 1.16.2 à 1.16.5."
+        note = "Format 6, valid from 1.16.2 to 1.16.5."
     },
     ["1.19.4"] = {
         pack_format = 13,
@@ -39,7 +39,7 @@ M.versions = {
         item_folder = "item",
         gui_folder = "gui",
         entity_folder = "entity",
-        note = "Format 13, spécifique à 1.19.4."
+        note = "Format 13, specific to 1.19.4."
     },
     ["1.20+"] = {
         pack_format = 15,
@@ -47,7 +47,7 @@ M.versions = {
         item_folder = "item",
         gui_folder = "gui",
         entity_folder = "entity",
-        note = "Format 15 pour 1.20/1.20.1. Vérifie le format exact pour 1.20.2+ / 1.21.x si besoin (change souvent)."
+        note = "Format 15 for 1.20/1.20.1. Check exact format for 1.20.2+ / 1.21.x if needed (changes frequently)."
     }
 }
 
@@ -60,15 +60,15 @@ M.categories = {
 
 M.resolutions = {16, 32, 64, 128, 256, 512}
 
--- Devine le mapping de dossiers (block vs blocks) pour N'IMPORTE QUELLE
--- version installée sur le PC (pas seulement celles de M.order), en se
--- basant sur la Flattening (1.13). Utilisé pour scanner le .jar "vanilla"
--- source, indépendamment de la version d'export choisie.
+-- Guesses the folder mapping (block vs blocks) for ANY
+-- version installed on the PC (not just those in M.order), based
+-- on the Flattening (1.13). Used to scan the source "vanilla" .jar,
+-- independently of the chosen export version.
 --
--- Limite assumée : les identifiants de snapshot (ex: "23w13a") ne sont pas
--- parsables en numéro de version -> on suppose alors le format "moderne"
--- (singulier), ce qui est correct pour la quasi-totalité des snapshots
--- conservés par le launcher (postérieurs à la Flattening de 2018).
+-- Assumed limitation: snapshot identifiers (e.g., "23w13a") cannot be
+-- parsed into version numbers -> it then assumes the "modern" format
+-- (singular), which is correct for almost all snapshots
+-- kept by the launcher (post-2018 Flattening).
 function M.guessFolderStyle(versionString)
     local major, minor = versionString:match("^(%d+)%.(%d+)")
     local isLegacy = false

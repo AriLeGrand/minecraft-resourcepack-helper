@@ -12,10 +12,10 @@ local Scanner = dofile(app.fs.joinPath(base, "modules", "scanner.lua"))
 local Export = dofile(app.fs.joinPath(base, "modules", "export.lua"))
 local Extractor = dofile(app.fs.joinPath(base, "modules", "extractor.lua"))
 
--- === État persistant pendant la session ===
--- baseVersion  : version installée utilisée UNIQUEMENT pour extraire le jar.
--- exportVersion: version choisie UNIQUEMENT pour le pack final (pack_format
---                + structure de dossiers en sortie).
+-- === Persistent state during session ===
+-- baseVersion   : installed version used ONLY to extract the jar.
+-- exportVersion : version chosen ONLY for the final pack (pack_format
+--                 + output folder structure).
 local State = {
     vanillaPath = "",
     packPath = "",
@@ -25,7 +25,7 @@ local State = {
     guiEntityScale = "1x",
     category = "Blocks",
     item = nil,
-    description = "Mon Resource Pack",
+    description = "My Resource Pack",
     mcRoot = Extractor.detectDefaultMinecraftDir(),
     cacheBaseDir = app.fs.joinPath(base, "cache")
 }
