@@ -19,6 +19,7 @@ pub mod rows;
 pub mod settings;
 pub mod textures;
 pub mod version;
+pub mod workfile;
 
 pub use error::{CoreError, Result};
 pub use pack_format::PackFormat;

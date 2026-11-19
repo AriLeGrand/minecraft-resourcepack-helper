@@ -14,6 +14,7 @@ use packcreator_core::pack::{self, PackSummary, Project};
 use packcreator_core::rows::{self, NameEra, TextureRow};
 use packcreator_core::settings::{self, RecentPack, Settings};
 use packcreator_core::textures::{TextureEntry, VanillaIndex};
+use packcreator_core::workfile;
 use packcreator_core::McVersion;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -592,6 +593,33 @@ fn launch(app: &AppHandle, file: &Path, editor: Option<&str>) -> Result<()> {
     }
 }
 
+/// Opens a texture in the built-in editor. Nothing is written until it is saved.
+#[tauri::command(async)]
+fn editor_open(state: State<AppState>, path: String) -> Result<workfile::OpenedRaw> {
+    let inner = state.lock();
+    let p = inner.pack()?;
+    let root = extract::vanilla_dir(&inner.cache_dir, &p.project.version_dir);
+    let cat = packcreator_core::textures::category_of(&path);
+    let scale = if cat.uses_pack_resolution() {
+        (p.project.resolution / 16).max(1)
+    } else {
+        1
+    };
+    workfile::open_raw(&p.dir, &root, &path, scale)
+}
+
+/// Saves the document: flattened PNG into the pack, layers into the working file.
+#[tauri::command(async)]
+fn editor_save(
+    state: State<AppState>,
+    path: String,
+    doc: workfile::RawDoc,
+    flat: String,
+) -> Result<()> {
+    let dir = state.lock().pack()?.dir.clone();
+    workfile::save_raw(&dir, &path, &doc, &flat)
+}
+
 #[tauri::command(async)]
 fn reveal(app: AppHandle, path: String) -> Result<()> {
     use tauri_plugin_opener::OpenerExt;
@@ -832,6 +860,8 @@ pub fn run() {
             inspect_image,
             import_texture,
             open_external,
+            editor_open,
+            editor_save,
             reveal,
             revert_texture,
             set_pack_icon,
