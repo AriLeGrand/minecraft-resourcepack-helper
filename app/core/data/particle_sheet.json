@@ -1,0 +1,584 @@
+{
+ "schema": 1,
+ "about": "Cell map of the shared particle sheet used before 1.14 (textures/particle/particles.png). The sheet is a 16x16 grid; a cell is 8x8 px at vanilla size (128x128). Cell index = row * 16 + column. Sprite names are the names of the separate images used from 1.14. Positions were checked against a real 1.8.9 sheet by comparing each cell with the 1.20.1 separate images.",
+ "file": "particle/particles",
+ "until": "1.13.2",
+ "grid": 16,
+ "vanilla_size": 128,
+ "sprites": {
+  "generic_0": 0,
+  "generic_1": 1,
+  "generic_2": 2,
+  "generic_3": 3,
+  "generic_4": 4,
+  "generic_5": 5,
+  "generic_6": 6,
+  "generic_7": 7,
+  "splash_0": 19,
+  "splash_1": 20,
+  "splash_2": 21,
+  "splash_3": 22,
+  "bubble": 32,
+  "flame": 48,
+  "lava": 49,
+  "note": 64,
+  "critical_hit": 65,
+  "enchanted_hit": 66,
+  "damage": 67,
+  "heart": 80,
+  "angry": 81,
+  "glint": 82,
+  "drip_hang": 112,
+  "drip_fall": 113,
+  "drip_land": 114,
+  "effect_0": 128,
+  "effect_1": 129,
+  "effect_2": 130,
+  "effect_3": 131,
+  "effect_4": 132,
+  "effect_5": 133,
+  "effect_6": 134,
+  "effect_7": 135,
+  "spell_0": 144,
+  "spell_1": 145,
+  "spell_2": 146,
+  "spell_3": 147,
+  "spell_4": 148,
+  "spell_5": 149,
+  "spell_6": 150,
+  "spell_7": 151,
+  "spark_0": 160,
+  "spark_1": 161,
+  "spark_2": 162,
+  "spark_3": 163,
+  "spark_4": 164,
+  "spark_5": 165,
+  "spark_6": 166,
+  "spark_7": 167,
+  "glitter_0": 176,
+  "glitter_1": 177,
+  "glitter_2": 178,
+  "glitter_3": 179,
+  "glitter_4": 180,
+  "glitter_5": 181,
+  "glitter_6": 182,
+  "glitter_7": 183,
+  "sga_a": 225,
+  "sga_b": 226,
+  "sga_c": 227,
+  "sga_d": 228,
+  "sga_e": 229,
+  "sga_f": 230,
+  "sga_g": 231,
+  "sga_h": 232,
+  "sga_i": 233,
+  "sga_j": 234,
+  "sga_k": 235,
+  "sga_l": 236,
+  "sga_m": 237,
+  "sga_n": 238,
+  "sga_o": 239,
+  "sga_p": 240,
+  "sga_q": 241,
+  "sga_r": 242,
+  "sga_s": 243,
+  "sga_t": 244,
+  "sga_u": 245,
+  "sga_v": 246,
+  "sga_w": 247,
+  "sga_x": 248,
+  "sga_y": 249,
+  "sga_z": 250
+ },
+ "sprites_since": {
+  "damage": "1.9",
+  "glitter_0": "1.9",
+  "glitter_1": "1.9",
+  "glitter_2": "1.9",
+  "glitter_3": "1.9",
+  "glitter_4": "1.9",
+  "glitter_5": "1.9",
+  "glitter_6": "1.9",
+  "glitter_7": "1.9"
+ },
+ "not_particles": [
+  {
+   "name": "fishing_hook",
+   "cells": [
+    33
+   ],
+   "note": "The fishing bobber is drawn from this sheet. From 1.14 it is entity/fishing_hook.png."
+  }
+ ],
+ "unused_cells": [
+  16,
+  17,
+  36,
+  37,
+  38,
+  39,
+  52,
+  53,
+  54,
+  55,
+  68,
+  69,
+  70,
+  71,
+  83,
+  84,
+  85,
+  86,
+  87,
+  96,
+  97
+ ],
+ "particles": [
+  {
+   "id": "poof",
+   "legacy": "explode",
+   "sprites": [
+    "generic_7",
+    "generic_6",
+    "generic_5",
+    "generic_4",
+    "generic_3",
+    "generic_2",
+    "generic_1",
+    "generic_0"
+   ],
+   "mode": "age"
+  },
+  {
+   "id": "smoke",
+   "legacy": "smoke",
+   "sprites": [
+    "generic_7",
+    "generic_6",
+    "generic_5",
+    "generic_4",
+    "generic_3",
+    "generic_2",
+    "generic_1",
+    "generic_0"
+   ],
+   "mode": "age"
+  },
+  {
+   "id": "large_smoke",
+   "legacy": "largesmoke",
+   "sprites": [
+    "generic_7",
+    "generic_6",
+    "generic_5",
+    "generic_4",
+    "generic_3",
+    "generic_2",
+    "generic_1",
+    "generic_0"
+   ],
+   "mode": "age"
+  },
+  {
+   "id": "cloud",
+   "legacy": "cloud",
+   "sprites": [
+    "generic_7",
+    "generic_6",
+    "generic_5",
+    "generic_4",
+    "generic_3",
+    "generic_2",
+    "generic_1",
+    "generic_0"
+   ],
+   "mode": "age"
+  },
+  {
+   "id": "dust",
+   "legacy": "reddust",
+   "sprites": [
+    "generic_7",
+    "generic_6",
+    "generic_5",
+    "generic_4",
+    "generic_3",
+    "generic_2",
+    "generic_1",
+    "generic_0"
+   ],
+   "mode": "age"
+  },
+  {
+   "id": "item_snowball_poof",
+   "legacy": "snowshovel",
+   "sprites": [
+    "generic_7",
+    "generic_6",
+    "generic_5",
+    "generic_4",
+    "generic_3",
+    "generic_2",
+    "generic_1",
+    "generic_0"
+   ],
+   "mode": "age"
+  },
+  {
+   "id": "portal",
+   "legacy": "portal",
+   "sprites": [
+    "generic_0",
+    "generic_1",
+    "generic_2",
+    "generic_3",
+    "generic_4",
+    "generic_5",
+    "generic_6",
+    "generic_7"
+   ],
+   "mode": "random"
+  },
+  {
+   "id": "mycelium",
+   "legacy": "townaura",
+   "sprites": [
+    "generic_0"
+   ],
+   "mode": "single"
+  },
+  {
+   "id": "underwater",
+   "legacy": "suspended",
+   "sprites": [
+    "generic_0"
+   ],
+   "mode": "single"
+  },
+  {
+   "id": "firework",
+   "legacy": "fireworksSpark",
+   "sprites": [
+    "spark_7",
+    "spark_6",
+    "spark_5",
+    "spark_4",
+    "spark_3",
+    "spark_2",
+    "spark_1",
+    "spark_0"
+   ],
+   "mode": "age"
+  },
+  {
+   "id": "bubble",
+   "legacy": "bubble",
+   "sprites": [
+    "bubble"
+   ],
+   "mode": "single"
+  },
+  {
+   "id": "splash",
+   "legacy": "splash",
+   "sprites": [
+    "splash_0",
+    "splash_1",
+    "splash_2",
+    "splash_3"
+   ],
+   "mode": "random"
+  },
+  {
+   "id": "rain",
+   "legacy": "droplet",
+   "sprites": [
+    "splash_0",
+    "splash_1",
+    "splash_2",
+    "splash_3"
+   ],
+   "mode": "random"
+  },
+  {
+   "id": "fishing",
+   "legacy": "wake",
+   "sprites": [
+    "splash_0",
+    "splash_1",
+    "splash_2",
+    "splash_3"
+   ],
+   "mode": "age"
+  },
+  {
+   "id": "crit",
+   "legacy": "crit",
+   "sprites": [
+    "critical_hit"
+   ],
+   "mode": "single"
+  },
+  {
+   "id": "enchanted_hit",
+   "legacy": "magicCrit",
+   "sprites": [
+    "enchanted_hit"
+   ],
+   "mode": "single"
+  },
+  {
+   "id": "effect",
+   "legacy": "spell",
+   "sprites": [
+    "effect_7",
+    "effect_6",
+    "effect_5",
+    "effect_4",
+    "effect_3",
+    "effect_2",
+    "effect_1",
+    "effect_0"
+   ],
+   "mode": "age"
+  },
+  {
+   "id": "entity_effect",
+   "legacy": "mobSpell",
+   "sprites": [
+    "effect_7",
+    "effect_6",
+    "effect_5",
+    "effect_4",
+    "effect_3",
+    "effect_2",
+    "effect_1",
+    "effect_0"
+   ],
+   "mode": "age"
+  },
+  {
+   "id": "instant_effect",
+   "legacy": "instantSpell",
+   "sprites": [
+    "spell_7",
+    "spell_6",
+    "spell_5",
+    "spell_4",
+    "spell_3",
+    "spell_2",
+    "spell_1",
+    "spell_0"
+   ],
+   "mode": "age"
+  },
+  {
+   "id": "witch",
+   "legacy": "witchMagic",
+   "sprites": [
+    "spell_7",
+    "spell_6",
+    "spell_5",
+    "spell_4",
+    "spell_3",
+    "spell_2",
+    "spell_1",
+    "spell_0"
+   ],
+   "mode": "age"
+  },
+  {
+   "id": "dripping_water",
+   "legacy": "dripWater",
+   "sprites": [
+    "drip_hang",
+    "drip_fall",
+    "drip_land"
+   ],
+   "mode": "state"
+  },
+  {
+   "id": "dripping_lava",
+   "legacy": "dripLava",
+   "sprites": [
+    "drip_hang",
+    "drip_fall",
+    "drip_land"
+   ],
+   "mode": "state"
+  },
+  {
+   "id": "angry_villager",
+   "legacy": "angryVillager",
+   "sprites": [
+    "angry"
+   ],
+   "mode": "single"
+  },
+  {
+   "id": "happy_villager",
+   "legacy": "happyVillager",
+   "sprites": [
+    "glint"
+   ],
+   "mode": "single"
+  },
+  {
+   "id": "note",
+   "legacy": "note",
+   "sprites": [
+    "note"
+   ],
+   "mode": "single"
+  },
+  {
+   "id": "enchant",
+   "legacy": "enchantmenttable",
+   "sprites": [
+    "sga_a",
+    "sga_b",
+    "sga_c",
+    "sga_d",
+    "sga_e",
+    "sga_f",
+    "sga_g",
+    "sga_h",
+    "sga_i",
+    "sga_j",
+    "sga_k",
+    "sga_l",
+    "sga_m",
+    "sga_n",
+    "sga_o",
+    "sga_p",
+    "sga_q",
+    "sga_r",
+    "sga_s",
+    "sga_t",
+    "sga_u",
+    "sga_v",
+    "sga_w",
+    "sga_x",
+    "sga_y",
+    "sga_z"
+   ],
+   "mode": "random"
+  },
+  {
+   "id": "flame",
+   "legacy": "flame",
+   "sprites": [
+    "flame"
+   ],
+   "mode": "single"
+  },
+  {
+   "id": "lava",
+   "legacy": "lava",
+   "sprites": [
+    "lava"
+   ],
+   "mode": "single"
+  },
+  {
+   "id": "heart",
+   "legacy": "heart",
+   "sprites": [
+    "heart"
+   ],
+   "mode": "single"
+  },
+  {
+   "id": "damage_indicator",
+   "legacy": "damageIndicator",
+   "sprites": [
+    "damage"
+   ],
+   "mode": "single",
+   "since": "1.9"
+  },
+  {
+   "id": "end_rod",
+   "legacy": "endRod",
+   "sprites": [
+    "glitter_7",
+    "glitter_6",
+    "glitter_5",
+    "glitter_4",
+    "glitter_3",
+    "glitter_2",
+    "glitter_1",
+    "glitter_0"
+   ],
+   "mode": "age",
+   "since": "1.9"
+  },
+  {
+   "id": "dragon_breath",
+   "legacy": "dragonbreath",
+   "sprites": [
+    "generic_5",
+    "generic_6",
+    "generic_7"
+   ],
+   "mode": "age",
+   "since": "1.9"
+  },
+  {
+   "id": "totem_of_undying",
+   "legacy": "totem",
+   "sprites": [
+    "glitter_7",
+    "glitter_6",
+    "glitter_5",
+    "glitter_4",
+    "glitter_3",
+    "glitter_2",
+    "glitter_1",
+    "glitter_0"
+   ],
+   "mode": "age",
+   "since": "1.11"
+  }
+ ],
+ "other_files": [
+  {
+   "id": "explosion",
+   "legacy": "largeexplode",
+   "file": "entity/explosion",
+   "grid": 4,
+   "vanilla_size": 128,
+   "sprites": [
+    "explosion_0",
+    "explosion_1",
+    "explosion_2",
+    "explosion_3",
+    "explosion_4",
+    "explosion_5",
+    "explosion_6",
+    "explosion_7",
+    "explosion_8",
+    "explosion_9",
+    "explosion_10",
+    "explosion_11",
+    "explosion_12",
+    "explosion_13",
+    "explosion_14",
+    "explosion_15"
+   ],
+   "mode": "age"
+  },
+  {
+   "id": "footstep",
+   "legacy": "footstep",
+   "file": "particle/footprint",
+   "grid": 1,
+   "vanilla_size": 8,
+   "sprites": [
+    "footprint"
+   ],
+   "mode": "single",
+   "until": "1.12.2"
+  }
+ ]
+}

@@ -1,0 +1,11 @@
+[package]
+name = "packcreator-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Pack Creator core: Minecraft versions, paths, pack formats, renames, mcmeta, import/export."
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["preserve_order"] }
+thiserror = "2"

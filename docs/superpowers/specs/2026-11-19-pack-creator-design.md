@@ -86,15 +86,18 @@ by Aseprite**, and can still hand a texture to an external editor.
 ## 5. Domain facts the app relies on
 
 Builder: verify each against real game files before relying on it.
+Verified in stage 0: see `docs/research/domain-facts.md`.
 
 - Vanilla textures live in the client jar at `assets/minecraft/textures/...`.
   The jar is at `<.minecraft>/versions/<v>/<v>.jar`. Default `.minecraft`:
   Windows `%APPDATA%\.minecraft`, macOS `~/Library/Application Support/minecraft`,
   Linux `~/.minecraft`.
-- Newer jars contain `version.json` with a `pack_version` field (resource pack
-  format) — read it instead of hard-coding. Keep a fallback table for old
-  versions. Very recent versions describe supported ranges differently
-  (min/max format); support writing what the target version expects.
+- Jars from 1.14 contain `version.json` with `pack_version` — read it instead
+  of hard-coding. *(Corrected in stage 0, D-001:)* it is not one number: a plain
+  number in 1.14–1.16, `{resource, data}` up to 1.21.8, and
+  `{resource_major, resource_minor, …}` from 1.21.9. Older jars (e.g. 1.8.9)
+  have no `version.json`: use the fallback table. From format 65 (1.21.9)
+  `pack.mcmeta` uses `min_format`/`max_format` (D-005).
 - Folder renames at 1.13 ("Flattening"): `blocks/`→`block/`, `items/`→`item/`,
   and many file renames (`planks_oak`→`oak_planks`, `grass_top`→`grass_block_top`, …).
   A **rename table between versions** is required data (research/build it; keep it as
@@ -103,13 +106,19 @@ Builder: verify each against real game files before relying on it.
   `textures/gui/sprites/…`, with optional `<name>.png.mcmeta` containing
   `{"gui":{"scaling":{"type":"stretch"|"tile"|"nine_slice", ...}}}`
   (`tile`/`nine_slice` take `width`, `height`; `nine_slice` takes `border`).
+  *(Corrected, D-003:)* `border` is a number or `{left, top, right, bottom}`;
+  newer versions add `stretch_inner`; no file means "stretch".
 - Animation: frames stacked vertically in one PNG + `<name>.png.mcmeta` with
   `{"animation":{"frametime":N,"interpolate":bool,"frames":[...]}}`.
-  1 tick = 1/20 s.
+  1 tick = 1/20 s. *(Corrected, D-004:)* `frames` is optional, entries may be
+  `{index, time}` objects, `height`/`width` exist, and `.mcmeta` files may hold
+  other sections (`texture`, `villager`) that must be kept.
 - Particles: 1.14+ have one image per frame in `textures/particle/` plus
   `assets/minecraft/particles/<name>.json` (`{"textures":[...]}`) listing frames.
   Older versions use a single shared sheet `textures/particle/particles.png`
-  (grid of 8×8 cells at 16×) where each particle owns fixed cells, some shared
+  (*corrected, D-002:* 128×128, a 16×16 grid of 8×8-pixel cells; the fishing
+  bobber is on it too; explosion and footprint are separate files) where each
+  particle owns fixed cells, some shared
   (e.g. generic smoke cells). The app must know each particle's cells per version
   and **only edit those cells**. A resource pack changes how particles look, not
   how they move — say so in the UI.
