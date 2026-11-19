@@ -64,9 +64,12 @@ export function Welcome() {
 
   const create = () =>
     run(async () => {
-      const pack = await api.createPack({ name, version_dir: versionDir, resolution, location });
-      toast(`Created ${pack.project.name}`);
-      await enterPack(pack);
+      // enterPack asks about unsaved editor work before the new pack replaces the open one
+      await enterPack(async () => {
+        const pack = await api.createPack({ name, version_dir: versionDir, resolution, location });
+        toast(`Created ${pack.project.name}`);
+        return pack;
+      });
     });
 
   const browseLocation = async () => {
@@ -81,8 +84,7 @@ export function Welcome() {
     run(async () => {
       const dir = await open({ directory: true, title: "Choose a pack folder (the one that contains pack.mcmeta)" });
       if (typeof dir !== "string") return;
-      await enterPack(await api.openPack(dir));
-      then?.();
+      if (await enterPack(() => api.openPack(dir))) then?.();
     });
 
   const importZip = () =>
@@ -91,15 +93,22 @@ export function Welcome() {
       if (typeof zip !== "string") return;
       const title = baseName(zip.replace(/\\/g, "/")).replace(/\.zip$/i, "");
       const dest = joinPath(boot.default_packs_dir, safeFileName(title));
-      const pack = await api.importZip(zip, dest);
-      toast(`Imported into ${dest}`);
-      await enterPack(pack);
+      await enterPack(async () => {
+        const pack = await api.importZip(zip, dest);
+        toast(`Imported into ${dest}`);
+        return pack;
+      });
     });
 
   const openRecent = (path: string) =>
     run(async () => {
+      // the pack that is already open: just go back to it (editor tabs stay as they are)
+      if (useApp.getState().pack?.dir === path) {
+        go("textures");
+        return;
+      }
       try {
-        await enterPack(await api.openPack(path));
+        await enterPack(() => api.openPack(path));
       } catch (e) {
         const err = toError(e);
         ask({

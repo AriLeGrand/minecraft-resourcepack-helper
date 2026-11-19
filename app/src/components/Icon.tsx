@@ -18,14 +18,29 @@ const PATHS = {
   list: "M4 6h16M4 12h16M4 18h16",
   warn: "M12 8v5M12 16h.01M10.3 3.9L2.4 18a2 2 0 0 0 1.7 3h15.8a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z",
   close: "M6 6l12 12M18 6L6 18",
+  undo: "M9 14L4 9l5-5M4 9h10a6 6 0 0 1 0 12h-3",
+  redo: "M15 14l5-5-5-5M20 9H10a6 6 0 0 0 0 12h3",
+  eye: "M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12zM12 9a3 3 0 1 0 0 6a3 3 0 1 0 0-6z",
+  eyeOff: "M3 3l18 18M10.6 5.1A10 10 0 0 1 12 5c6 0 10 7 10 7a17 17 0 0 1-3 3.7M6.6 6.6C3.8 8.4 2 12 2 12s4 7 10 7a9.6 9.6 0 0 0 5.4-1.6",
+  lock: "M6 11h12v9H6zM8 11V8a4 4 0 0 1 8 0v3",
+  unlock: "M6 11h12v9H6zM8 11V8a4 4 0 0 1 7.5-2",
+  plus: "M12 5v14M5 12h14",
+  copy: "M9 9h11v11H9zM5 15H4V4h11v1",
+  trash: "M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13",
+  up: "M12 19V5M6 11l6-6 6 6",
+  down: "M12 5v14M6 13l6 6 6-6",
+  swap: "M7 4L3 8l4 4M3 8h14M17 20l4-4-4-4M21 16H7",
+  prev: "M15 6l-6 6 6 6",
+  next: "M9 6l6 6-6 6",
 } as const;
 
 export type IconName = keyof typeof PATHS;
 
-export function Icon({ name, size = 18, width = 1.6, color = "currentColor" }: { name: IconName; size?: number; width?: number; color?: string }) {
+/** `d` draws a path that is not in the list (the editor's tool icons), in the same style. */
+export function Icon({ name, d, size = 18, width = 1.6, color = "currentColor" }: { name?: IconName; d?: string; size?: number; width?: number; color?: string }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={width} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d={PATHS[name]} />
+      <path d={d ?? (name ? PATHS[name] : "")} />
     </svg>
   );
 }

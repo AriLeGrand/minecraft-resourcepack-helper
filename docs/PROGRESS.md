@@ -17,13 +17,33 @@ Done so far in stage 2:
   symmetry, tiled wrap, flood fill / wand, gradient, blur, jumble, selection
   masks, copy/paste, layer compositing, palette, frames, base64). 38 tests pass.
 
-Next (nothing of this exists yet): `editor/history.ts` (undo patches),
-the editor store (tabs, document model built from `editor_open`), `Canvas.tsx`
-(zoom, pan, grid, tool interaction), tool column and options bar, layers /
-palette / colour picker / preview panels, save with Save / Discard / Cancel,
-shortcuts, then wire "Edit texture" in `screens/Browser.tsx` (currently opens
-the external editor) and the `editor` screen in `App.tsx` (currently a
-placeholder). Then screenshots vs `docs/mockups/AppEditor.dc.html`.
+- The editor UI (plan steps 2-11), all in `app/src/editor/` plus
+  `app/src/screens/Editor.tsx`:
+  - pure, tested modules: `doc.ts` (document: layers, frames, flatten, the
+    vanilla reference), `history.ts` (undo / redo patches), `view.ts` (zoom and
+    pan maths), `tools.ts` (the 20 tools), `shortcuts.ts`, `controller.ts`
+    (pointer input → tool sessions → undo steps);
+  - `editorStore.ts` (tabs, tool, options, colours, clipboard, open / save /
+    close with Save / Discard / Cancel, reload when a file changes on disk);
+  - browser-only: `render.ts`, `Canvas.tsx`, `Panels.tsx` (preview, palette,
+    layers), `ColorPicker.tsx`.
+  - "Edit texture" and double-click in the browser open the built-in editor;
+    "Open externally" is unchanged. Ctrl+K lists the tools while a texture is
+    open. Closing the pack, opening another pack and quitting ask about unsaved
+    textures (`registerPackGuard` in `store.ts`, `onCloseRequested` in `App.tsx`).
+  - 167 front-end tests pass (`npm run check`).
+  - Checked in the real app with real mouse and keyboard input
+    (`tools/shot.mjs` has `--drag`, `--rdrag`, `--move`, `--wheel`, `--key`):
+    open from the browser, draw, shapes, selection, move, copy / paste, layers,
+    tiled mode, wheel zoom, text, gradient, bucket, spray, palette and colour
+    picker, frames of an animated texture, save (PNG pixels checked on disk,
+    `.mcmeta` kept), reopening with layers, the close-tab and quit questions,
+    outside changes to open files, quitting with nothing unsaved.
+
+Left for the end of stage 2: compare more screenshots with
+`docs/mockups/AppEditor.dc.html`, push, stage summary. Not done in stage 2
+(see D-032): "Draw" for the pack icon in the built-in editor, onion skin
+display, adding / removing frames (stage 3), 3D and Animated preview tabs.
 
 Stage 1 is complete (2026-11-19): installer built at
 `app/target/release/bundle/nsis/Pack Creator_0.1.0_x64-setup.exe` (2.5 MB) and

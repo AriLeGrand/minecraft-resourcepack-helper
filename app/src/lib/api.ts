@@ -179,6 +179,61 @@ export interface ExportOutput {
   installed_to: string | null;
 }
 
+// ---- editor (raw RGBA pixels as base64; PNG coding happens in Rust)
+
+export interface AnimFrame {
+  index: number;
+  time: number | null;
+}
+
+export interface Animation {
+  frametime: number;
+  interpolate: boolean;
+  frames: AnimFrame[] | null;
+  width: number | null;
+  height: number | null;
+}
+
+export interface LayerMeta {
+  name: string;
+  visible: boolean;
+  locked: boolean;
+  /** 0 to 100. */
+  opacity: number;
+}
+
+export interface RawFrame {
+  /** One RGBA buffer per layer, base64, `width * height * 4` bytes each. */
+  cels: string[];
+  time: number | null;
+}
+
+export interface RawDoc {
+  width: number;
+  height: number;
+  layers: LayerMeta[];
+  frames: RawFrame[];
+  animation: Animation | null;
+  palette: string[];
+}
+
+export interface RawImage {
+  width: number;
+  height: number;
+  rgba: string;
+}
+
+export type Origin = "work_file" | "pack_png" | "vanilla";
+
+export interface OpenedRaw {
+  path: string;
+  origin: Origin;
+  doc: RawDoc;
+  /** The game's texture (whole file, frames stacked) or `null` when the game has none. */
+  vanilla: RawImage | null;
+  vanilla_frames: number;
+}
+
 export interface SettingsPatch {
   minecraft_dir?: string | null;
   external_editor?: string | null;
@@ -209,6 +264,9 @@ export const api = {
   importTexture: (path: string, source: string, frametime: number | null) =>
     invoke<ImportResult>("import_texture", { path, source, frametime }),
   openExternal: (path: string) => invoke<string>("open_external", { path }),
+  editorOpen: (path: string) => invoke<OpenedRaw>("editor_open", { path }),
+  /** `flat` is every frame flattened and stacked vertically, base64 RGBA. */
+  editorSave: (path: string, doc: RawDoc, flat: string) => invoke<void>("editor_save", { path, doc, flat }),
   reveal: (path: string) => invoke<void>("reveal", { path }),
   revertTexture: (path: string) => invoke<boolean>("revert_texture", { path }),
   setPackIcon: (source: string) => invoke<void>("set_pack_icon", { source }),

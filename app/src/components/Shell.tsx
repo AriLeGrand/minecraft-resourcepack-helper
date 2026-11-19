@@ -1,5 +1,6 @@
 // The frame every screen lives in: top bar, section bar, status bar.
 import type { ReactNode } from "react";
+import { useEditor } from "../editor/editorStore";
 import { formatLabel } from "../lib/logic";
 import { useApp, type Screen } from "../store";
 import { Icon, type IconName } from "./Icon";
@@ -70,6 +71,7 @@ export function NavBar() {
   const pack = useApp((s) => s.pack);
   const go = useApp((s) => s.go);
   const toast = useApp((s) => s.toast);
+  const unsaved = useEditor((s) => s.tabs.some((t) => t.doc.dirty));
   return (
     <nav className="nav" aria-label="Sections">
       {SECTIONS.map((s) => {
@@ -84,6 +86,7 @@ export function NavBar() {
             onClick={() => (off ? toast("Create or open a pack first.", "warn") : go(s.key))}
           >
             <Icon name={s.icon} />
+            {s.key === "editor" && unsaved && <span className="unsaved" aria-label="Unsaved changes" />}
           </button>
         );
       })}
@@ -91,7 +94,8 @@ export function NavBar() {
   );
 }
 
-export function StatusBar({ children }: { children?: ReactNode }) {
+/** `right` replaces the pack folder shown at the right end (the editor shows where saving writes). */
+export function StatusBar({ children, right }: { children?: ReactNode; right?: ReactNode }) {
   const status = useApp((s) => s.status);
   const busy = useApp((s) => s.busy);
   const pack = useApp((s) => s.pack);
@@ -116,7 +120,7 @@ export function StatusBar({ children }: { children?: ReactNode }) {
         </span>
       )}
       {children}
-      <span className="right mono ellipsis" style={{ maxWidth: 480 }}>{pack ? pack.dir : `v${version ?? "0.1"} preview`}</span>
+      <span className="right mono ellipsis" style={{ maxWidth: 480 }}>{right ?? (pack ? pack.dir : `v${version ?? "0.1"} preview`)}</span>
     </footer>
   );
 }

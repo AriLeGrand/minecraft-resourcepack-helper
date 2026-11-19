@@ -1,5 +1,7 @@
 // Toasts (no success popups), the modal for errors and questions, and Ctrl+K.
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useEditor } from "../editor/editorStore";
+import { TOOLS } from "../editor/tools";
 import { baseName, CATEGORIES, categoryLabel, matchesSearch, searchWords } from "../lib/logic";
 import { useApp, type Screen } from "../store";
 import { Icon } from "./Icon";
@@ -99,7 +101,16 @@ export function CommandPalette() {
     const nav = (label: string, screen: Screen): Item => ({ label, kind: "Go to", run: () => app.go(screen) });
     const commands: Item[] = [nav("Home", "home"), nav("Settings", "settings")];
     if (pack) {
-      commands.push(nav("Textures", "textures"), nav("Pack and export", "export"));
+      commands.push(nav("Textures", "textures"), nav("Editor", "editor"), nav("Pack and export", "export"));
+      // tools and editor commands, while a texture is open in the editor
+      if (useEditor.getState().tabs.length > 0) {
+        for (const t of TOOLS) {
+          commands.push({ label: t.label, kind: "Tool", run: () => { useEditor.getState().setTool(t.id); app.go("editor"); } });
+        }
+        commands.push({ label: "Save to pack", kind: "Command", run: () => void useEditor.getState().save() });
+        commands.push({ label: "Undo", kind: "Command", run: () => useEditor.getState().undo() });
+        commands.push({ label: "Redo", kind: "Command", run: () => useEditor.getState().redo() });
+      }
       for (const c of CATEGORIES) {
         commands.push({
           label: `Show ${c.label}`,

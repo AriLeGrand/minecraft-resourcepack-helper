@@ -1,15 +1,17 @@
 import { listen } from "@tauri-apps/api/event";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useEffect } from "react";
 import { CommandPalette, ModalHost, Toasts } from "./components/Overlays";
 import { NavBar, PackChips, sectionLabel, StatusBar, TopBar } from "./components/Shell";
+import { useEditor } from "./editor/editorStore";
 import { Browser } from "./screens/Browser";
+import { Editor } from "./screens/Editor";
 import { Export } from "./screens/Export";
 import { Settings } from "./screens/Settings";
 import { Welcome } from "./screens/Welcome";
 import { useApp, type Screen } from "./store";
 
 const LATER: Partial<Record<Screen, string>> = {
-  editor: "The built-in pixel editor is the next stage. For now, “Open externally” in the texture browser sends a texture to your own image editor.",
   animation: "The animation timeline arrives in stage 3.",
   particles: "The particle viewer arrives in stage 4.",
   interface: "The interface (GUI) editor arrives in stage 5.",
@@ -41,8 +43,15 @@ export function App() {
 
   useEffect(() => {
     void useApp.getState().init();
-    // files changed on disk (external editor, Explorer): refresh quietly
-    const changed = listen("pack-changed", () => void useApp.getState().reload(true));
+    // files changed on disk (external editor, Explorer): refresh quietly, then
+    // reload open editor tabs whose file changed (tabs with unsaved edits keep them)
+    const changed = listen("pack-changed", () => {
+      void useApp.getState().reload(true).then(() => useEditor.getState().syncWithDisk());
+    });
+    // quitting with unsaved textures asks Save / Discard / Cancel first
+    const closing = getCurrentWindow().onCloseRequested(async (event) => {
+      if (!(await useApp.getState().confirmLeave())) event.preventDefault();
+    });
     const progress = listen<{ done: number; total: number }>("extract-progress", (e) => {
       const { busy, setBusy } = useApp.getState();
       if (busy) setBusy({ ...busy, done: e.payload.done, total: e.payload.total });
@@ -54,6 +63,7 @@ export function App() {
     window.addEventListener("contextmenu", noMenu);
     return () => {
       void changed.then((off) => off());
+      void closing.then((off) => off());
       void progress.then((off) => off());
       window.removeEventListener("contextmenu", noMenu);
     };
@@ -64,6 +74,7 @@ export function App() {
   else if (screen === "settings") content = <Settings />;
   else if (!pack || screen === "home") content = <Welcome />;
   else if (screen === "textures") content = <Browser />;
+  else if (screen === "editor") content = <Editor />;
   else if (screen === "export") content = <Export />;
   else content = <ComingLater screen={screen} />;
 

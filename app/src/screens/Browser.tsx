@@ -3,6 +3,7 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Icon } from "../components/Icon";
 import { NavBar, PackChips, StatusBar, TopBar } from "../components/Shell";
+import { useEditor } from "../editor/editorStore";
 import { api, images, type TextureDetail, type TextureRow } from "../lib/api";
 import {
   baseName, CATEGORIES, categoryLabel, countRows, dayLabel, filterRows, folderOf, matchesElsewhere, timeLabel,
@@ -253,8 +254,13 @@ function GridView({ rows, dirName, stamp, selected, onSelect }: {
 
 // ------------------------------------------------------------- actions
 
-/** "Edit texture": the built-in editor comes in stage 2; until then the texture opens externally. */
-async function editTexture(path: string) {
+/** "Edit texture" and double-click: the built-in editor, on its own tab. */
+function editTexture(path: string) {
+  return useEditor.getState().openTexture(path);
+}
+
+/** "Open externally": the user's own image editor; the file is watched and refreshes here on save. */
+async function openExternally(path: string) {
   const app = useApp.getState();
   try {
     await api.openExternal(path);
@@ -413,7 +419,7 @@ function Inspector({ row, now }: { row: TextureRow | null; now: number }) {
         <button className="btn primary block" style={{ height: 38, fontSize: 13 }} onClick={() => void editTexture(row.path)} disabled={row.extra && !mine}>Edit texture</button>
         <div className="rowbtns">
           <button className="btn" onClick={() => void importImage(row)}>Import image</button>
-          <button className="btn" onClick={() => void editTexture(row.path)}>Open externally</button>
+          <button className="btn" onClick={() => void openExternally(row.path)}>Open externally</button>
           <button className="btn ghost" onClick={() => revertTexture(row)} disabled={!mine}>Revert</button>
         </div>
       </div>

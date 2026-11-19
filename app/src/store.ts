@@ -28,6 +28,22 @@ export interface Modal {
   buttons: { label: string; primary?: boolean; danger?: boolean; run?: () => void }[];
 }
 
+/**
+ * The editor registers itself here, so that leaving a pack (closing it,
+ * opening another one, quitting) can never drop unsaved textures.
+ */
+export interface PackGuard {
+  /** Asks Save / Discard / Cancel when textures have unsaved edits. `false` = stay. */
+  confirmLeave: () => Promise<boolean>;
+  /** The open pack changed: editor tabs of any other pack are closed. */
+  packChanged: (dir: string | null) => void;
+}
+
+let guard: PackGuard = { confirmLeave: async () => true, packChanged: () => {} };
+export const registerPackGuard = (g: PackGuard) => {
+  guard = g;
+};
+
 interface State {
   boot: Bootstrap | null;
   pack: PackState | null;
@@ -50,8 +66,16 @@ interface State {
   go: (s: Screen) => void;
   setBoot: (b: Bootstrap) => void;
   setPack: (p: PackState | null) => void;
-  enterPack: (p: PackState) => Promise<void>;
-  closePack: () => Promise<void>;
+  /**
+   * Makes a pack the open one. Pass a function when the pack still has to be
+   * opened or created: unsaved editor work is then asked about first, and
+   * nothing is switched when the answer is Cancel. Returns `false` in that case.
+   */
+  enterPack: (p: PackState | (() => Promise<PackState>)) => Promise<boolean>;
+  /** Returns `false` when the user chose to stay (unsaved editor work). */
+  closePack: () => Promise<boolean>;
+  /** Save / Discard / Cancel for unsaved editor work. `true` = fine to leave. */
+  confirmLeave: () => Promise<boolean>;
   reload: (quiet?: boolean) => Promise<void>;
   ensureExtracted: (dirName: string, label: string) => Promise<boolean>;
   select: (path: string | null) => void;
@@ -108,17 +132,32 @@ export const useApp = create<State>((set, get) => ({
   setBoot: (boot) => set({ boot }),
   setPack: (pack) => set({ pack }),
 
-  enterPack: async (pack) => {
+  enterPack: async (next) => {
+    let pack: PackState;
+    if (typeof next === "function") {
+      // ask before Rust switches packs: afterwards a save would land in the wrong pack
+      if (!(await guard.confirmLeave())) return false;
+      pack = await next();
+    } else {
+      pack = next;
+    }
+    guard.packChanged(pack.dir);
     set({ pack, rows: [], summary: null, selected: null, filters: defaultFilters, screen: "textures" });
     api.bootstrap().then((boot) => set({ boot })).catch(() => {});
     await get().reload();
+    return true;
   },
 
   closePack: async () => {
+    if (!(await guard.confirmLeave())) return false;
     await api.closePack().catch(() => {});
     const boot = await api.bootstrap().catch(() => get().boot);
+    guard.packChanged(null);
     set({ pack: null, rows: [], summary: null, selected: null, screen: "home", status: "Ready", boot });
+    return true;
   },
+
+  confirmLeave: () => guard.confirmLeave(),
 
   ensureExtracted: async (dirName, label) => {
     set({ busy: { text: `Extracting textures from Minecraft ${label}…`, done: 0, total: 0 } });
@@ -154,7 +193,8 @@ export const useApp = create<State>((set, get) => ({
         summary,
         loading: false,
         stamp: get().stamp + 1,
-        status: `Vanilla ${label} loaded`,
+        // a quiet refresh (file watcher, after a save) leaves the last message alone
+        status: quiet ? get().status : `Vanilla ${label} loaded`,
         selected: selected && rows.some((r) => r.path === selected) ? selected : null,
       });
     } catch (e) {
