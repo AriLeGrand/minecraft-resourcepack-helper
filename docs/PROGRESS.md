@@ -6,7 +6,16 @@ Decisions: `docs/DECISIONS.md`. Facts: `docs/research/domain-facts.md`.
 
 ## Current stage
 
-**Stage 2: pixel editor** — in progress. Plan: `docs/superpowers/plans/stage-2.md`.
+**Stage 3: animation** — starting. Plan: `docs/superpowers/plans/stage-3.md`.
+
+**Stage 2: pixel editor** — complete (2026-11-19). Plan: `docs/superpowers/plans/stage-2.md`.
+Re-verified after the review fixes with real mouse/keyboard input in `tauri dev`:
+pencil, undo/redo, rectangle, bucket, line, select + move, add layer, Ctrl+S
+(pixels checked in the PNG on disk), close-tab Save/Discard/Cancel, reopen with
+layers, frame stepping on a 6-frame texture, tiled mode. Screenshots:
+`app/target/devdata/screenshots/5*-editor*.png`, `6-editor-tiled.png` (git-ignored).
+Differences from the mockup that are intended: the bottom timeline and the 3D /
+Animated preview tabs belong to stages 3 and 4.
 
 Done so far in stage 2:
 - `app/core/src/workfile.rs` (working files with layers and frames, pixel-exact
@@ -49,9 +58,8 @@ Done so far in stage 2:
   one preview per screen refresh, strokes painted piece by piece).
   107 core tests and 206 front-end tests pass.
 
-Left for the end of stage 2: compare more screenshots with
-`docs/mockups/AppEditor.dc.html`, push, stage summary. Not done in stage 2
-(see D-032): adding / removing frames (stage 3), 3D and Animated preview tabs.
+Not done in stage 2 (see D-032): adding / removing frames (stage 3), 3D and
+Animated preview tabs (stages 3-4).
 
 Stage 1 is complete (2026-11-19): installer built at
 `app/target/release/bundle/nsis/Pack Creator_0.1.0_x64-setup.exe` (2.5 MB) and
