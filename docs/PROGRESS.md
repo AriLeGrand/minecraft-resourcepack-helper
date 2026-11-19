@@ -6,9 +6,18 @@ Decisions: `docs/DECISIONS.md`. Facts: `docs/research/domain-facts.md`.
 
 ## Current stage
 
-**Final stage** — documentation done (2026-11-19).
-**Next: build the release installer** (`cd app && npx tauri build`, then run
-the installed app once and check it), and push the branch.
+**All stages complete** (2026-11-19). The project is feature-complete for the
+kickoff scope; see `docs/LIMITATIONS.md` for known limits and the "later" list.
+
+Release: `app/target/release/bundle/nsis/Pack Creator_0.1.0_x64-setup.exe`
+(2.8 MB, built 2026-11-19). The release build was run against the demo game:
+textures load through the image protocol, the editor opens, and the lazily
+loaded 3D preview renders (WebGL) under the app's security policy.
+Full test pass at release: cargo fmt / clippy clean, 147 Rust tests, 319
+front-end tests, typecheck and lint clean.
+
+Possible next steps (not started): the items in `docs/LIMITATIONS.md` "Later",
+checking a 1.21.9+ pack in-game (D-005), opening a pull request to `main`.
 
 Done in the final stage:
 - `README.md` rewritten for Pack Creator (what it is, screens, install, quick
