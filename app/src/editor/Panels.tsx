@@ -2,14 +2,16 @@
 import { memo, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { Icon } from "../components/Icon";
 import { ColorPicker } from "./ColorPicker";
+import { frametimeOf, isPlayable } from "./anim";
 import { flatten, REFERENCE_OPACITY, type EditorDoc } from "./doc";
 import { useEditor, withPreview, type Preview, type Tab } from "./editorStore";
 import { releaseAfterMouse } from "./focus";
 import { hexToRgba, rgbaToHex, rgbToHsv, type Buf } from "./pixels";
+import { useAnimPlayer } from "./Player";
 import { bufToCanvas } from "./render";
 
 /** A pixel buffer shown with hard pixels, `repeat` × `repeat` times, fitted into a box. */
-function PixelView({ buf, box, repeat = 1, label }: { buf: Buf; box: number; repeat?: number; label: string }) {
+export function PixelView({ buf, box, repeat = 1, label }: { buf: Buf; box: number; repeat?: number; label: string }) {
   const ref = useRef<HTMLCanvasElement>(null);
   // one scratch canvas for the life of the view, not a new one per redraw
   const tileRef = useRef<HTMLCanvasElement | null>(null);
@@ -51,11 +53,18 @@ export const PreviewPanel = memo(function PreviewPanel({ doc: saved, preview }: 
           <button role="tab" disabled title={`3D preview ${LATER}`}>3D</button>
           <button role="tab" aria-selected={mode === "tiled"} className={mode === "tiled" ? "on" : ""} onClick={() => setMode("tiled")}>Tiled</button>
           <button role="tab" aria-selected={mode === "original"} className={mode === "original" ? "on" : ""} onClick={() => setMode("original")}>Original</button>
-          <button role="tab" disabled title={`Animated preview ${LATER}`}>Animated</button>
+          <button
+            role="tab" aria-selected={mode === "animated"} className={mode === "animated" ? "on" : ""}
+            title="Plays the animation at the game's speed" onClick={() => setMode("animated")}
+          >
+            Animated
+          </button>
         </div>
       </div>
       <div className="ed-preview">
-        {mode === "tiled" ? (
+        {mode === "animated" ? (
+          <AnimatedPreview doc={saved} />
+        ) : mode === "tiled" ? (
           <PixelView buf={flat} box={196} repeat={3} label="Texture repeated 3 by 3" />
         ) : (
           <div className="pair">
@@ -75,6 +84,21 @@ export const PreviewPanel = memo(function PreviewPanel({ doc: saved, preview }: 
     </section>
   );
 });
+
+/** The texture playing at the game's speed (flat; the 3D view comes later). */
+function AnimatedPreview({ doc }: { doc: EditorDoc }) {
+  const slot = useAnimPlayer(doc, { playing: isPlayable(doc), loop: true });
+  const scale = Math.max(1, Math.floor(160 / Math.max(doc.width, doc.height)));
+  const ft = frametimeOf(doc.animation);
+  return (
+    <div className="ed-animprev">
+      <canvas ref={slot(0)} className="pixel checker" role="img" aria-label="The texture playing at in-game speed" style={{ width: doc.width * scale, height: doc.height * scale }} />
+      <div className="dim">
+        {isPlayable(doc) ? `Plays at in-game speed · ${ft} tick${ft === 1 ? "" : "s"} per frame` : "One frame: nothing to play yet"}
+      </div>
+    </div>
+  );
+}
 
 /** A refresh arrow in the app's icon style (24 grid, stroke only). */
 const REFRESH = "M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7";

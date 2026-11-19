@@ -4,7 +4,7 @@ import { Icon } from "../components/Icon";
 import { NavBar, PackChips, StatusBar, TopBar } from "../components/Shell";
 import { Canvas } from "../editor/Canvas";
 import { cancelPending, commitPending, sessionKind } from "../editor/controller";
-import { frameTicks, targetLabel, type EditorDoc } from "../editor/doc";
+import { frameTicks, PACK_ICON, targetLabel, type EditorDoc } from "../editor/doc";
 import { activeTab, fileName, useEditor } from "../editor/editorStore";
 import { releaseAfterMouse } from "../editor/focus";
 import { LayersPanel, PalettePanel, PreviewPanel } from "../editor/Panels";
@@ -20,8 +20,8 @@ function hasMarkedText(): boolean {
   return !!sel && !sel.isCollapsed && sel.toString().length > 0;
 }
 
-/** Keyboard shortcuts, active while a texture is open. */
-function useShortcuts(active: boolean) {
+/** Keyboard shortcuts, active while a texture is open (editor and animation screens). */
+export function useShortcuts(active: boolean) {
   useEffect(() => {
     if (!active) return;
     const onKey = (e: KeyboardEvent) => {
@@ -113,7 +113,9 @@ const ToolColumn = memo(function ToolColumn() {
  * kept inside its limits and applied on Enter or when the field is left.
  * Escape puts the old value back.
  */
-function NumberField({ value, min, max, suffix, label, onChange }: { value: number; min: number; max: number; suffix: string; label: string; onChange: (n: number) => void }) {
+export function NumberField({ value, min, max, suffix, label, onChange, className = "ed-num" }: {
+  value: number; min: number; max: number; suffix: string; label: string; onChange: (n: number) => void; className?: string;
+}) {
   const [draft, setDraft] = useState<string | null>(null);
   // the latest draft, also for the blur that follows Enter / Escape in the same moment
   const typed = useRef<string | null>(null);
@@ -129,7 +131,7 @@ function NumberField({ value, min, max, suffix, label, onChange }: { value: numb
     if (Number.isFinite(n)) onChange(Math.max(min, Math.min(max, Math.round(n))));
   };
   return (
-    <span className="ed-num">
+    <span className={className}>
       <input
         type="number" aria-label={label} min={min} max={max} step={1}
         title={`${min} to ${max}. Enter applies, Escape cancels.`}
@@ -286,14 +288,26 @@ const FileTabs = memo(function FileTabs() {
 
 const FrameStrip = memo(function FrameStrip({ doc }: { doc: EditorDoc }) {
   const step = useEditor((s) => s.stepFrame);
+  const go = useApp((s) => s.go);
   const ticks = frameTicks(doc);
+  const many = doc.frames.length > 1;
   return (
     <div className="ed-frames">
-      <button aria-label="Previous frame" title="Previous frame (←)" onClick={() => step(-1)}><Icon name="prev" size={14} width={2} /></button>
-      <button aria-label="Next frame" title="Next frame (→)" onClick={() => step(1)}><Icon name="next" size={14} width={2} /></button>
-      <span className="count">{doc.frameIndex + 1} / {doc.frames.length}</span>
-      <span className="dim">· {ticks} tick{ticks === 1 ? "" : "s"}</span>
-      <span className="dim grow" style={{ textAlign: "right" }}>You are editing one frame of an animation. The timeline arrives with the animation view.</span>
+      {many ? (
+        <>
+          <button aria-label="Previous frame" title="Previous frame (←)" onClick={() => step(-1)}><Icon name="prev" size={14} width={2} /></button>
+          <button aria-label="Next frame" title="Next frame (→)" onClick={() => step(1)}><Icon name="next" size={14} width={2} /></button>
+          <span className="count">{doc.frameIndex + 1} / {doc.frames.length}</span>
+          <span className="dim">· {ticks} tick{ticks === 1 ? "" : "s"}</span>
+        </>
+      ) : (
+        <span className="dim" style={{ marginLeft: 2 }}>{doc.animation ? "Animated · 1 frame" : "Still image · 1 frame"}</span>
+      )}
+      {doc.path !== PACK_ICON && (
+        <button className="ed-link" title="Frames, timing and frame order, with an in-game preview" onClick={() => go("animation")}>
+          Open animation view
+        </button>
+      )}
     </div>
   );
 });
@@ -395,7 +409,7 @@ export function Editor() {
           <FileTabs />
           <OptionsBar />
           <Canvas tab={tab} />
-          {frames > 1 && <FrameStrip doc={doc} />}
+          <FrameStrip doc={doc} />
         </main>
         <aside className="ed-side">
           <PreviewPanel doc={doc} preview={tab.preview} />

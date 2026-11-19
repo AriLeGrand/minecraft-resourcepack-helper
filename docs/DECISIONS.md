@@ -281,3 +281,70 @@ works from any field (the field is left first, which applies its value).
 Number fields apply on Enter or when left, Escape puts the old value back.
 Copy, cut, paste and the selection commands are also in Ctrl+K and, with the
 selection and Move tools, in the options bar.
+
+## Stage 3
+
+**D-047 · Where durations live.** While the play order is "every frame in
+order" (no `frames` list), a frame's own duration is stored with the frame
+(Rust turns per-frame times into a `frames` list on save). As soon as there is
+an explicit list, durations live on its entries and the frames' own times are
+cleared, because Rust ignores them then. Switching between the two carries the
+durations over (list → in order: each frame takes its first entry's time). The
+duration shown under a thumbnail is that of the frame's first entry; changing
+it changes every entry of that frame.
+
+**D-048 · Frame operations keep the play order consistent.** Inserting or
+deleting a frame renumbers the entries; deleting removes that frame's entries
+and an order left empty becomes "in order" (`null`). A custom order plays a new
+frame right after the last entry of the frame before it. A ping-pong order stays
+a ping-pong (it is built again for the new count, durations kept by frame).
+Moving a frame in a custom order keeps every entry pointing at the same
+picture; with "in order" or ping-pong the strip order is the play order.
+
+**D-049 · New animations.** A still texture that gets a second frame (new,
+duplicate, import) gets `{"frametime": 2}` as in the design. Deleting back to
+one frame keeps the animation (the `.mcmeta` is still written); a still image
+without an animation shows no settings and gets no `.mcmeta`.
+
+**D-050 · Frame order is typed as in the file.** The chips and the custom field
+count from 0, like `animation.frames` (thumbnails are numbered from 1, and the
+tooltips say both). `2:5` means frame 2 for 5 ticks. The list is checked against
+the frame count while typing; Apply is only possible when it is valid. Presets:
+In order, Ping-pong (0..n-1 then n-2..1), Custom.
+
+**D-051 · Playback.** The preview runs on `requestAnimationFrame`, 1 tick =
+50 ms, and paints its canvases directly (no React render per frame; the "frame
+N / M" label and the lit order chip are changed in the DOM). Interpolation is
+the game's: per whole tick, colour = trunc(d·current + (1−d)·next) with
+d = 1 − sub/ticks, alpha of the current frame, the last entry blends into the
+first. Paused, the preview shows the frame being edited. "Loop" off stops on the
+last entry (the game always loops). Playing only affects the preview: the big
+frame stays on the frame being edited, which can be drawn on with the editor's
+current tool at any time. The 3D cube is CSS only; the real 3D view is stage 4.
+
+**D-052 · Import strip.** The file is read pixel-exact by Rust
+(`read_image_raw`). An import bar shows the frame height (default: the image
+width; the texture's own frame height when the width matches and the width does
+not divide the height) and refuses heights that are not a whole number of
+frames, with the size and what to change. Frames of the texture's size go into
+the active layer of frames 0..k-1 (frames are added when the strip has more;
+extra frames of the texture are kept). Frames of another size replace all frames
+and layers (one layer "Imported") only after a question; nothing is ever
+resized. Either way it is one undo step and nothing is written until save.
+
+**D-053 · Frame changes as undo steps.** A new command kind stores the frames,
+layers, size, animation and current frame before and after (pixel buffers
+shared, not copied). Undo keeps current layer locks (as for layer steps) and
+fits the view again when the size changed. Deleting a frame with pixels asks
+first (like deleting a layer).
+
+**D-054 · Animation screen works on the editor's tab.** Same document, same
+history, same Save / Discard / Cancel guards; the pack icon cannot be animated
+(the screen says so). The generated file is the text of `animation_mcmeta`,
+refreshed 120 ms after a change, with Rust's error shown when it refuses.
+
+**D-055 · Development hook for Import strip.** The native file dialog cannot be
+driven by `tools/shot.mjs`, and Tauri's `invoke` cannot be replaced from the
+page. In development builds only, `window.__packCreatorDev.importStrip(path)`
+runs the import from a path (the same code after the dialog). It is not in
+release builds.

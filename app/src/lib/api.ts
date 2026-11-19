@@ -273,6 +273,15 @@ export const api = {
   /** `flat` is every frame flattened and stacked vertically, base64 RGBA. */
   editorSave: (path: string, doc: RawDoc, flat: string, packDir: string) =>
     invoke<void>("editor_save", { path, doc, flat, packDir }),
+  /**
+   * The exact `.mcmeta` text a save would write for this animation (merged
+   * with the pack's current file). Fails with kind "bad_frames" when the play
+   * order uses a frame that does not exist.
+   */
+  animationMcmeta: (path: string, animation: Animation | null, times: (number | null)[], packDir: string) =>
+    invoke<string>("animation_mcmeta", { path, animation, times, packDir }),
+  /** Any image file as raw RGBA, pixel-exact ("Import strip"). */
+  readImageRaw: (path: string) => invoke<RawImage>("read_image_raw", { path }),
   reveal: (path: string) => invoke<void>("reveal", { path }),
   revertTexture: (path: string) => invoke<boolean>("revert_texture", { path }),
   setPackIcon: (source: string) => invoke<void>("set_pack_icon", { source }),

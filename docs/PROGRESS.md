@@ -6,7 +6,46 @@ Decisions: `docs/DECISIONS.md`. Facts: `docs/research/domain-facts.md`.
 
 ## Current stage
 
-**Stage 3: animation** — starting. Plan: `docs/superpowers/plans/stage-3.md`.
+**Next: Stage 4 — game previews** (3D block preview with three.js in the editor
+and animation preview tabs, particle viewer).
+
+**Stage 3: animation** — complete (2026-11-19). Plan: `docs/superpowers/plans/stage-3.md`.
+Decisions D-047 to D-055.
+- Rust: `animation_mcmeta` (the exact `.mcmeta` a save writes, merged with the
+  pack's file, "bad_frames" for an order using a missing frame),
+  `read_image_raw`, vanilla `.mcmeta` round-trip test (steps 1-3).
+- `app/src/editor/anim.ts` (+ `anim.test.ts`, 28 tests): play order, presets
+  (in order / ping-pong / custom with `2:5` durations), timing (entry and image
+  at a tick, loop or stop, loop length), the game's interpolation, durations per
+  frame, frame operations that renumber the order, strip splitting.
+- `history.ts`: frames commands (frames, layers, size, animation); editor store:
+  new / duplicate / delete / move frame, frame duration, frame time,
+  interpolate, frame order, import strip, each an undo step that marks the tab
+  unsaved (`animStore.test.ts`, 8 tests).
+- `app/src/editor/Player.tsx`: playback hook at 1 tick = 50 ms on
+  requestAnimationFrame, painting canvases directly.
+- `app/src/screens/Animation.tsx`: the screen as in the mockup (editable big
+  frame with onion skin, toolbar, frame strip with durations, in-game preview
+  flat + CSS cube, settings, generated file, status bar). Editor: "Open
+  animation view" link and a working "Animated" preview tab.
+- Checked in the real app (`tauri dev`, real mouse / keyboard via
+  `tools/shot.mjs`): block/andesite (1 frame) → duplicate ×2, new frame, a
+  different line drawn on each frame, ping-pong, frame time 3, interpolate,
+  frame 2 at 6 ticks, an invalid custom order (error shown), playback timing
+  sampled (3 / 6 tick entries at ~150 / ~300 ms), interpolated colours seen,
+  loop off stops, import of synthetic strips (bad height refused, same size into
+  the layer, other size asked then replaced, both undone), Ctrl+S: PNG on disk
+  32×128 with the right line per frame, `.mcmeta` identical to the generated
+  text; closed and reopened: 4 frames, order and durations back. Prismarine
+  (6 frames) still opens. Screenshots `app/target/devdata/screenshots/7-*.png`.
+
+Known issues / limits of stage 3:
+- Durations of a ping-pong are kept by frame when the order is rebuilt; an
+  import that replaces the size rebuilds a ping-pong without durations.
+- After undoing back to the saved state the tab still counts as unsaved (as in
+  stage 2).
+- The editor's "Animated" tab is flat; 3D comes with stage 4.
+- Frames are reordered with buttons, not by dragging.
 
 **Stage 2: pixel editor** — complete (2026-11-19). Plan: `docs/superpowers/plans/stage-2.md`.
 Re-verified after the review fixes with real mouse/keyboard input in `tauri dev`:

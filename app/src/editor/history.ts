@@ -2,7 +2,9 @@
 // rectangle that changed (before and after), per frame and layer. Changes of
 // the layer list (add / delete / duplicate / reorder, and a layer's name,
 // visibility or opacity) store the layer list before and after (the pixel
-// buffers are shared, not copied).
+// buffers are shared, not copied). Changes of the frames (add, delete, move,
+// import, durations, play order, frame time) store the frames, layers, size
+// and animation before and after, again sharing the pixel buffers.
 import { sameMask, setCel, structureOf, withStructure, type EditorDoc, type Structure } from "./doc";
 import type { Buf, Mask } from "./pixels";
 
@@ -24,11 +26,38 @@ export interface CelPatch {
   patch: Patch;
 }
 
+/** What undo needs to restore after a change of the frames or the animation. */
+export type FramesState = Pick<
+  EditorDoc,
+  "width" | "height" | "layers" | "frames" | "animation" | "activeLayer" | "frameIndex" | "reference" | "nextLayerId"
+>;
+
+export function framesStateOf(doc: EditorDoc): FramesState {
+  const { width, height, layers, frames, animation, activeLayer, frameIndex, reference, nextLayerId } = doc;
+  return { width, height, layers, frames, animation, activeLayer, frameIndex, reference, nextLayerId };
+}
+
+/**
+ * The document with stored frames put back. As with the layer list, layers
+ * that still exist keep the lock they have now; a selection of another size
+ * is dropped.
+ */
+export function withFramesState(doc: EditorDoc, s: FramesState): EditorDoc {
+  const now = new Map(doc.layers.map((l) => [l.id, l]));
+  const layers = s.layers.map((l) => {
+    const cur = now.get(l.id);
+    return cur && cur.locked !== l.locked ? { ...l, locked: cur.locked } : l;
+  });
+  const resized = s.width !== doc.width || s.height !== doc.height;
+  return { ...doc, ...s, layers, selection: resized ? null : doc.selection };
+}
+
 export interface Command {
   label: string;
   cels: CelPatch[];
   selection?: { before: Mask | null; after: Mask | null };
   structure?: { before: Structure; after: Structure };
+  frames?: { before: FramesState; after: FramesState };
   /**
    * Steps with the same key that follow each other at once are one step
    * (a slider being dragged must not fill the stack). See `pushMerged`.
@@ -127,6 +156,7 @@ export function applyCommand(doc: EditorDoc, cmd: Command, dir: "undo" | "redo")
   // way the patches must meet the layers they were made on
   const structure = () => {
     if (cmd.structure) out = withStructure(out, cmd.structure[side]);
+    if (cmd.frames) out = withFramesState(out, cmd.frames[side]);
   };
   const pixels = () => {
     for (const c of cmd.cels) {
@@ -172,4 +202,9 @@ export function editCommand(
 /** Command for a change of the layer list (add, delete, duplicate, reorder, name, visibility, opacity). */
 export function structureCommand(label: string, before: EditorDoc, after: EditorDoc): Command {
   return { label, cels: [], structure: { before: structureOf(before), after: structureOf(after) } };
+}
+
+/** Command for a change of the frames or the animation settings. */
+export function framesCommand(label: string, before: EditorDoc, after: EditorDoc): Command {
+  return { label, cels: [], frames: { before: framesStateOf(before), after: framesStateOf(after) } };
 }

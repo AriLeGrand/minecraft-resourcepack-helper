@@ -75,7 +75,8 @@ export interface Scene {
 // A neighbour frame flattened for the onion skin, kept while that frame and
 // the layer list stay the same (drawing on the current frame does not touch it).
 const flatCache = new WeakMap<Buf[], { layers: Layer[]; buf: Buf }>();
-function flatFrame(doc: EditorDoc, index: number): Buf {
+/** One frame flattened, kept while its images and the layer list stay the same. */
+export function flatFrame(doc: EditorDoc, index: number): Buf {
   const cels = doc.frames[index].cels;
   const hit = flatCache.get(cels);
   if (hit && hit.layers === doc.layers) return hit.buf;

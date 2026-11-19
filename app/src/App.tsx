@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { CommandPalette, ModalHost, Toasts } from "./components/Overlays";
 import { NavBar, PackChips, sectionLabel, StatusBar, TopBar } from "./components/Shell";
 import { useEditor } from "./editor/editorStore";
+import { Animation } from "./screens/Animation";
 import { Browser } from "./screens/Browser";
 import { Editor } from "./screens/Editor";
 import { Export } from "./screens/Export";
@@ -12,7 +13,6 @@ import { Welcome } from "./screens/Welcome";
 import { useApp, type Screen } from "./store";
 
 const LATER: Partial<Record<Screen, string>> = {
-  animation: "The animation timeline arrives in stage 3.",
   particles: "The particle viewer arrives in stage 4.",
   interface: "The interface (GUI) editor arrives in stage 5.",
   models: "3D models are planned for later. Blockbench is the tool for those today.",
@@ -75,6 +75,7 @@ export function App() {
   else if (!pack || screen === "home") content = <Welcome />;
   else if (screen === "textures") content = <Browser />;
   else if (screen === "editor") content = <Editor />;
+  else if (screen === "animation") content = <Animation />;
   else if (screen === "export") content = <Export />;
   else content = <ComingLater screen={screen} />;
 

@@ -2,6 +2,7 @@
 // functions (no DOM, no React). A document is never changed in place: every
 // function returns a new one, and pixel buffers are replaced, not written to.
 import type { Animation, OpenedRaw, Origin, RawDoc } from "../lib/api";
+import { imageTicks } from "./anim";
 import {
   base64ToBytes, bytesToBase64, cloneBuf, composite, cropFrame, getPx, newBuf, scaleNearest, stackFrames,
   type Buf, type LayerView, type Mask, type Rgba,
@@ -182,7 +183,7 @@ export const isAnimated = (doc: EditorDoc) => doc.animation !== null || doc.fram
 
 /** Ticks the frame is shown for. */
 export function frameTicks(doc: EditorDoc, frameIndex = doc.frameIndex): number {
-  return doc.frames[frameIndex].time ?? doc.animation?.frametime ?? 1;
+  return imageTicks(doc, frameIndex);
 }
 
 /** Why the active layer cannot be drawn on, or `null` when it can. */

@@ -5,11 +5,14 @@ import { create } from "zustand";
 import { api } from "../lib/api";
 import { registerPackGuard, useApp } from "../store";
 import {
+  deleteFrame, duplicateFrame, importReplacing, importSameSize, MAX_TICKS, moveFrame, newFrame, setImageTime, withOrder, type Entry,
+} from "./anim";
+import {
   activeCel, addLayer, deleteLayer, duplicateLayer, editBlock, fileLabel, flatStrip, flatten, fromRaw, layerHasPixels, moveLayer,
   patchLayer, setCel, toRaw, type EditorDoc, type LayerPatch,
 } from "./doc";
 import {
-  applyCommand, editCommand, emptyHistory, push, pushMerged, stepRedo, stepUndo, structureCommand, type History,
+  applyCommand, editCommand, emptyHistory, framesCommand, push, pushMerged, stepRedo, stepUndo, structureCommand, type History,
 } from "./history";
 import {
   bytesToBase64, clearArea, cloneBuf, copyClip, extractPalette, rgbaToHex,
@@ -50,6 +53,8 @@ export interface Tab {
   paletteSource: "vanilla" | "image" | "saved";
 }
 
+export type PreviewTab = "tiled" | "original" | "animated";
+
 export interface TextEdit {
   at: Pt;
   value: string;
@@ -68,7 +73,7 @@ interface EditorState {
   /** Texture pixel under the pointer. */
   cursor: Pt | null;
   viewport: { w: number; h: number };
-  previewTab: "tiled" | "original";
+  previewTab: PreviewTab;
   /** Text being typed with the Text tool. */
   text: TextEdit | null;
 
@@ -89,7 +94,7 @@ interface EditorState {
   setViewport: (w: number, h: number) => void;
   setView: (view: View | null) => void;
   zoomStep: (dir: 1 | -1) => void;
-  setPreviewTab: (t: "tiled" | "original") => void;
+  setPreviewTab: (t: PreviewTab) => void;
   setText: (t: TextEdit | null) => void;
 
   setPreview: (p: Preview | null) => void;
@@ -105,6 +110,21 @@ interface EditorState {
   patchLayer: (index: number, patch: LayerPatch) => void;
   toggleReference: () => void;
   stepFrame: (delta: number) => void;
+  selectFrame: (index: number) => void;
+
+  // frames and animation settings: each one undo step
+  newFrame: () => void;
+  duplicateFrame: () => void;
+  deleteFrame: () => void;
+  moveFrame: (delta: -1 | 1) => void;
+  /** Own duration of one frame in ticks; `null` = the animation's frame time. */
+  setFrameTime: (index: number, ticks: number | null) => void;
+  setFrametime: (ticks: number) => void;
+  setInterpolate: (on: boolean) => void;
+  /** `null` = every frame in order. */
+  setOrder: (entries: Entry[] | null, label?: string) => void;
+  /** Frames cut from an imported strip (see `splitStrip`). Asks first when their size is not the texture's. */
+  importFrames: (frames: Buf[], source: string) => void;
 
   selectAll: () => void;
   deselect: () => void;
@@ -172,6 +192,12 @@ function newTab(doc: EditorDoc, packDir: string): Tab {
   };
 }
 
+/** True when two documents have the same animation settings and frame durations. */
+function sameAnimation(a: EditorDoc, b: EditorDoc): boolean {
+  return JSON.stringify(a.animation) === JSON.stringify(b.animation) && a.frames.length === b.frames.length
+    && a.frames.every((f, i) => f.time === b.frames[i].time);
+}
+
 let lastWarn = { text: "", at: 0 };
 /** A warning toast, not repeated while the user keeps clicking. */
 function warn(text: string) {
@@ -234,6 +260,21 @@ export const useEditor = create<EditorState>((set, get) => {
     update(tab.id, (t) => ({
       ...t, doc, history: push(t.history, structureCommand(label, tab.doc, doc)), preview: null, float: null, edits: t.edits + 1,
     }));
+  };
+
+  /** A change of the frames or the animation, as one undo step. `true` = something changed. */
+  const framesEdit = (label: string, fn: (d: EditorDoc) => EditorDoc, tabId?: number): boolean => {
+    flushPending();
+    const tab = tabId === undefined ? current() : get().tabs.find((t) => t.id === tabId);
+    if (!tab) return false;
+    const doc = fn(tab.doc);
+    if (doc === tab.doc) return false;
+    const resized = doc.width !== tab.doc.width || doc.height !== tab.doc.height;
+    update(tab.id, (t) => ({
+      ...t, doc: { ...doc, dirty: true }, history: push(t.history, framesCommand(label, tab.doc, doc)),
+      preview: null, float: null, edits: t.edits + 1, view: resized ? null : t.view,
+    }));
+    return true;
   };
 
   const removeTab = (id: number) => {
@@ -481,10 +522,12 @@ export const useEditor = create<EditorState>((set, get) => {
         useApp.getState().setStatus("Nothing to undo");
         return;
       }
-      const changes = step.command.cels.length > 0 || !!step.command.structure;
+      const changes = step.command.cels.length > 0 || !!step.command.structure || !!step.command.frames;
       let doc = applyCommand(tab.doc, step.command, "undo");
       doc = { ...doc, dirty: doc.dirty || changes, frameIndex: step.command.cels[0]?.frame ?? doc.frameIndex };
-      update(tab.id, (t) => ({ ...t, doc, history: step.history, preview: null, float: null, edits: t.edits + 1 }));
+      // a size change (import strip) fits the new size in the window
+      const resized = doc.width !== tab.doc.width || doc.height !== tab.doc.height;
+      update(tab.id, (t) => ({ ...t, doc, history: step.history, preview: null, float: null, edits: t.edits + 1, view: resized ? null : t.view }));
       useApp.getState().setStatus(`Undid: ${step.command.label}`);
     },
 
@@ -497,10 +540,12 @@ export const useEditor = create<EditorState>((set, get) => {
         useApp.getState().setStatus("Nothing to redo");
         return;
       }
-      const changes = step.command.cels.length > 0 || !!step.command.structure;
+      const changes = step.command.cels.length > 0 || !!step.command.structure || !!step.command.frames;
       let doc = applyCommand(tab.doc, step.command, "redo");
       doc = { ...doc, dirty: doc.dirty || changes, frameIndex: step.command.cels[0]?.frame ?? doc.frameIndex };
-      update(tab.id, (t) => ({ ...t, doc, history: step.history, preview: null, float: null, edits: t.edits + 1 }));
+      // a size change (import strip) fits the new size in the window
+      const resized = doc.width !== tab.doc.width || doc.height !== tab.doc.height;
+      update(tab.id, (t) => ({ ...t, doc, history: step.history, preview: null, float: null, edits: t.edits + 1, view: resized ? null : t.view }));
       useApp.getState().setStatus(`Redid: ${step.command.label}`);
     },
 
@@ -575,6 +620,107 @@ export const useEditor = create<EditorState>((set, get) => {
       const n = tab.doc.frames.length;
       const frameIndex = (((tab.doc.frameIndex + delta) % n) + n) % n;
       update(tab.id, (t) => ({ ...t, doc: { ...t.doc, frameIndex }, preview: null }));
+    },
+    selectFrame: (index) => {
+      const tab = current();
+      if (!tab || tab.doc.frameIndex === index || !tab.doc.frames[index]) return;
+      flushPending();
+      update(tab.id, (t) => ({ ...t, doc: { ...t.doc, frameIndex: index }, preview: null }));
+    },
+
+    newFrame: () => {
+      if (framesEdit("New frame", (d) => newFrame(d))) useApp.getState().setStatus("Added an empty frame after the current one");
+    },
+    duplicateFrame: () => {
+      if (framesEdit("Duplicate frame", (d) => duplicateFrame(d))) useApp.getState().setStatus("Duplicated the frame");
+    },
+    deleteFrame: () => {
+      flushPending();
+      const tab = current();
+      if (!tab) return;
+      if (tab.doc.frames.length <= 1) {
+        warn("A texture needs at least one frame. Add another frame before deleting this one.");
+        return;
+      }
+      const index = tab.doc.frameIndex;
+      const run = () => {
+        if (framesEdit("Delete frame", (d) => deleteFrame(d, index), tab.id)) useApp.getState().setStatus(`Deleted frame ${index + 1}`);
+      };
+      const drawn = tab.doc.frames[index].cels.some((c) => {
+        for (let i = 3; i < c.data.length; i += 4) if (c.data[i] !== 0) return true;
+        return false;
+      });
+      if (!drawn) {
+        run();
+        return;
+      }
+      useApp.getState().ask({
+        title: `Delete frame ${index + 1}?`,
+        text: "Its pixels (all layers) are removed from the animation, and the frame order no longer plays it.",
+        hint: "You can bring it back with Undo (Ctrl+Z) as long as the texture stays open.",
+        buttons: [{ label: "Cancel" }, { label: "Delete frame", danger: true, run }],
+      });
+    },
+    moveFrame: (delta) => {
+      framesEdit(delta < 0 ? "Move frame left" : "Move frame right", (d) => moveFrame(d, d.frameIndex, delta));
+    },
+    setFrameTime: (index, ticks) => {
+      framesEdit("Frame duration", (d) => {
+        const next = setImageTime(d, index, ticks);
+        return sameAnimation(next, d) ? d : next;
+      });
+    },
+    setFrametime: (ticks) => {
+      if (!Number.isFinite(ticks)) return;
+      const n = Math.max(1, Math.min(MAX_TICKS, Math.round(ticks)));
+      framesEdit("Frame time", (d) => {
+        const a = d.animation;
+        if (a && a.frametime === n) return d;
+        return { ...d, animation: { ...(a ?? { interpolate: false, frames: null, width: null, height: null }), frametime: n } };
+      });
+    },
+    setInterpolate: (on) => {
+      framesEdit(on ? "Smooth between frames" : "No smoothing between frames", (d) => {
+        const a = d.animation;
+        if ((a?.interpolate ?? false) === on) return d;
+        return { ...d, animation: { ...(a ?? { frametime: 1, frames: null, width: null, height: null }), interpolate: on } };
+      });
+    },
+    setOrder: (entries, label = "Frame order") => {
+      framesEdit(label, (d) => {
+        const next = withOrder(d, entries);
+        return sameAnimation(next, d) ? d : next;
+      });
+    },
+    importFrames: (frames, source) => {
+      flushPending();
+      const tab = current();
+      if (!tab || frames.length === 0) return;
+      const { w, h } = frames[0];
+      const n = frames.length;
+      const what = `${n} frame${n === 1 ? "" : "s"} of ${w}×${h}`;
+      if (w === tab.doc.width && h === tab.doc.height) {
+        if (get().blocked()) return;
+        const layer = tab.doc.layers[tab.doc.activeLayer].name;
+        if (framesEdit("Import strip", (d) => importSameSize(d, frames), tab.id)) {
+          useApp.getState().setStatus(`Imported ${what} from ${source} into the layer “${layer}”`);
+        }
+        return;
+      }
+      const run = () => {
+        if (framesEdit("Import strip", (d) => importReplacing(d, frames), tab.id)) {
+          useApp.getState().setStatus(`Imported ${what} from ${source}. The texture is now ${w}×${h}.`);
+        }
+      };
+      useApp.getState().ask({
+        title: `Replace the frames with ${w}×${h} frames?`,
+        text:
+          `The frames in ${source} are ${w}×${h}, but ${fileName(tab.doc.path)} is ${tab.doc.width}×${tab.doc.height}. ` +
+          `Importing replaces every frame and layer of this texture with the ${n} imported frame${n === 1 ? "" : "s"}, at ${w}×${h}. ` +
+          "The imported pixels are not resized.",
+        hint: "You can undo this with Ctrl+Z as long as the texture stays open. Nothing is written until you save.",
+        buttons: [{ label: "Cancel" }, { label: "Replace frames", primary: true, run }],
+      });
     },
 
     selectAll: () => {
