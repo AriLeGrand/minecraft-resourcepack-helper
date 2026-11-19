@@ -195,7 +195,7 @@ mod tests {
         ];
         entries.sort_by(|a, b| a.path.cmp(&b.path));
         let index = VanillaIndex {
-            schema: 2,
+            schema: 3,
             dir_name: "1.21.4".into(),
             id: Some("1.21.4".into()),
             format: None,

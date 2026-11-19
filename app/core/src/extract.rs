@@ -36,6 +36,9 @@ fn index_file(dir: &Path) -> PathBuf {
 /// Loads the index of an extracted version. `None` when it is missing,
 /// unreadable, from another app version, or the jar changed since.
 pub fn load_index(cache_root: &Path, version: &InstalledVersion) -> Option<VanillaIndex> {
+    if !is_extracted(cache_root, version) {
+        return None;
+    }
     let text = fs::read_to_string(index_file(&vanilla_dir(cache_root, &version.dir_name))).ok()?;
     let idx: VanillaIndex = serde_json::from_str(&text).ok()?;
     (idx.schema == INDEX_SCHEMA

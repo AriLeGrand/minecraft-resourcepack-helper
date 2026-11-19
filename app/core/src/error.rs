@@ -51,3 +51,19 @@ impl<T> IoCtx<T> for io::Result<T> {
         self.map_err(|e| CoreError::io(path, &e))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn read_only_and_missing_files_give_clear_messages() {
+        let p = Path::new("D:/Packs/x");
+        let e = CoreError::io(p, &io::Error::from(io::ErrorKind::PermissionDenied));
+        assert_eq!(e.kind, "read_only");
+        assert!(e.hint.unwrap().contains("read-only"));
+        let e = CoreError::io(p, &io::Error::from(io::ErrorKind::NotFound));
+        assert_eq!(e.kind, "not_found");
+        assert!(e.message.contains("D:/Packs/x"));
+    }
+}

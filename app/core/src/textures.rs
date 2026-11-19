@@ -15,7 +15,7 @@ use walkdir::WalkDir;
 pub const TEXTURES_DIR: &str = "assets/minecraft/textures";
 /// Thumbnails are at most this many pixels on their longest side.
 pub const THUMB_MAX: u32 = 64;
-pub const INDEX_SCHEMA: u32 = 2;
+pub const INDEX_SCHEMA: u32 = 3;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]

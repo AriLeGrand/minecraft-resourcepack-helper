@@ -251,11 +251,22 @@ fn bootstrap(app: AppHandle, state: State<AppState>) -> Bootstrap {
     bootstrap_view(&app, &inner, err)
 }
 
+/// `null` must mean "clear this setting", a missing key "leave it alone".
+fn nullable<'de, D: serde::Deserializer<'de>>(
+    d: D,
+) -> std::result::Result<Option<Option<String>>, D::Error> {
+    Option::<String>::deserialize(d).map(Some)
+}
+
 #[derive(Deserialize)]
 struct SettingsPatch {
+    #[serde(default, deserialize_with = "nullable")]
     minecraft_dir: Option<Option<String>>,
+    #[serde(default, deserialize_with = "nullable")]
     external_editor: Option<Option<String>>,
+    #[serde(default, deserialize_with = "nullable")]
     export_dir: Option<Option<String>>,
+    #[serde(default, deserialize_with = "nullable")]
     packs_dir: Option<Option<String>>,
     export_kind_folder: Option<bool>,
     export_install: Option<bool>,
@@ -831,4 +842,19 @@ pub fn run() {
         ])
         .run(tauri::generate_context!())
         .expect("error while running Pack Creator");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn settings_patch_tells_null_from_missing() {
+        let p: SettingsPatch =
+            serde_json::from_str(r#"{"external_editor":null,"export_dir":"D:/out"}"#).unwrap();
+        assert_eq!(p.external_editor, Some(None));
+        assert_eq!(p.export_dir, Some(Some("D:/out".to_owned())));
+        assert_eq!(p.minecraft_dir, None);
+        assert_eq!(p.export_install, None);
+    }
 }
