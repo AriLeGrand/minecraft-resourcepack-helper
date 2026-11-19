@@ -129,7 +129,7 @@ fn table() -> &'static [Row] {
 }
 
 /// Where a pack format came from, so the UI can say so.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum FormatSource {
     /// Read from `version.json` in the jar.

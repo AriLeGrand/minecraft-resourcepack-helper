@@ -2,13 +2,23 @@
 //!
 //! Everything that must be correct lives here, with unit tests and without any
 //! dependency on the UI: Minecraft versions, pack formats, texture renames,
-//! the legacy particle sheet, and (in later modules) paths, `.mcmeta` files,
-//! import and export.
+//! the legacy particle sheet, jar extraction, the texture index, `.mcmeta`
+//! files, packs, import and export.
 
+pub mod error;
+pub mod export;
+pub mod extract;
+pub mod import;
+pub mod mcmeta;
+pub mod minecraft;
+pub mod pack;
 pub mod pack_format;
 pub mod particles;
 pub mod renames;
+pub mod settings;
+pub mod textures;
 pub mod version;
 
+pub use error::{CoreError, Result};
 pub use pack_format::PackFormat;
 pub use version::McVersion;
