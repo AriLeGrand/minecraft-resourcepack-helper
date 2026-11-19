@@ -459,3 +459,84 @@ drops), drawn by multiplying the image. Nearest-neighbour drawing, at most 120
 particles. The layout follows the pack's version; the mockup's "Pack" toggle is
 shown read-only. "Save to pack" in the top bar shows only when an editor tab of
 this particle's images has unsaved changes.
+
+## Stage 5
+
+**D-065 · Which `.mcmeta` the game reads for a sprite.** The game looks for a
+sprite's `.mcmeta` in the packs from the top down to the pack that provides
+the PNG. So a pack's `.mcmeta` alone overrides the game's one, but a pack PNG
+without its own `.mcmeta` is **stretched** (the game's nine-slice below it is
+never read). `core/src/gui.rs::effective` reports the rule that applies and
+where it comes from (pack file / pack PNG only / game); the screen warns when a
+pack PNG lost the game's nine-slice this way.
+
+**D-066 · Writing stretch rules.** `gui.scaling` is rebuilt in the game's key
+order (`type`, `width`, `height`, `border`, `stretch_inner`), unknown keys in
+`scaling` and `gui` and every other section are kept. Four equal borders are
+written as one number (as the game does); `stretch_inner` is written when on,
+or kept when the file already had the key. "Stretch" removes the section, and
+the file when nothing is left; but when the pack does not have the PNG and the
+game's rule is not stretch, `{"type": "stretch"}` is written instead, since an
+absent section would let the game's file decide. When the pack has neither the
+file nor the PNG, the base for the new file is the game's file (so its other
+sections, e.g. an animation, still apply), and a result equal to the game's
+file is no file at all. Width and height are always the piece's GUI size (the
+game's rule, else the game's image size), never the pack image's pixels.
+Rules that cannot work (borders wider than the sprite, sizes outside 1–4096)
+are refused in Rust.
+
+**D-067 · Stretch rules are saved at once, with Undo.** Choosing Stretch / Tile
+/ Nine-slice, ticking "stretch the inside" or leaving a border field (blur or
+Enter) writes the `.mcmeta` immediately; the toast says what happened
+(written / updated / removed) and has Undo, which puts the exact previous text
+back (or removes the file). While a border is typed the preview and the
+generated file follow it as a draft; Escape drops it. So there is never unsaved
+layout work to lose, and "Save to pack" in the top bar is shown only when an
+editor tab of one of this screen's pieces has unsaved pixels (as on the
+Particles screen). Revert = back to the game's own rule for the piece (also
+with Undo); it never deletes the pack's image.
+
+**D-068 · A new sprite keeps the game's rule.** When a save in the editor
+first adds `gui/sprites/…png` to the pack and the pack has no `.mcmeta` for it,
+the game's `gui` section is copied (`gui::keep_vanilla_scaling`, called from
+`editor_save`). Without it, drawing a button would make the game stretch it.
+
+**D-069 · Screens and layouts are data.** `core/data/gui_screens.json` lists 7
+screens (76 pieces) with a simple layout in GUI pixels: the pause menu of the
+mockup, a chest + survival inventory, the HUD, the title screen, the recipe
+book, advancements and boss bars. They are faithful-looking approximations of
+the game's positions, not every screen. Layout items can draw a part of a
+texture as it is (`src`, like the game's partial draws: the experience and
+boss bar fill, the containers), a background tiled (`draw: "tile"`), a
+texture whose units differ from its pixels (`tex`: the logo), and a `normal`
+piece shown when "Show hover states" is off. Pieces outside `gui/sprites/`
+(containers, the logo, the advancements window) have no stretch rule. Text is
+drawn with JetBrains Mono, not the game's font.
+
+**D-070 · Drawing like the game.** `src/gui/slice.ts` follows the game's
+`blitSprite` / `blitTiledSprite` / `blitNineSlicedSprite`: borders cut to half
+the target when it is small, a target as wide (or tall) as the sprite keeps
+that direction whole, edges and centre tiled from their top-left corner with
+the last tile cut (stretched with `stretch_inner`), nearest sampling at pixel
+centres, an image larger than its GUI size read at its density. The preview is
+composited in a pixel buffer at GUI scale 1–3 (source-over), then text and
+outlines on the canvas. Click picks the topmost piece whose pixel is not
+transparent there (else the topmost rectangle); double-click opens it in the
+editor. The mockup's nine-slice help said edges "stretch"; by default the game
+repeats them, so the text says "fill" and the stretch-inside box explains it.
+
+**D-071 · Before 1.20.2: rectangles of shared images.**
+`core/data/gui_regions.json` holds 15 pieces of `gui/widgets.png`, 43 of
+`gui/icons.png` and 22 of `gui/bars.png` (1.9+). 80 of them were found by
+searching the 1.21.11 sprites' exact pixels in the 1.20.1 and 1.8.9 images
+(`tools/research/find_gui_regions.py`), and a developer-only test checks those
+120 version/rectangle pairs again; the two language-button rectangles come from
+the game's drawing code. Sliders reuse the button images then (track =
+disabled button, knob cut from the button), so they are not separate pieces.
+The screen lists the images as screens, shows the shared image with the
+selected rectangle (the rest dimmed), and "Draw this piece" opens the image in
+the editor's region mode limited to that rectangle (scaled when the pack's
+image is a whole multiple of 256; any other size opens unrestricted with an
+explanation). A shared image in the pack counts as done for all its pieces.
+There are no stretch rules before 1.20.2: the panel says so, and the Rust
+commands refuse them for such packs.

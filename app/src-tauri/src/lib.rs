@@ -7,6 +7,8 @@ mod watch;
 use packcreator_core::error::{CoreError, Result};
 use packcreator_core::export::{self, AltTarget, Check, ExportKind, ExportOptions, ExportOutput};
 use packcreator_core::extract;
+use packcreator_core::gui::{self, Scaling};
+use packcreator_core::gui_screens;
 use packcreator_core::import::{self, ImageInfo, ImportResult};
 use packcreator_core::mcmeta::Animation;
 use packcreator_core::minecraft::{self, InstalledVersion};
@@ -642,8 +644,14 @@ fn editor_save(
     flat: String,
     pack_dir: String,
 ) -> Result<()> {
-    let dir = own_pack(&state.lock(), &pack_dir)?.dir.clone();
-    workfile::save_raw(&dir, &path, &doc, &flat)
+    let (dir, vanilla) = model_roots(&state, &pack_dir)?;
+    let first = packcreator_core::textures::texture_file(&dir, &path).is_ok_and(|f| !f.is_file());
+    workfile::save_raw(&dir, &path, &doc, &flat)?;
+    // a new interface sprite keeps the game's stretch rule (see gui::keep_vanilla_scaling)
+    if first {
+        gui::keep_vanilla_scaling(&dir, &vanilla, &path)?;
+    }
+    Ok(())
 }
 
 /// The `.mcmeta` text a save of this animation would write (merged with the
@@ -717,6 +725,85 @@ fn particle_add_frame(
 ) -> Result<particle_list::AddedFrame> {
     let (pack, vanilla) = model_roots(&state, &pack_dir)?;
     particle_list::add_frame(&pack, &vanilla, &id)
+}
+
+/// Every interface screen and piece for the pack's version, with status.
+#[tauri::command(async)]
+fn gui_overview(state: State<AppState>, pack_dir: String) -> Result<gui_screens::GuiOverview> {
+    let (pack, vanilla, version) = {
+        let inner = state.lock();
+        let p = own_pack(&inner, &pack_dir)?;
+        let version = inner.pack_version().ok().and_then(|(_, mc)| mc);
+        (
+            p.dir.clone(),
+            extract::vanilla_dir(&inner.cache_dir, &p.project.version_dir),
+            version,
+        )
+    };
+    gui_screens::overview(&pack, &vanilla, version.as_ref())
+}
+
+/// The pack folder and game folder for a stretch-rule command, refused for
+/// anything but a sprite of a version that has stretch rules.
+fn sprite_roots(state: &State<AppState>, pack_dir: &str, path: &str) -> Result<(PathBuf, PathBuf)> {
+    let inner = state.lock();
+    let p = own_pack(&inner, pack_dir)?;
+    let version = inner.pack_version().ok().and_then(|(_, mc)| mc);
+    if version.is_some_and(|v| gui_screens::Regions::builtin().applies_to(&v)) {
+        return Err(CoreError::new(
+            "no_scaling",
+            "This Minecraft version has no stretch rules: interface pieces are fixed rectangles of shared images.",
+        ));
+    }
+    if !path.starts_with("gui/sprites/") {
+        return Err(CoreError::new(
+            "no_scaling",
+            format!("{path} is drawn at a fixed size; only images in gui/sprites/ can have a stretch rule."),
+        ));
+    }
+    Ok((
+        p.dir.clone(),
+        extract::vanilla_dir(&inner.cache_dir, &p.project.version_dir),
+    ))
+}
+
+/// The exact `.mcmeta` text the pack would have with this stretch rule
+/// (`None` = no file).
+#[tauri::command(async)]
+fn gui_scaling_preview(
+    state: State<AppState>,
+    path: String,
+    scaling: Scaling,
+    pack_dir: String,
+) -> Result<Option<String>> {
+    let (pack, vanilla) = sprite_roots(&state, &pack_dir, &path)?;
+    gui::preview(&pack, &vanilla, &path, &scaling)
+}
+
+/// Writes a sprite's stretch rule into the pack. Returns the file before
+/// and after (for Undo).
+#[tauri::command(async)]
+fn gui_set_scaling(
+    state: State<AppState>,
+    path: String,
+    scaling: Scaling,
+    pack_dir: String,
+) -> Result<gui::MetaChange> {
+    let (pack, vanilla) = sprite_roots(&state, &pack_dir, &path)?;
+    gui::set_scaling(&pack, &vanilla, &path, &scaling)
+}
+
+/// Undo: puts the pack's `.mcmeta` of a sprite back exactly as it was
+/// (`None` removes it).
+#[tauri::command(async)]
+fn gui_restore_mcmeta(
+    state: State<AppState>,
+    path: String,
+    text: Option<String>,
+    pack_dir: String,
+) -> Result<()> {
+    let (pack, _) = sprite_roots(&state, &pack_dir, &path)?;
+    gui::put_mcmeta(&pack, &path, text.as_deref())
 }
 
 /// Reads an image file as raw RGBA, pixel-exact ("Import strip").
@@ -973,6 +1060,10 @@ pub fn run() {
             models_for_texture,
             particle_list,
             particle_add_frame,
+            gui_overview,
+            gui_scaling_preview,
+            gui_set_scaling,
+            gui_restore_mcmeta,
             reveal,
             revert_texture,
             set_pack_icon,

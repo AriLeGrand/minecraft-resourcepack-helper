@@ -6,8 +6,55 @@ Decisions: `docs/DECISIONS.md`. Facts: `docs/research/domain-facts.md`.
 
 ## Current stage
 
+**Stage 5: interface editor** — complete (2026-11-19). Plan: `docs/superpowers/plans/stage-5.md`.
+Decisions D-065 to D-071.
+**Next: Final stage — full test pass, release installer, README, known
+limitations and the "later" list.**
+
+- Rust `app/core/src/gui.rs` (11 tests): read / write `gui.scaling`
+  (stretch / tile / nine_slice, border number or sides, `stretch_inner`, every
+  other key kept, stretch removes the section and an empty file), which rule
+  applies with a pack (D-065), `set_scaling` / `preview` / `put_mcmeta` (Undo),
+  `keep_vanilla_scaling` for new sprites; round trip over the 125 GUI `.mcmeta`
+  files of the extracted versions (developer-only).
+- `app/core/src/gui_screens.rs` (7 tests) + `core/data/gui_screens.json`
+  (7 screens, 76 pieces, layouts) + `core/data/gui_regions.json` (widgets /
+  icons / bars rectangles before 1.20.2; 120 version/rectangle pairs checked
+  against the modern sprites' pixels, developer-only test; every piece path
+  checked against the 1.21.11 index, developer-only test).
+- Commands `gui_overview`, `gui_scaling_preview`, `gui_set_scaling`,
+  `gui_restore_mcmeta` (all `own_pack`; stretch rules refused before 1.20.2
+  and outside `gui/sprites/`); `editor_save` copies the game's rule for a new
+  sprite.
+- `app/src/gui/slice.ts` + `layout.ts` (30 tests, exact pixels): the game's
+  stretch / tile / nine-slice drawing, GUI scale maths, hit-testing, layout
+  placement. Editor: `rectRegion` / `openRect` (edit one rectangle of a shared
+  image; 3 tests) next to the particle cells.
+- `app/src/screens/Interface.tsx`: the screen as in the mockup.
+- Checked in the real app (`tauri dev`, `tools/shot.mjs`): Deep Sea Pack
+  (1.21.11) — all 7 screens drawn with the real sprites at 1× / 2× / 3×;
+  button → Tile (file on disk = tile 200×20), Stretch (file removed on disk,
+  warning that the game stretches the pack's PNG), Nine-slice (border 3 on
+  disk), left border 6 (object border on disk) and back to 3; drew two lines on
+  widget/button through "Draw this piece", saved, the lines show tiled across
+  every button of the pause and title screens; drew button_highlighted (new in
+  the pack) and its `.mcmeta` got the game's nine-slice. Legacy Test (1.8.9) —
+  Buttons and hotbar / HUD icons, button selected, "Draw this piece" opened
+  widgets.png limited to 0,66 200×20, strokes across the whole canvas, Ctrl+S;
+  on disk 61536 pixels outside the rectangle byte-identical to the game's
+  1.8.9 widgets.png, 0 changed, 656 of 4000 inside changed. Screenshots
+  `app/target/devdata/screenshots/10-*.png` (git-ignored).
+
+Known limits of stage 5:
+- Layouts are approximations of the game's screens; text uses JetBrains Mono.
+- Animated GUI sprites are drawn as their whole image (none of the listed
+  pieces is animated).
+- The width / height of a tile or nine-slice rule are not editable (always the
+  piece's GUI size); only the borders and `stretch_inner` are.
+- Legacy rectangles are checked against 1.20.1 and 1.8.9 only; versions in
+  between are assumed to use the same places.
+
 **Stage 4: game previews** — complete (2026-11-19). Plan: `docs/superpowers/plans/stage-4.md`.
-**Next: Stage 5, the interface (GUI) editor.**
 
 **Part B: particle viewer** — done (2026-11-19). Decisions D-061 to D-064.
 - Rust `app/core/src/particle_list.rs` (7 tests, synthetic files): the list

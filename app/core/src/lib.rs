@@ -8,6 +8,8 @@
 pub mod error;
 pub mod export;
 pub mod extract;
+pub mod gui;
+pub mod gui_screens;
 pub mod import;
 pub mod mcmeta;
 pub mod minecraft;

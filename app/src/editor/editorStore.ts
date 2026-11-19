@@ -21,7 +21,7 @@ import {
 import { clampSize, defaultOptions, pasteFloating, selectAllMask, toolDef, type Floating, type ToolId, type ToolOptions } from "./tools";
 import { centerView, fitView, stepZoom, zoomAbout, type View } from "./view";
 import { cellsLabel, uniqueCells } from "../particles/cells";
-import { cellsRegion, clipToMask, type Region } from "./region";
+import { cellsRegion, clipToMask, rectRegion, type RectRequest, type Region } from "./region";
 
 /** Lifted pixels that the Move tool can keep moving without damaging what is under them. */
 export interface Float {
@@ -93,6 +93,8 @@ interface EditorState {
   openTexture: (path: string) => Promise<void>;
   /** Opens the shared particle sheet with only these cells editable. */
   openCells: (path: string, req: CellsRequest) => Promise<void>;
+  /** Opens a shared interface image (before 1.20.2) with only one piece's rectangle editable. */
+  openRect: (path: string, req: RectRequest) => Promise<void>;
   /** Back to editing the whole image. */
   leaveRegion: (id?: number) => void;
   activate: (id: number) => void;
@@ -285,7 +287,9 @@ export const useEditor = create<EditorState>((set, get) => {
     const tab = tabId === undefined ? current() : get().tabs.find((t) => t.id === tabId);
     if (!tab) return false;
     if (tab.region) {
-      warn(`Frames cannot change while only the cells of ${tab.region.particle} are being edited: the sheet is one image. Choose “Edit the whole sheet” first.`);
+      warn(tab.region.kind === "rect"
+        ? `Frames cannot change while only ${tab.region.particle} is being edited: the image is one picture. Choose “Edit the whole image” first.`
+        : `Frames cannot change while only the cells of ${tab.region.particle} are being edited: the sheet is one image. Choose “Edit the whole sheet” first.`);
       return false;
     }
     const doc = fn(tab.doc);
@@ -395,6 +399,30 @@ export const useEditor = create<EditorState>((set, get) => {
       flushPending();
       update(tab.id, (t) => ({ ...t, region, preview: null, float: null }));
       app.setStatus(`Editing only ${req.particle} (${label}). Everything else on the sheet stays as it is.`);
+    },
+
+    openRect: async (path, req) => {
+      const app = useApp.getState();
+      await get().openTexture(path);
+      const packDir = app.pack?.dir;
+      const tab = get().tabs.find((t) => t.doc.path === path && t.packDir === packDir);
+      if (!tab) return;
+      const { doc } = tab;
+      const region = rectRegion(doc, req);
+      if (!region) {
+        app.showError(
+          {
+            message: `${fileName(path)} is ${doc.width}×${doc.height}${doc.frames.length > 1 ? ` with ${doc.frames.length} frames` : ""}, so the rectangle of ${req.piece} cannot be found on it.`,
+            hint: `The image must be one picture of ${req.imageSize[0]}×${req.imageSize[1]} (the game's size) or a whole multiple of it, such as ${req.imageSize[0] * 2}×${req.imageSize[1] * 2}. It is open as a whole image; be careful with the other pieces.`,
+          },
+          "Only this piece could not be selected",
+        );
+        return;
+      }
+      flushPending();
+      update(tab.id, (t) => ({ ...t, region, preview: null, float: null }));
+      const r = region.rects[0];
+      app.setStatus(`Editing only ${req.piece} (${r.w}×${r.h} px at ${r.x}, ${r.y}). Everything else in ${fileName(path)} stays as it is.`);
     },
 
     leaveRegion: (id) => {

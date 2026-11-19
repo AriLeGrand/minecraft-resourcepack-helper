@@ -305,6 +305,95 @@ export interface ParticleList {
   sheet_grid: number;
 }
 
+/** Interface editor (Rust `core/src/gui.rs`, `core/src/gui_screens.rs`). */
+export interface Border {
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+}
+
+/** A sprite's stretch rule (`gui.scaling` of its `.mcmeta`). Sizes are GUI pixels. */
+export type Scaling =
+  | { type: "stretch" }
+  | { type: "tile"; width: number; height: number }
+  | { type: "nine_slice"; width: number; height: number; border: Border; stretch_inner: boolean };
+
+/** `pack`: the pack's .mcmeta; `pack_png_only`: the pack's PNG without one (stretched); `game`: the game's. */
+export type ScalingSource = "pack" | "pack_png_only" | "game";
+
+export interface ScalingState {
+  scaling: Scaling;
+  source: ScalingSource;
+  vanilla: Scaling;
+  pack_has_png: boolean;
+  pack_mcmeta: string | null;
+  vanilla_mcmeta: string | null;
+  error: string | null;
+}
+
+export interface GuiLayoutItem {
+  piece?: string;
+  x: number;
+  y: number;
+  w?: number;
+  h?: number;
+  /** Part of the texture [u, v, w, h] in texture units, drawn without the stretch rule. */
+  src?: [number, number, number, number];
+  /** Size of the whole texture in texture units (when not its pixel size). */
+  tex?: [number, number];
+  draw?: "tile";
+  /** The piece shown instead when hover states are off. */
+  normal?: string;
+  text?: string;
+  color?: string;
+  align?: "left" | "center" | "right";
+  shadow?: boolean;
+  outline?: boolean;
+}
+
+export interface GuiPiece {
+  id: string;
+  name: string;
+  path: string;
+  used_on: string;
+  size: [number, number] | null;
+  pack_size: [number, number] | null;
+  in_pack: boolean;
+  in_version: boolean;
+  scalable: boolean;
+  scaling: ScalingState | null;
+  /** Shared images (before 1.20.2): the rectangle [x, y, w, h] in the game's image. */
+  rect: [number, number, number, number] | null;
+  checked: string[];
+  modern: string | null;
+}
+
+export interface GuiScreen {
+  id: string;
+  name: string;
+  folder: string;
+  size: [number, number];
+  pieces: GuiPiece[];
+  layout: GuiLayoutItem[];
+  /** Shared images: the texture path of the image. */
+  image: string | null;
+  done: number;
+  total: number;
+}
+
+export interface GuiOverview {
+  layout: "sprites" | "shared";
+  screens: GuiScreen[];
+  done: number;
+  total: number;
+}
+
+export interface MetaChange {
+  before: string | null;
+  after: string | null;
+}
+
 export interface AddedFrame {
   texture: string;
   json: string;
@@ -364,6 +453,17 @@ export const api = {
   particleList: (packDir: string) => invoke<ParticleList>("particle_list", { packDir }),
   /** Copies the particle's last frame into a new image and appends it to the pack's particle file. */
   particleAddFrame: (id: string, packDir: string) => invoke<AddedFrame>("particle_add_frame", { id, packDir }),
+  /** Every interface screen and piece for the pack's version, with status. */
+  guiOverview: (packDir: string) => invoke<GuiOverview>("gui_overview", { packDir }),
+  /** The exact `.mcmeta` text the pack would have with this stretch rule (`null` = no file). */
+  guiScalingPreview: (path: string, scaling: Scaling, packDir: string) =>
+    invoke<string | null>("gui_scaling_preview", { path, scaling, packDir }),
+  /** Writes a sprite's stretch rule into the pack; returns the file before and after. */
+  guiSetScaling: (path: string, scaling: Scaling, packDir: string) =>
+    invoke<MetaChange>("gui_set_scaling", { path, scaling, packDir }),
+  /** Undo: the pack's `.mcmeta` of a sprite exactly as it was (`null` removes it). */
+  guiRestoreMcmeta: (path: string, text: string | null, packDir: string) =>
+    invoke<void>("gui_restore_mcmeta", { path, text, packDir }),
   /** Any image file as raw RGBA, pixel-exact ("Import strip"). */
   readImageRaw: (path: string) => invoke<RawImage>("read_image_raw", { path }),
   reveal: (path: string) => invoke<void>("reveal", { path }),

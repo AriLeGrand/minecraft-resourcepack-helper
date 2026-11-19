@@ -28,7 +28,7 @@ import { pointerDown, pointerMove, pointerUp, resetController, setPreviewSchedul
 import { activeCel, flatStrip, fromRaw } from "./doc";
 import { activeTab, openForTest, useEditor, type CellsRequest } from "./editorStore";
 import { base64ToBytes, newBuf, setPx, type Buf, type Pt } from "./pixels";
-import { andMask, cellsRegion, clipToMask, editMask } from "./region";
+import { andMask, cellsRegion, clipToMask, editMask, rectRegion } from "./region";
 import { BLUE, opened, RED } from "./testutil";
 import { defaultOptions, type ToolId } from "./tools";
 
@@ -256,5 +256,48 @@ describe("saving", () => {
     await ed().openCells("particle/particles", HEART);
     expect(tab().region).toBeNull();
     expect(useApp.getState().modal?.title ?? JSON.stringify(useApp.getState().toasts)).toMatch(/cells could not be selected/i);
+  });
+});
+
+describe("one rectangle of a shared interface image", () => {
+  // a 16×16 "widgets.png" opened at 2× (32×32); the piece is 6×3 at 2, 4
+  const BUTTON = { piece: "button", rect: [2, 4, 6, 3] as [number, number, number, number], imageSize: [16, 16] as [number, number] };
+
+  it("scales the rectangle to the image and refuses other shapes", () => {
+    const r = rectRegion(fromRaw(opened([[sheet(32)]])), BUTTON)!;
+    expect(r.kind).toBe("rect");
+    expect(r.rects).toEqual([{ x: 4, y: 8, w: 12, h: 6 }]);
+    expect(r.mask.reduce((a, b) => a + b, 0)).toBe(72);
+    expect(r.mask[8 * 32 + 4]).toBe(1);
+    expect(r.mask[8 * 32 + 3]).toBe(0);
+    expect(rectRegion(fromRaw(opened([[newBuf(24, 24)]])), BUTTON)).toBeNull();
+    expect(rectRegion(fromRaw(opened([[newBuf(32, 16)]])), BUTTON)).toBeNull();
+    expect(rectRegion(fromRaw(opened([[newBuf(8, 8)]])), BUTTON)).toBeNull();
+  });
+
+  it("opens the image, keeps every stroke inside and saves the rest unchanged", async () => {
+    rust.editorOpen.mockResolvedValue(opened([[sheet(32)]], { path: "gui/widgets" }));
+    await ed().openRect("gui/widgets", BUTTON);
+    const r = tab().region!;
+    expect(r.particle).toBe("button");
+    expect(useApp.getState().status).toContain("Editing only button");
+    useEditor.setState({ tool: "pencil", options: { ...defaultOptions, size: 4 } });
+    drag(ACROSS);
+    ed().selectAll();
+    ed().deleteSelection();
+    drag([[0, 0], [31, 31]]);
+    expect(await ed().save()).toBe(true);
+    const [path, , flat] = rust.editorSave.mock.calls[0];
+    expect(path).toBe("gui/widgets");
+    const c = changes(sheet(32), { w: 32, h: 32, data: base64ToBytes(flat) }, r.mask);
+    expect(c.outside).toBe(0);
+    expect(c.inside).toBeGreaterThan(0);
+  });
+
+  it("explains an image of the wrong size and leaves it unrestricted", async () => {
+    rust.editorOpen.mockResolvedValue(opened([[newBuf(24, 24)]], { path: "gui/widgets" }));
+    await ed().openRect("gui/widgets", BUTTON);
+    expect(tab().region).toBeNull();
+    expect(useApp.getState().modal?.title).toMatch(/only this piece could not be selected/i);
   });
 });

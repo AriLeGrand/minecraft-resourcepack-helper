@@ -113,6 +113,33 @@ Result: `app/core/data/renames.json` (428 Flattening entries + 113 later ones).
   - GUI sprites can be animated too (`{"animation": {"frametime": 2}}`).
 - Many screens are still one big image in every version
   (`gui/container/*.png`, 256×256).
+- Before 1.20.2 the pieces sit at fixed rectangles of 256×256 shared images.
+  Found by searching each 1.21.11 sprite's exact pixels (transparent pixels
+  normalised) in the 1.20.1 and 1.8.9 images
+  (`tools/research/find_gui_regions.py`):
+  - `widgets.png`: hotbar 0,0 182×22; selection 0,22 24×23; off-hand left
+    24,22 and right 53,22 (29×24, 1.9+); disabled button 0,46; button 0,66;
+    highlighted button 0,86 (all 200×20; the 1.8.9 highlighted button has
+    other pixels); difficulty lock 0/20,146 (normal), 166 (highlighted), 186
+    (disabled), 20×20. The language button (0,106 and 0,126) has no modern
+    sprite to compare; its place comes from the game's code. The slider uses
+    the disabled button as track and the button as knob.
+  - `icons.png`: crosshair 0,0 15×15; hearts in 9×9 cells on row 0 (container
+    16, blinking 25, full 52, half 61, blinking 70/79, poisoned 88/97,
+    withered 124/133, absorbing 160/169, frozen 178/187 from 1.17), hardcore
+    row 45; armor row 9 (empty 16, half 25, full 34); ridden-animal hearts row 9
+    (52, 88, 97); air row 18 (16, 25); food row 27 (empty 16, full 52, half
+    61, hunger 88/97/133); experience bar 0,64 and 0,69; boss bar 0,74 and
+    0,79 (used up to 1.8.9); jump bar 0,84 and 0,89; attack indicators row 94
+    (1.9+).
+  - `bars.png` (1.9–1.20.1): colours in pairs of 5 px rows (pink, blue, red,
+    green, yellow, purple, white from y 0), notch overlays from y 80
+    (6, 10, 12, 20).
+  - Result: `app/core/data/gui_regions.json`; 120 version/rectangle pairs match
+    pixel for pixel (checked again by a developer-only test).
+- Which `.mcmeta` applies: the game searches the packs from the top down to
+  the pack with the PNG, so a pack PNG without its own `.mcmeta` is stretched
+  even when the game's sprite is nine-sliced (D-065).
 
 ## 5. Particles
 

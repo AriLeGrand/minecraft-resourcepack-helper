@@ -319,19 +319,30 @@ const RegionBanner = memo(function RegionBanner({ tabId, region }: { tabId: numb
   const leave = useEditor((s) => s.leaveRegion);
   const go = useApp((s) => s.go);
   const n = uniqueCells(region.cells).length;
+  const r = region.rects[0];
+  const piece = region.kind === "rect";
   return (
     <div className="ed-region" role="status">
       <Icon name="lock" size={14} width={2} color="var(--link)" />
-      <span>
-        Editing only <b className="mono">{region.particle}</b> (cell{n === 1 ? "" : "s"} {cellsLabel(region.cells)}).{" "}
-        {region.shared.length > 0
-          ? <>Shared with: <span className="mono">{region.shared.join(", ")}</span>. A change shows on those particles too.</>
-          : "No other particle uses these cells."}{" "}
-        Pixels outside stay exactly as they are.
-      </span>
+      {piece ? (
+        <span>
+          Editing only <b className="mono">{region.particle}</b> ({r.w}×{r.h} px at {r.x}, {r.y}). The rest of this image belongs to other interface pieces.{" "}
+          Pixels outside stay exactly as they are.
+        </span>
+      ) : (
+        <span>
+          Editing only <b className="mono">{region.particle}</b> (cell{n === 1 ? "" : "s"} {cellsLabel(region.cells)}).{" "}
+          {region.shared.length > 0
+            ? <>Shared with: <span className="mono">{region.shared.join(", ")}</span>. A change shows on those particles too.</>
+            : "No other particle uses these cells."}{" "}
+          Pixels outside stay exactly as they are.
+        </span>
+      )}
       <span className="grow" />
-      <button className="an-btn" onClick={() => go("particles")}>Back to particles</button>
-      <button className="an-btn" title="Every pixel of the sheet becomes editable again" onClick={() => leave(tabId)}>Edit the whole sheet</button>
+      <button className="an-btn" onClick={() => go(piece ? "interface" : "particles")}>{piece ? "Back to interface" : "Back to particles"}</button>
+      <button className="an-btn" title={`Every pixel of the ${piece ? "image" : "sheet"} becomes editable again`} onClick={() => leave(tabId)}>
+        {piece ? "Edit the whole image" : "Edit the whole sheet"}
+      </button>
     </div>
   );
 });

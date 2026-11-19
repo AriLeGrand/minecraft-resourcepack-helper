@@ -8,13 +8,13 @@ import { Animation } from "./screens/Animation";
 import { Browser } from "./screens/Browser";
 import { Editor } from "./screens/Editor";
 import { Export } from "./screens/Export";
+import { Interface } from "./screens/Interface";
 import { Particles } from "./screens/Particles";
 import { Settings } from "./screens/Settings";
 import { Welcome } from "./screens/Welcome";
 import { useApp, type Screen } from "./store";
 
 const LATER: Partial<Record<Screen, string>> = {
-  interface: "The interface (GUI) editor arrives in stage 5.",
   models: "3D models are planned for later. Blockbench is the tool for those today.",
 };
 
@@ -78,6 +78,7 @@ export function App() {
   else if (screen === "animation") content = <Animation />;
   else if (screen === "export") content = <Export />;
   else if (screen === "particles") content = <Particles />;
+  else if (screen === "interface") content = <Interface />;
   else content = <ComingLater screen={screen} />;
 
   return (
