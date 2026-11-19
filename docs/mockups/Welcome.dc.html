@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Pack Creator: start</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#8fb2ff}a:hover{color:#b8ceff}
+</style>
+</helmet>
+<div style="width: 100%; min-height: 900px; box-sizing: border-box; background: #111214; color: #ececf0; font-family: Inter, system-ui, sans-serif; font-size: 13px; display: flex; flex-direction: column">
+
+  <header style="display: flex; flex-wrap: wrap; align-items: center; gap: 16px; padding: 0 14px; min-height: 44px; background: #18191c; border-bottom: 1px solid #2a2b30">
+    <div style="display: flex; align-items: center; gap: 10px">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#5b8cff" stroke-width="1.6" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9zM12 12l8-4.5M12 12v9M12 12L4 7.5"></path></svg>
+      <span style="font-weight: 600; letter-spacing: -0.01em">Pack Creator</span>
+    </div>
+    <div style="flex: 1; display: flex; justify-content: center; min-width: 200px">
+      <label style="display: flex; align-items: center; gap: 8px; width: 100%; max-width: 420px; height: 30px; padding: 0 10px; background: #111214; border: 1px solid #2a2b30; border-radius: 6px; color: #9b9ca4">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9b9ca4" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-4-4"></path></svg>
+        <input type="text" aria-label="Search everything" placeholder="Search textures, tools, commands…" style="flex: 1; min-width: 0; background: transparent; border: 0; color: #ececf0; font: inherit; font-size: 12px; outline: none">
+        <span style="font-size: 11px; border: 1px solid #2a2b30; border-radius: 4px; padding: 1px 5px">Ctrl K</span>
+      </label>
+    </div>
+    <div style="font-size: 12px; color: #9b9ca4">No pack open</div>
+  </header>
+
+  <div style="flex: 1; display: flex; min-height: 0">
+    <nav aria-label="Sections" style="flex: 0 0 52px; background: #18191c; border-right: 1px solid #2a2b30; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px 0">
+      <sc-for list="{{nav}}" as="n" hint-placeholder-count="7">
+        <a href="#" aria-label="{{n.label}}" title="{{n.label}}" style="width: 36px; height: 36px; border-radius: 8px; display: flex; align-items: center; justify-content: center; {{n.style}}">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="{{n.stroke}}" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{n.d}}"></path></svg>
+        </a>
+      </sc-for>
+    </nav>
+
+    <main style="flex: 1; min-width: 0; overflow: auto; padding: 48px 32px">
+      <div style="max-width: 1120px; margin: 0 auto; display: flex; flex-wrap: wrap; gap: 32px">
+
+        <section style="flex: 1 1 520px; min-width: 0; display: flex; flex-direction: column; gap: 24px">
+          <div>
+            <h1 style="margin: 0; font-size: 28px; font-weight: 600; letter-spacing: -0.02em">Start a new pack</h1>
+            <p style="margin: 8px 0 0; color: #9b9ca4; font-size: 14px">Pick a Minecraft version and a resolution. Textures are extracted from your game automatically.</p>
+          </div>
+
+          <div style="display: flex; align-items: center; gap: 12px; padding: 12px 14px; background: #142033; border: 1px solid #24406b; border-radius: 8px">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#8fb2ff" stroke-width="2" aria-hidden="true"><path d="M5 12l5 5 9-10"></path></svg>
+            <div style="flex: 1; font-size: 13px">Minecraft found in <span style="font-family: 'JetBrains Mono', monospace; font-size: 12px">%APPDATA%\.minecraft</span> · 6 versions installed</div>
+            <a href="#" style="font-size: 12px">Change</a>
+          </div>
+
+          <div style="background: #18191c; border: 1px solid #2a2b30; border-radius: 10px; padding: 24px; display: flex; flex-direction: column; gap: 20px">
+            <div style="display: flex; flex-direction: column; gap: 6px">
+              <label for="packname" style="font-size: 12px; font-weight: 500; color: #c4c5cc">Pack name</label>
+              <input id="packname" type="text" value="Deep Sea Pack" style="height: 36px; padding: 0 12px; background: #111214; border: 1px solid #34353b; border-radius: 6px; color: #ececf0; font: inherit; font-size: 13px">
+            </div>
+            <div style="display: flex; flex-wrap: wrap; gap: 16px">
+              <div style="flex: 1 1 220px; display: flex; flex-direction: column; gap: 6px">
+                <label for="ver" style="font-size: 12px; font-weight: 500; color: #c4c5cc">Minecraft version</label>
+                <select id="ver" style="height: 36px; padding: 0 10px; background: #111214; border: 1px solid #34353b; border-radius: 6px; color: #ececf0; font: inherit; font-size: 13px">
+                  <option>Java 1.21.4 · installed</option>
+                  <option>Java 1.20.1 · installed</option>
+                  <option>Java 1.12.2 · installed</option>
+                </select>
+                <div style="font-size: 11px; color: #9b9ca4">Pack format 46 · read from the game files</div>
+              </div>
+              <div style="flex: 1 1 220px; display: flex; flex-direction: column; gap: 6px">
+                <span style="font-size: 12px; font-weight: 500; color: #c4c5cc">Resolution</span>
+                <div role="group" aria-label="Resolution" style="display: flex; height: 36px; background: #111214; border: 1px solid #34353b; border-radius: 6px; padding: 3px; gap: 3px; box-sizing: border-box">
+                  <sc-for list="{{resolutions}}" as="r" hint-placeholder-count="5">
+                    <button type="button" style="flex: 1; font: inherit; font-size: 12px; border: 0; border-radius: 4px; {{r.style}}">{{r.label}}</button>
+                  </sc-for>
+                </div>
+                <div style="font-size: 11px; color: #9b9ca4">GUI and entities can use their own scale later</div>
+              </div>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 6px">
+              <label for="loc" style="font-size: 12px; font-weight: 500; color: #c4c5cc">Location</label>
+              <div style="display: flex; gap: 8px">
+                <input id="loc" type="text" value="D:\Packs\Deep Sea Pack" style="flex: 1; min-width: 0; height: 36px; padding: 0 12px; background: #111214; border: 1px solid #34353b; border-radius: 6px; color: #ececf0; font-family: 'JetBrains Mono', monospace; font-size: 12px">
+                <button type="button" style="font: inherit; font-size: 12px; padding: 0 14px; height: 36px; border-radius: 6px; border: 1px solid #34353b; background: #1f2024; color: #ececf0">Browse</button>
+              </div>
+            </div>
+            <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding-top: 4px">
+              <button type="button" style="font: inherit; font-weight: 600; font-size: 13px; padding: 0 20px; height: 40px; border-radius: 6px; border: 0; background: #5b8cff; color: #0a1630">Create pack</button>
+              <span style="font-size: 12px; color: #9b9ca4">Creates the folder, pack.mcmeta and a placeholder pack.png</span>
+            </div>
+          </div>
+
+          <div style="display: flex; flex-wrap: wrap; gap: 12px">
+            <button type="button" style="flex: 1 1 200px; display: flex; align-items: center; gap: 12px; text-align: left; font: inherit; padding: 14px; border-radius: 8px; border: 1px solid #2a2b30; background: #18191c; color: #ececf0">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#c4c5cc" stroke-width="1.6" aria-hidden="true"><path d="M3 7h6l2 2h10v10H3z"></path></svg>
+              <span><span style="display: block; font-weight: 500">Open pack folder</span><span style="font-size: 12px; color: #9b9ca4">Continue an existing pack</span></span>
+            </button>
+            <button type="button" style="flex: 1 1 200px; display: flex; align-items: center; gap: 12px; text-align: left; font: inherit; padding: 14px; border-radius: 8px; border: 1px solid #2a2b30; background: #18191c; color: #ececf0">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#c4c5cc" stroke-width="1.6" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"></path></svg>
+              <span><span style="display: block; font-weight: 500">Import .zip</span><span style="font-size: 12px; color: #9b9ca4">Edit a pack you downloaded</span></span>
+            </button>
+            <button type="button" style="flex: 1 1 200px; display: flex; align-items: center; gap: 12px; text-align: left; font: inherit; padding: 14px; border-radius: 8px; border: 1px solid #2a2b30; background: #18191c; color: #ececf0">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#c4c5cc" stroke-width="1.6" aria-hidden="true"><path d="M4 12a8 8 0 1 0 16 0a8 8 0 1 0-16 0M12 8v4l3 2"></path></svg>
+              <span><span style="display: block; font-weight: 500">Port to another version</span><span style="font-size: 12px; color: #9b9ca4">Renames files between versions</span></span>
+            </button>
+          </div>
+        </section>
+
+        <aside style="flex: 0 1 380px; min-width: 0; display: flex; flex-direction: column; gap: 16px">
+          <div style="display: flex; align-items: baseline; justify-content: space-between">
+            <h2 style="margin: 0; font-size: 14px; font-weight: 600">Recent packs</h2>
+            <a href="#" style="font-size: 12px">Show all</a>
+          </div>
+          <div style="background: #18191c; border: 1px solid #2a2b30; border-radius: 10px; overflow: hidden">
+            <sc-for list="{{recent}}" as="p" hint-placeholder-count="4">
+              <a href="#" style="display: flex; align-items: center; gap: 14px; padding: 14px 16px; color: #ececf0; text-decoration: none; {{p.border}}">
+                <div style="width: 44px; height: 44px; flex: none; border-radius: 6px; overflow: hidden; display: grid; grid-template-columns: repeat(8, minmax(0, 1fr))">
+                  <sc-for list="{{p.px}}" as="x" hint-placeholder-count="64"><div style="background: {{x.c}}"></div></sc-for>
+                </div>
+                <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px">
+                  <div style="display: flex; justify-content: space-between; gap: 8px">
+                    <span style="font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{p.name}}</span>
+                    <span style="font-size: 11px; color: #9b9ca4; white-space: nowrap">{{p.when}}</span>
+                  </div>
+                  <div style="display: flex; align-items: center; gap: 8px">
+                    <div style="flex: 1; height: 4px; background: #2a2b30; border-radius: 2px; overflow: hidden"><div style="height: 100%; background: #3ecf8e; width: {{p.pct}}"></div></div>
+                    <span style="font-size: 11px; color: #9b9ca4; white-space: nowrap">{{p.meta}}</span>
+                  </div>
+                </div>
+              </a>
+            </sc-for>
+          </div>
+
+          <h2 style="margin: 8px 0 0; font-size: 14px; font-weight: 600">Installed versions</h2>
+          <div style="background: #18191c; border: 1px solid #2a2b30; border-radius: 10px; padding: 6px 0">
+            <sc-for list="{{installs}}" as="v" hint-placeholder-count="6">
+              <div style="display: flex; align-items: center; justify-content: space-between; padding: 8px 16px; font-size: 12px">
+                <span style="font-family: 'JetBrains Mono', monospace">{{v.name}}</span>
+                <span style="{{v.style}}">{{v.state}}</span>
+              </div>
+            </sc-for>
+          </div>
+        </aside>
+      </div>
+    </main>
+  </div>
+
+  <footer style="display: flex; flex-wrap: wrap; gap: 16px; align-items: center; padding: 4px 14px; min-height: 24px; background: #18191c; border-top: 1px solid #2a2b30; font-size: 11px; color: #9b9ca4">
+    <span style="display: flex; align-items: center; gap: 6px"><span style="width: 6px; height: 6px; border-radius: 50%; background: #3ecf8e"></span>Ready</span>
+    <span style="margin-left: auto">v0.1 preview</span>
+  </footer>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    var navDefs = [
+      ['home', 'Home', 'M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z'],
+      ['tex', 'Textures', 'M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z'],
+      ['edit', 'Editor', 'M4 20l4-1L19 8l-3-3L5 16l-1 4zM14 7l3 3'],
+      ['anim', 'Animation', 'M4 5h16v14H4zM8 5v14M16 5v14M4 9h4M4 15h4M16 9h4M16 15h4'],
+      ['model', 'Models (later)', 'M12 3l8 4.5v9L12 21l-8-4.5v-9zM12 12l8-4.5M12 12v9M12 12L4 7.5'],
+      ['pack', 'Pack and export', 'M12 3v12M7 10l5 5 5-5M5 21h14'],
+      ['set', 'Settings', 'M12 9a3 3 0 1 0 0 6a3 3 0 1 0 0-6zM12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1']
+    ];
+    var active = 'home';
+    var nav = navDefs.map(function (d) {
+      var on = d[0] === active;
+      return { label: d[1], d: d[2], stroke: on ? '#ececf0' : '#8b8c94', style: on ? 'background: #26272c; box-shadow: inset 2px 0 0 #5b8cff;' : '' };
+    });
+    var resolutions = ['16×', '32×', '64×', '128×', '256×'].map(function (r) {
+      return { label: r, style: r === '32×' ? 'background: #2c3e63; color: #ececf0; font-weight: 600;' : 'background: transparent; color: #9b9ca4;' };
+    });
+    function rng(seed) { var s = (seed * 9301 + 49297) % 233280; return function () { s = (s * 9301 + 49297) % 233280; return s / 233280; }; }
+    function pix(seed, pal) { var r = rng(seed), o = []; for (var i = 0; i < 64; i++) { var v = r(); o.push({ c: v < 0.45 ? pal[0] : (v < 0.8 ? pal[1] : pal[2]) }); } return o; }
+    var recentDefs = [
+      ['Deep Sea Pack', 'Edited 2 h ago', '18%', '1.21.4 · 32× · 482 / 2650', ['#3c7468', '#63a597', '#1d3f38']],
+      ['Autumn Village', 'Yesterday', '64%', '1.20.1 · 16× · 1690 / 2610', ['#b8653a', '#d4a04f', '#6e3a1f']],
+      ['Classic PvP 1.8', 'Last week', '91%', '1.8.9 · 16× · 401 / 440', ['#8a8a8a', '#c9c0b3', '#4a4a4a']],
+      ['Pastel GUI', 'Oct 2', '35%', '1.21.4 · GUI 2× · 41 / 118', ['#e8bfb5', '#c9b6e8', '#a8d6c3']]
+    ];
+    var recent = recentDefs.map(function (d, i) {
+      return { name: d[0], when: d[1], pct: d[2], meta: d[3], px: pix(i * 41 + 3, d[4]), border: i > 0 ? 'border-top: 1px solid #2a2b30;' : '' };
+    });
+    var installs = [
+      ['1.21.4', 'Extracted', 1], ['1.21.1', 'Not extracted', 0], ['1.20.1', 'Extracted', 1],
+      ['1.16.5', 'Not extracted', 0], ['1.12.2', 'Extracted', 1], ['1.8.9', 'Not extracted', 0]
+    ].map(function (d) { return { name: d[0], state: d[1], style: d[2] ? 'color: #3ecf8e;' : 'color: #9b9ca4;' }; });
+    return { nav: nav, resolutions: resolutions, recent: recent, installs: installs };
+  }
+}
+</script>
+</body>
+</html>

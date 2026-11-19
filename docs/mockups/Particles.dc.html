@@ -1,0 +1,378 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Pack Creator: particle viewer</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#8fb2ff}a:hover{color:#b8ceff}
+</style>
+</helmet>
+<div style="width: 100%; min-height: 900px; box-sizing: border-box; background: #111214; color: #ececf0; font-family: Inter, system-ui, sans-serif; font-size: 13px; display: flex; flex-direction: column">
+
+  <header style="display: flex; flex-wrap: wrap; align-items: center; gap: 16px; padding: 0 14px; min-height: 44px; background: #18191c; border-bottom: 1px solid #2a2b30">
+    <div style="display: flex; align-items: center; gap: 10px">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#5b8cff" stroke-width="1.6" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9zM12 12l8-4.5M12 12v9M12 12L4 7.5"></path></svg>
+      <span style="font-weight: 600">Deep Sea Pack</span>
+      <span style="color: #6b6c74">/</span>
+      <span style="color: #9b9ca4">Particles</span>
+      <span style="color: #6b6c74">/</span>
+      <span style="font-family: 'JetBrains Mono', monospace; font-size: 12px">{{selName}}</span>
+    </div>
+    <div style="flex: 1"></div>
+    <div style="display: flex; align-items: center; gap: 8px; font-size: 12px">
+      <button type="button" onClick="{{togglePlay}}" style="font: inherit; font-size: 12px; font-weight: 600; height: 30px; padding: 0 14px; border-radius: 6px; border: 1px solid #34353b; background: #1f2024; color: #ececf0">{{playLabel}}</button>
+      <button type="button" style="font: inherit; font-weight: 600; font-size: 12px; height: 30px; padding: 0 14px; border-radius: 6px; border: 0; background: #5b8cff; color: #0a1630">Save to pack</button>
+    </div>
+  </header>
+
+  <div style="flex: 1; display: flex; flex-wrap: wrap; min-height: 0">
+    <nav aria-label="Sections" style="flex: 0 0 52px; background: #18191c; border-right: 1px solid #2a2b30; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px 0">
+      <sc-for list="{{nav}}" as="n" hint-placeholder-count="9">
+        <a href="#" aria-label="{{n.label}}" title="{{n.label}}" style="width: 36px; height: 36px; border-radius: 8px; display: flex; align-items: center; justify-content: center; {{n.style}}">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="{{n.stroke}}" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{n.d}}"></path></svg>
+        </a>
+      </sc-for>
+    </nav>
+
+    <aside style="flex: 0 0 230px; background: #151619; border-right: 1px solid #2a2b30; padding: 14px 10px; box-sizing: border-box; display: flex; flex-direction: column; gap: 10px">
+      <div style="display: flex; justify-content: space-between; align-items: baseline; padding: 0 8px">
+        <span style="font-size: 11px; font-weight: 600; letter-spacing: 0.06em; color: #8b8c94">PARTICLES</span>
+        <span style="font-size: 11px; color: #9b9ca4">10 of 96</span>
+      </div>
+      <label style="display: flex; align-items: center; gap: 8px; height: 30px; padding: 0 10px; background: #111214; border: 1px solid #34353b; border-radius: 6px">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9b9ca4" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-4-4"></path></svg>
+        <input type="text" aria-label="Search particles" placeholder="Search particles…" style="flex: 1; min-width: 0; background: transparent; border: 0; color: #ececf0; font: inherit; font-size: 12px; outline: none">
+      </label>
+      <div style="display: flex; flex-direction: column; gap: 2px">
+        <sc-for list="{{list}}" as="p" hint-placeholder-count="10">
+          <button type="button" onClick="{{p.pick}}" style="display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; font: inherit; padding: 7px 8px; border: 0; border-radius: 6px; color: #ececf0; {{p.rowStyle}}">
+            <span style="width: 10px; height: 10px; flex: none; {{p.swatch}}"></span>
+            <span style="flex: 1; min-width: 0; font-family: 'JetBrains Mono', monospace; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{p.name}}</span>
+            <span style="font-size: 10px; color: #9b9ca4">{{p.frames}}</span>
+          </button>
+        </sc-for>
+      </div>
+    </aside>
+
+    <main style="flex: 999 1 520px; min-width: 0; display: flex; flex-direction: column; background: #0d0e10">
+      <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 16px; padding: 0 14px; min-height: 40px; border-bottom: 1px solid #2a2b30; background: #151619; font-size: 12px; color: #c4c5cc">
+        <span style="display: flex; align-items: center; gap: 6px">Scene
+          <span role="group" aria-label="Scene" style="display: flex; background: #111214; border: 1px solid #2a2b30; border-radius: 6px; padding: 2px; gap: 2px">
+            <sc-for list="{{bgTabs}}" as="t" hint-placeholder-count="3"><button type="button" onClick="{{t.pick}}" style="font: inherit; font-size: 11px; padding: 3px 9px; border: 0; border-radius: 4px; {{t.style}}">{{t.label}}</button></sc-for>
+          </span>
+        </span>
+        <span style="display: flex; align-items: center; gap: 6px">Speed
+          <span role="group" aria-label="Speed" style="display: flex; background: #111214; border: 1px solid #2a2b30; border-radius: 6px; padding: 2px; gap: 2px">
+            <sc-for list="{{speedTabs}}" as="t" hint-placeholder-count="3"><button type="button" onClick="{{t.pick}}" style="font: inherit; font-size: 11px; padding: 3px 9px; border: 0; border-radius: 4px; {{t.style}}">{{t.label}}</button></sc-for>
+          </span>
+        </span>
+        <span style="display: flex; align-items: center; gap: 6px">Show
+          <span role="group" aria-label="Texture source" style="display: flex; background: #111214; border: 1px solid #2a2b30; border-radius: 6px; padding: 2px; gap: 2px">
+            <sc-for list="{{srcTabs}}" as="t" hint-placeholder-count="3"><button type="button" onClick="{{t.pick}}" style="font: inherit; font-size: 11px; padding: 3px 9px; border: 0; border-radius: 4px; {{t.style}}">{{t.label}}</button></sc-for>
+          </span>
+        </span>
+        <span style="display: flex; align-items: center; gap: 6px">Pack
+          <span role="group" aria-label="Texture layout" style="display: flex; background: #111214; border: 1px solid #2a2b30; border-radius: 6px; padding: 2px; gap: 2px">
+            <sc-for list="{{layoutTabs}}" as="t" hint-placeholder-count="2"><button type="button" onClick="{{t.pick}}" style="font: inherit; font-size: 11px; padding: 3px 9px; border: 0; border-radius: 4px; {{t.style}}">{{t.label}}</button></sc-for>
+          </span>
+        </span>
+        <button type="button" onClick="{{toggleSource}}" style="font: inherit; font-size: 11px; padding: 4px 10px; border-radius: 6px; border: 1px solid #34353b; background: #111214; color: #c4c5cc">{{sourceLabel}}</button>
+        <span style="margin-left: auto; color: #9b9ca4">{{liveCount}} particles alive</span>
+      </div>
+
+      <div style="flex: 1; display: flex; align-items: center; justify-content: center; padding: 24px; min-height: 560px">
+        <div style="position: relative; width: 620px; height: 480px; max-width: 100%; overflow: hidden; border-radius: 10px; border: 1px solid #2a2b30; {{sceneBg}}">
+          <div style="position: absolute; left: 0; right: 0; bottom: 0; height: 70px; {{groundStyle}}"></div>
+          <sc-if value="{{emTorch}}" hint-placeholder-val="{{true}}">
+            <div style="position: absolute; left: 304px; top: 360px; width: 12px; height: 50px; background: #7a5530; box-shadow: inset -3px 0 0 #5a3d22"></div>
+            <div style="position: absolute; left: 302px; top: 350px; width: 16px; height: 14px; {{torchHead}}"></div>
+          </sc-if>
+          <sc-if value="{{emCampfire}}" hint-placeholder-val="{{false}}">
+            <div style="position: absolute; left: 250px; top: 392px; width: 120px; height: 18px; background: #6b4a2b; box-shadow: inset 0 -4px 0 #4a321c"></div>
+            <div style="position: absolute; left: 270px; top: 380px; width: 80px; height: 14px; background: #ff9a2e; box-shadow: 0 0 30px 8px rgba(255,140,40,0.35)"></div>
+          </sc-if>
+          <sc-if value="{{emBlock}}" hint-placeholder-val="{{false}}">
+            <div style="position: absolute; left: 280px; top: 350px; width: 60px; height: 60px; {{blockStyle}}"></div>
+          </sc-if>
+          <sc-for list="{{parts}}" as="p" hint-placeholder-count="30">
+            <div style="position: absolute; {{p.style}}"></div>
+          </sc-for>
+          <div style="position: absolute; left: 12px; top: 12px; font-size: 11px; color: rgba(255,255,255,0.75); background: rgba(0,0,0,0.35); padding: 4px 8px; border-radius: 4px">{{emitterLabel}}</div>
+        </div>
+      </div>
+    </main>
+
+    <aside style="flex: 0 0 340px; background: #151619; border-left: 1px solid #2a2b30; display: flex; flex-direction: column">
+      <sc-if value="{{separate}}" hint-placeholder-val="{{false}}">
+      <section style="padding: 14px; border-bottom: 1px solid #2a2b30; display: flex; flex-direction: column; gap: 10px">
+        <div style="display: flex; justify-content: space-between; align-items: baseline">
+          <h2 style="margin: 0; font-size: 11px; font-weight: 600; letter-spacing: 0.06em; color: #8b8c94">TEXTURES · {{frameCount}}</h2>
+          <span style="font-size: 11px; color: #9b9ca4">{{frameHint}}</span>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px">
+          <sc-for list="{{frames}}" as="f" hint-placeholder-count="8">
+            <div style="display: flex; flex-direction: column; align-items: center; gap: 3px">
+              <div style="width: 40px; height: 40px; display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); background: #0d0e10; border-radius: 4px; border: 1px solid #2a2b30; {{f.ring}}">
+                <sc-for list="{{f.px}}" as="x" hint-placeholder-count="64"><div style="background: {{x.c}}"></div></sc-for>
+              </div>
+              <span style="font-size: 9px; color: #9b9ca4; font-family: 'JetBrains Mono', monospace">{{f.n}}</span>
+            </div>
+          </sc-for>
+        </div>
+        <div style="display: flex; gap: 8px">
+          <a href="AppEditor.dc.html" style="flex: 1; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; height: 32px; border-radius: 6px; background: #5b8cff; color: #0a1630; text-decoration: none">Edit frames</a>
+          <button type="button" style="flex: 1; font: inherit; font-size: 12px; height: 32px; border-radius: 6px; border: 1px solid #34353b; background: #1f2024; color: #ececf0">Add frame</button>
+        </div>
+      </section>
+      </sc-if>
+      <sc-if value="{{sheet}}" hint-placeholder-val="{{true}}">
+      <section style="padding: 14px; border-bottom: 1px solid #2a2b30; display: flex; flex-direction: column; gap: 10px">
+        <div style="display: flex; justify-content: space-between; align-items: baseline">
+          <h2 style="margin: 0; font-size: 11px; font-weight: 600; letter-spacing: 0.06em; color: #8b8c94">PARTICLE SHEET</h2>
+          <span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #9b9ca4">particles.png · 128×128</span>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(16, minmax(0, 1fr)); gap: 1px; padding: 4px; background: #0d0e10; border: 1px solid #2a2b30; border-radius: 6px">
+          <sc-for list="{{sheetCells}}" as="c" hint-placeholder-count="256"><div style="aspect-ratio: 1; {{c.style}}"></div></sc-for>
+        </div>
+        <div style="font-size: 11px; line-height: 1.5; color: #c4c5cc">{{sheetHint}}</div>
+        <div style="font-size: 11px; font-weight: 600; letter-spacing: 0.06em; color: #8b8c94; padding-top: 4px">ONLY THIS PARTICLE</div>
+        <div style="display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 5px">
+          <sc-for list="{{sheetFrames}}" as="f" hint-placeholder-count="8">
+            <div style="aspect-ratio: 1; display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); background: #0d0e10; border-radius: 3px; border: 1px solid #2d4a7a">
+              <sc-for list="{{f.px}}" as="x" hint-placeholder-count="64"><div style="background: {{x.c}}"></div></sc-for>
+            </div>
+          </sc-for>
+        </div>
+        <div style="display: flex; gap: 8px">
+          <a href="AppEditor.dc.html" style="flex: 1; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; height: 32px; border-radius: 6px; background: #5b8cff; color: #0a1630; text-decoration: none">Edit only these cells</a>
+        </div>
+      </section>
+      </sc-if>
+
+      <section style="padding: 14px; border-bottom: 1px solid #2a2b30; display: flex; flex-direction: column; gap: 8px">
+        <div style="display: flex; justify-content: space-between; align-items: center">
+          <h2 style="margin: 0; font-size: 11px; font-weight: 600; letter-spacing: 0.06em; color: #8b8c94">PARTICLE FILE</h2>
+          <span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #9b9ca4">{{fileLabel}}</span>
+        </div>
+        <sc-if value="{{separate}}" hint-placeholder-val="{{false}}"><pre style="margin: 0; padding: 10px 12px; max-height: 190px; overflow: auto; background: #0d0e10; border: 1px solid #2a2b30; border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-size: 11px; line-height: 1.5; color: #c4c5cc; white-space: pre-wrap">{{json}}</pre></sc-if>
+        <sc-if value="{{sheet}}" hint-placeholder-val="{{true}}"><div style="font-size: 12px; line-height: 1.5; color: #c4c5cc; padding: 10px 12px; background: #0d0e10; border: 1px solid #2a2b30; border-radius: 6px">1.12.2 and older have no particle files: each particle sits at a fixed spot on the sheet. The app knows those spots, so you only ever edit the cells of the particle you picked.</div></sc-if>
+      </section>
+
+      <section style="padding: 14px; display: flex; flex-direction: column; gap: 8px">
+        <div style="display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; background: #1d1a10; border: 1px solid #4a3d16; border-radius: 8px">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f5a524" stroke-width="2" style="flex: none; margin-top: 1px" aria-hidden="true"><path d="M12 8v5M12 16h.01M10.3 3.9L2.4 18a2 2 0 0 0 1.7 3h15.8a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"></path></svg>
+          <span style="font-size: 11px; line-height: 1.5; color: #e6d3a3">A resource pack can change how a particle <b>looks</b> (its images and their order), not how it <b>moves</b>. Movement here is an approximation of the game.</span>
+        </div>
+      </section>
+    </aside>
+  </div>
+
+  <footer style="display: flex; flex-wrap: wrap; gap: 16px; align-items: center; padding: 4px 14px; min-height: 24px; background: #18191c; border-top: 1px solid #2a2b30; font-size: 11px; color: #9b9ca4">
+    <span>Particles: 21 / 96 done</span>
+    <span>1.14 and newer: one image per particle · older: one shared sheet</span>
+    <span style="margin-left: auto; font-family: 'JetBrains Mono', monospace">→ {{footerPath}}</span>
+  </footer>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  static get P() {
+    var PDEFS = {
+      smoke: { frames: 8, life: 1.6, rate: 14, vx: 12, vy: -45, s0: 16, s1: 6, c0: [205, 205, 205], c1: [110, 110, 110], emitter: 'torch', names: 'generic_7..0', aged: true },
+      flame: { frames: 1, life: 0.7, rate: 10, vx: 4, vy: -14, s0: 8, s1: 4, c0: [255, 196, 70], c1: [255, 110, 30], emitter: 'torch', names: 'flame' },
+      soul_fire_flame: { frames: 1, life: 0.7, rate: 10, vx: 4, vy: -14, s0: 8, s1: 4, c0: [140, 240, 255], c1: [60, 170, 200], emitter: 'torch', names: 'soul_fire_flame' },
+      campfire_cosy_smoke: { frames: 12, life: 4.0, rate: 4, vx: 6, vy: -55, s0: 26, s1: 30, c0: [170, 170, 170], c1: [120, 120, 120], emitter: 'campfire', names: 'big_smoke_0..11', aged: true },
+      explosion: { frames: 16, life: 0.8, rate: 7, vx: 70, vy: 70, s0: 30, s1: 44, c0: [255, 255, 255], c1: [120, 120, 120], emitter: 'block', names: 'explosion_0..15', aged: true, burst: true },
+      heart: { frames: 1, life: 1.4, rate: 3, vx: 10, vy: -28, s0: 12, s1: 12, c0: [232, 50, 60], c1: [200, 30, 40], emitter: 'block', names: 'heart' },
+      note: { frames: 1, life: 1.2, rate: 3, vx: 6, vy: -34, s0: 11, s1: 11, c0: [90, 220, 120], c1: [90, 160, 255], emitter: 'block', names: 'note', rainbow: true },
+      bubble: { frames: 1, life: 1.8, rate: 9, vx: 8, vy: -60, s0: 7, s1: 7, c0: [210, 235, 255], c1: [170, 210, 255], emitter: 'block', names: 'bubble', ring: true },
+      enchant: { frames: 26, life: 1.8, rate: 12, vx: 0, vy: 0, s0: 9, s1: 7, c0: [235, 235, 255], c1: [180, 180, 255], emitter: 'block', names: 'sga_a..z', inward: true },
+      portal: { frames: 8, life: 1.5, rate: 14, vx: 0, vy: 0, s0: 9, s1: 3, c0: [210, 120, 255], c1: [120, 40, 200], emitter: 'block', names: 'generic_0..7', inward: true, aged: true }
+    };
+    var PORDER = ['smoke', 'flame', 'soul_fire_flame', 'campfire_cosy_smoke', 'explosion', 'heart', 'note', 'bubble', 'enchant', 'portal'];
+    function texList(key) {
+      var o = [], i;
+      if (key === 'smoke') { for (i = 7; i >= 0; i--) o.push('generic_' + i); }
+      else if (key === 'portal') { for (i = 0; i <= 7; i++) o.push('generic_' + i); }
+      else if (key === 'campfire_cosy_smoke') { for (i = 0; i <= 11; i++) o.push('big_smoke_' + i); }
+      else if (key === 'explosion') { for (i = 0; i <= 15; i++) o.push('explosion_' + i); }
+      else if (key === 'enchant') { for (i = 0; i < 26; i++) o.push('sga_' + String.fromCharCode(97 + i)); }
+      else { o.push(key); }
+      return o;
+    }
+    function mix(a, b, t) { return 'rgb(' + Math.round(a[0] + (b[0] - a[0]) * t) + ',' + Math.round(a[1] + (b[1] - a[1]) * t) + ',' + Math.round(a[2] + (b[2] - a[2]) * t) + ')'; }
+    return { PDEFS: PDEFS, PORDER: PORDER, texList: texList, mix: mix };
+  }
+  constructor(props) {
+    super(props);
+    this.state = { sel: 'smoke', playing: true, speed: 1, bg: 'night', src: 'yours', parts: [], acc: 0, seed: 1, layout: 'sheet', showSource: false };
+  }
+  componentDidMount() {
+    var self = this;
+    this.timer = setInterval(function () { self.tick(); }, 50);
+  }
+  componentWillUnmount() { if (this.timer) clearInterval(this.timer); }
+  rand() { this._s = ((this._s || 7) * 16807) % 2147483647; return this._s / 2147483647; }
+  tick() {
+    var P = this.constructor.P, PDEFS = P.PDEFS, PORDER = P.PORDER, texList = P.texList, mix = P.mix;
+    if (!this.state.playing) return;
+    var d = PDEFS[this.state.sel], dt = 0.05 * this.state.speed, self = this;
+    var cx = 310, cy = d.emitter === 'campfire' ? 380 : (d.emitter === 'torch' ? 352 : 350);
+    var parts = this.state.parts.map(function (p) {
+      var q = { x: p.x + p.vx * dt, y: p.y + p.vy * dt, vx: p.vx, vy: p.vy, age: p.age + dt, life: p.life, hue: p.hue, g: p.g };
+      if (d.inward) { q.vx += (cx - q.x) * 1.6 * dt; q.vy += (cy - 20 - q.y) * 1.6 * dt; }
+      return q;
+    }).filter(function (p) { return p.age < p.life; });
+    var acc = this.state.acc + d.rate * dt;
+    while (acc >= 1 && parts.length < 70) {
+      acc -= 1;
+      var p = { age: 0, life: d.life * (0.75 + self.rand() * 0.5), hue: Math.floor(self.rand() * 6), g: Math.floor(self.rand() * 26) };
+      if (d.inward) {
+        var a = self.rand() * Math.PI * 2, r = 90 + self.rand() * 60;
+        p.x = cx + Math.cos(a) * r; p.y = cy - 30 + Math.sin(a) * r * 0.6; p.vx = 0; p.vy = 0;
+      } else if (d.burst) {
+        p.x = cx + (self.rand() - 0.5) * 80; p.y = cy - 30 + (self.rand() - 0.5) * 60; p.vx = (self.rand() - 0.5) * d.vx; p.vy = (self.rand() - 0.5) * d.vy;
+      } else {
+        p.x = cx + (self.rand() - 0.5) * (d.emitter === 'campfire' ? 70 : 8); p.y = cy; p.vx = (self.rand() - 0.5) * 2 * d.vx; p.vy = d.vy * (0.8 + self.rand() * 0.4);
+      }
+      parts.push(p);
+    }
+    this.setState({ parts: parts, acc: acc });
+  }
+  renderVals() {
+    var P = this.constructor.P, PDEFS = P.PDEFS, PORDER = P.PORDER, texList = P.texList, mix = P.mix;
+    var self = this, sel = this.state.sel, d = PDEFS[sel];
+    var sheetMode = this.state.layout === 'sheet';
+    function range(a, b) { var o = []; for (var q = a; q <= b; q++) o.push(q); return o; }
+    var SHEET = { smoke: range(0, 7), portal: range(0, 7), bubble: [32], flame: [48], note: [64], heart: [80], enchant: range(224, 249) };
+    function sheetLabel(k) { return SHEET[k] ? (SHEET[k].length > 1 ? SHEET[k].length + ' cells' : '1 cell') : (k === 'explosion' ? 'own file' : 'not in 1.12'); }
+    var navDefs = [
+      ['home', 'Home', 'M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z'],
+      ['tex', 'Textures', 'M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z'],
+      ['edit', 'Editor', 'M4 20l4-1L19 8l-3-3L5 16l-1 4zM14 7l3 3'],
+      ['gui', 'Interface', 'M4 5h16v14H4zM4 9h16M8 13h8M8 16h5'],
+      ['part', 'Particles', 'M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5L18 18M6 18l2.5-2.5M15.5 8.5L18 6'],
+      ['anim', 'Animation', 'M4 5h16v14H4zM8 5v14M16 5v14M4 9h4M4 15h4M16 9h4M16 15h4'],
+      ['model', 'Models (later)', 'M12 3l8 4.5v9L12 21l-8-4.5v-9zM12 12l8-4.5M12 12v9M12 12L4 7.5'],
+      ['pack', 'Pack and export', 'M12 3v12M7 10l5 5 5-5M5 21h14'],
+      ['set', 'Settings', 'M12 9a3 3 0 1 0 0 6a3 3 0 1 0 0-6zM12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1']
+    ];
+    var nav = navDefs.map(function (n) {
+      var on = n[0] === 'part';
+      return { label: n[1], d: n[2], stroke: on ? '#ececf0' : '#8b8c94', style: on ? 'background: #26272c; box-shadow: inset 2px 0 0 #5b8cff;' : '' };
+    });
+    var list = PORDER.map(function (k) {
+      var pd = PDEFS[k], on = k === sel;
+      return {
+        name: k, frames: sheetMode ? sheetLabel(k) : (pd.frames > 1 ? pd.frames + ' fr' : '1 fr'),
+        swatch: 'background: ' + mix(pd.c0, pd.c1, 0.3) + ';' + (pd.ring ? ' border-radius: 50%;' : ''),
+        rowStyle: on ? 'background: #1c2a45; box-shadow: inset 2px 0 0 #5b8cff;' : ('background: transparent;' + (sheetMode && !SHEET[k] && k !== 'explosion' ? ' opacity: 0.45;' : '')),
+        pick: function () { self.setState({ sel: k, parts: [], acc: 0 }); }
+      };
+    });
+    function tabs(opts, cur, key) {
+      return opts.map(function (o) {
+        return { label: o[1], style: o[0] === cur ? 'background: #2c2d33; color: #ececf0; font-weight: 600;' : 'background: transparent; color: #9b9ca4;', pick: function () { var s = {}; s[key] = o[0]; self.setState(s); } };
+      });
+    }
+    var vanillaShift = this.state.src === 'vanilla';
+    var parts = this.state.parts.map(function (p) {
+      var t = Math.min(1, p.age / p.life);
+      var size = Math.round(d.s0 + (d.s1 - d.s0) * t);
+      var col = d.rainbow ? ['#5ad97a', '#59c3ff', '#b77cff', '#ff6fb1', '#ffd34d', '#ff8a3d'][p.hue] : mix(d.c0, d.c1, t);
+      if (vanillaShift) { col = mix([200, 200, 200], [120, 120, 120], t); }
+      var op = d.aged ? (1 - t * 0.35) : (t > 0.75 ? (1 - t) * 4 : 1);
+      var shape = d.ring ? 'border-radius: 50%; background: transparent; border: 2px solid ' + col + ';' : 'background: ' + col + '; box-shadow: inset -2px -2px 0 rgba(0,0,0,0.22);';
+      if (sel === 'enchant') { shape = 'background: transparent; border-left: 2px solid ' + col + '; border-top: 2px solid ' + col + '; width: ' + size + 'px; height: ' + size + 'px; transform: rotate(' + (p.g * 14) + 'deg);'; }
+      if (sel === 'heart' || sel === 'note') { shape += ' clip-path: polygon(50% 100%, 0 40%, 15% 5%, 50% 25%, 85% 5%, 100% 40%);'; }
+      if (sel === 'note') { shape = 'background: ' + col + '; clip-path: polygon(55% 0, 100% 10%, 100% 30%, 70% 22%, 70% 80%, 40% 100%, 15% 90%, 20% 65%, 55% 62%);'; }
+      return { style: 'left: ' + Math.round(p.x - size / 2) + 'px; top: ' + Math.round(p.y - size / 2) + 'px; width: ' + size + 'px; height: ' + size + 'px; opacity: ' + op.toFixed(2) + '; ' + shape };
+    });
+
+    var names = texList(sel);
+    var shown = names.slice(0, 18);
+    var frames = shown.map(function (nm, i) {
+      var t = shown.length > 1 ? i / (shown.length - 1) : 0, px = [], rr, cx = 3.5, cy = 3.5;
+      if (sel === 'smoke') rr = 3.8 - t * 2.6;
+      else if (sel === 'portal') rr = 1.2 + t * 2.6;
+      else if (sel === 'campfire_cosy_smoke') rr = 2.4 + t * 1.4;
+      else rr = 3;
+      var col = mix(d.c0, d.c1, t);
+      for (var k = 0; k < 64; k++) {
+        var x = k % 8, y = Math.floor(k / 8), dist = Math.sqrt((x - cx) * (x - cx) + (y - cy) * (y - cy)), c = 'transparent';
+        if (sel === 'explosion') { var ring = 1 + t * 2.8; if (Math.abs(dist - ring) < 1.1) c = mix([255, 255, 255], [110, 110, 110], t); }
+        else if (sel === 'enchant') { if (((x * 7 + y * 3 + i * 5) % 5 === 0) && x > 0 && x < 7 && y > 0 && y < 7) c = col; }
+        else if (sel === 'bubble') { if (Math.abs(dist - 2.6) < 0.8) c = col; else if (x === 2 && y === 2) c = '#ffffff'; }
+        else if (dist < rr) c = (dist < rr - 1.2) ? col : mix(d.c1, [60, 60, 60], 0.3);
+        px.push({ c: c });
+      }
+      return { n: nm, px: px, ring: '' };
+    });
+    var hint = d.frames > 1 ? (sel === 'enchant' ? 'one picked at random' : 'played over its lifetime') : 'single image';
+    var lines = names.map(function (n) { return '"minecraft:' + n + '"'; });
+    var rows = [];
+    for (var i = 0; i < lines.length; i += 2) rows.push('    ' + lines.slice(i, i + 2).join(', '));
+    var json = '{\n  "textures": [\n' + rows.join(',\n') + '\n  ]\n' + '}';
+
+    var bgs = {
+      night: ['background: linear-gradient(180deg, #0b1020 0%, #18213a 70%);', 'background: #23301f; box-shadow: inset 0 4px 0 #2f4a29;'],
+      day: ['background: linear-gradient(180deg, #6ea6e8 0%, #b8d8f5 70%);', 'background: #5d8c3a; box-shadow: inset 0 4px 0 #78a94b;'],
+      water: ['background: linear-gradient(180deg, #123b5c 0%, #0b2840 100%);', 'background: #3a4b44; box-shadow: inset 0 4px 0 #4b5f56;']
+    };
+    var emit = d.emitter;
+    var emitterLabel = this.state.showSource ? { torch: 'Emitter: torch', campfire: 'Emitter: campfire', block: 'Emitter: block' }[emit] : 'Particles only';
+    var mine = SHEET[sel] || [];
+    var sheetFrames = mine.length ? frames.slice(0, Math.min(8, mine.length)) : [];
+    var others = range(16, 23).concat(range(33, 38), range(49, 53), range(65, 70), range(81, 86), range(96, 103), range(112, 119), range(128, 135), range(144, 148), range(160, 163));
+    var ownerColor = {};
+    Object.keys(SHEET).forEach(function (k) { SHEET[k].forEach(function (ix) { ownerColor[ix] = mix(PDEFS[k].c0, PDEFS[k].c1, 0.35); }); });
+    var otherPal = ['rgb(150,150,160)', 'rgb(90,140,220)', 'rgb(200,90,90)', 'rgb(120,200,120)', 'rgb(220,200,90)', 'rgb(170,120,210)'];
+    others.forEach(function (ix, n) { if (!ownerColor[ix]) ownerColor[ix] = otherPal[n % otherPal.length]; });
+    var sheetCells = [];
+    for (var ci = 0; ci < 256; ci++) {
+      var colr = ownerColor[ci], st;
+      if (!colr) st = 'background: #141518;';
+      else if (mine.indexOf(ci) >= 0) st = 'background: radial-gradient(circle, ' + colr + ' 0 50%, transparent 56%) #1c2a45; outline: 1px solid #5b8cff; outline-offset: -1px;';
+      else st = 'background: radial-gradient(circle, ' + colr + ' 0 40%, transparent 46%); opacity: 0.28;';
+      sheetCells.push({ style: st });
+    }
+    var sheetHint;
+    if (mine.length) {
+      sheetHint = (mine.length > 1 ? 'The ' + mine.length + ' highlighted cells are ' : 'The highlighted cell is ') + sel + '. Everything else on the sheet belongs to other particles and is left untouched.';
+      if (sel === 'smoke' || sel === 'portal') sheetHint += ' Smoke and portal share the same 8 cells.';
+    } else if (sel === 'explosion') { sheetHint = 'Explosion is not on the sheet: it uses its own image, textures/entity/explosion.png.'; }
+    else { sheetHint = sel + ' does not exist in 1.12.2, so it has no cells on the sheet.'; }
+    var torchHead = sel === 'soul_fire_flame' ? 'background: #5fd7e8; box-shadow: 0 0 22px 6px rgba(95,215,232,0.45);' : 'background: #ffc84a; box-shadow: 0 0 22px 6px rgba(255,190,70,0.45);';
+    var blockStyle = sel === 'enchant' ? 'background: #3b2a5c; box-shadow: inset 0 10px 0 #b02a2a, inset 0 -6px 0 #261a3d;' : (sel === 'portal' ? 'background: #1a1028; box-shadow: inset 0 0 0 6px #2a1a40;' : 'background: #6f6f74; box-shadow: inset -6px -6px 0 #55555a, inset 6px 6px 0 #8a8a90;');
+    return {
+      nav: nav, list: list, parts: parts, selName: sel,
+      liveCount: String(this.state.parts.length),
+      playLabel: this.state.playing ? 'Pause' : 'Play',
+      togglePlay: function () { self.setState({ playing: !self.state.playing }); },
+      bgTabs: tabs([['night', 'Night'], ['day', 'Day'], ['water', 'Underwater']], this.state.bg, 'bg'),
+      speedTabs: tabs([[0.25, '¼×'], [1, '1×'], [2, '2×']], this.state.speed, 'speed'),
+      srcTabs: tabs([['yours', 'Your pack'], ['vanilla', 'Vanilla']], this.state.src, 'src'),
+      sceneBg: bgs[this.state.bg][0], groundStyle: bgs[this.state.bg][1],
+      emTorch: emit === 'torch' && this.state.showSource, emCampfire: emit === 'campfire' && this.state.showSource, emBlock: emit === 'block' && this.state.showSource,
+      sheet: sheetMode, separate: !sheetMode, sheetCells: sheetCells, sheetHint: sheetHint, sheetFrames: sheetFrames,
+      layoutTabs: tabs([['sheet', '1.12.2 · one sheet'], ['separate', '1.21.4 · one image each']], this.state.layout, 'layout'),
+      sourceLabel: this.state.showSource ? 'Hide torch / block' : 'Show torch / block',
+      toggleSource: function () { self.setState({ showSource: !self.state.showSource }); },
+      fileLabel: sheetMode ? 'textures/particle/particles.png' : 'particles/' + sel + '.json',
+      footerPath: sheetMode ? 'textures/particle/particles.png (one shared sheet)' : 'textures/particle/ + particles/' + sel + '.json',
+      emitterLabel: emitterLabel, torchHead: torchHead, blockStyle: blockStyle,
+      frames: frames, frameCount: names.length + (names.length > 1 ? ' images' : ' image'), frameHint: hint, json: json
+    };
+  }
+}
+</script>
+</body>
+</html>

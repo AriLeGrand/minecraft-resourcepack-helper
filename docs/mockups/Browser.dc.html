@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Pack Creator: texture browser</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#8fb2ff}a:hover{color:#b8ceff}
+</style>
+</helmet>
+<div style="width: 100%; min-height: 900px; box-sizing: border-box; background: #111214; color: #ececf0; font-family: Inter, system-ui, sans-serif; font-size: 13px; display: flex; flex-direction: column">
+
+  <header style="display: flex; flex-wrap: wrap; align-items: center; gap: 16px; padding: 0 14px; min-height: 44px; background: #18191c; border-bottom: 1px solid #2a2b30">
+    <div style="display: flex; align-items: center; gap: 10px">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#5b8cff" stroke-width="1.6" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9zM12 12l8-4.5M12 12v9M12 12L4 7.5"></path></svg>
+      <span style="font-weight: 600">Deep Sea Pack</span>
+      <span style="color: #6b6c74">/</span>
+      <span style="color: #9b9ca4">Textures</span>
+    </div>
+    <div style="flex: 1; display: flex; justify-content: center; min-width: 200px">
+      <label style="display: flex; align-items: center; gap: 8px; width: 100%; max-width: 420px; height: 30px; padding: 0 10px; background: #111214; border: 1px solid #2a2b30; border-radius: 6px; color: #9b9ca4">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9b9ca4" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-4-4"></path></svg>
+        <input type="text" aria-label="Search everything" placeholder="Search textures, tools, commands…" style="flex: 1; min-width: 0; background: transparent; border: 0; color: #ececf0; font: inherit; font-size: 12px; outline: none">
+        <span style="font-size: 11px; border: 1px solid #2a2b30; border-radius: 4px; padding: 1px 5px">Ctrl K</span>
+      </label>
+    </div>
+    <div style="display: flex; align-items: center; gap: 8px; font-size: 12px">
+      <span style="border: 1px solid #2a2b30; border-radius: 6px; padding: 5px 10px; color: #c4c5cc">Java 1.21.4 · format 46</span>
+      <span style="border: 1px solid #2a2b30; border-radius: 6px; padding: 5px 10px; color: #c4c5cc">32×</span>
+      <button type="button" style="font: inherit; font-weight: 600; font-size: 12px; height: 30px; padding: 0 14px; border-radius: 6px; border: 0; background: #5b8cff; color: #0a1630">Export</button>
+    </div>
+  </header>
+
+  <div style="flex: 1; display: flex; flex-wrap: wrap; min-height: 0">
+    <nav aria-label="Sections" style="flex: 0 0 52px; background: #18191c; border-right: 1px solid #2a2b30; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px 0">
+      <sc-for list="{{nav}}" as="n" hint-placeholder-count="7">
+        <a href="#" aria-label="{{n.label}}" title="{{n.label}}" style="width: 36px; height: 36px; border-radius: 8px; display: flex; align-items: center; justify-content: center; {{n.style}}">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="{{n.stroke}}" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{n.d}}"></path></svg>
+        </a>
+      </sc-for>
+    </nav>
+
+    <aside style="flex: 0 0 220px; background: #151619; border-right: 1px solid #2a2b30; padding: 14px 10px; display: flex; flex-direction: column; gap: 18px; box-sizing: border-box">
+      <div style="display: flex; flex-direction: column; gap: 2px">
+        <div style="font-size: 11px; font-weight: 600; letter-spacing: 0.06em; color: #8b8c94; padding: 0 8px 6px">CATEGORIES</div>
+        <sc-for list="{{cats}}" as="c" hint-placeholder-count="10">
+          <a href="#" style="display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 6px; color: #ececf0; text-decoration: none; font-size: 12px; {{c.style}}">
+            <span style="flex: 1">{{c.name}}</span>
+            <span style="font-size: 11px; color: #9b9ca4">{{c.count}}</span>
+          </a>
+        </sc-for>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 2px">
+        <div style="font-size: 11px; font-weight: 600; letter-spacing: 0.06em; color: #8b8c94; padding: 0 8px 6px">STATUS</div>
+        <label style="display: flex; align-items: center; gap: 8px; padding: 5px 8px; font-size: 12px"><input type="radio" name="st" checked="checked"> All</label>
+        <label style="display: flex; align-items: center; gap: 8px; padding: 5px 8px; font-size: 12px"><input type="radio" name="st"> To do <span style="margin-left: auto; font-size: 11px; color: #9b9ca4">688</span></label>
+        <label style="display: flex; align-items: center; gap: 8px; padding: 5px 8px; font-size: 12px"><input type="radio" name="st"> Done <span style="margin-left: auto; font-size: 11px; color: #9b9ca4">124</span></label>
+        <label style="display: flex; align-items: center; gap: 8px; padding: 5px 8px; font-size: 12px"><input type="radio" name="st"> Changed since export <span style="margin-left: auto; font-size: 11px; color: #9b9ca4">3</span></label>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 2px">
+        <div style="font-size: 11px; font-weight: 600; letter-spacing: 0.06em; color: #8b8c94; padding: 0 8px 6px">ONLY SHOW</div>
+        <label style="display: flex; align-items: center; gap: 8px; padding: 5px 8px; font-size: 12px"><input type="checkbox"> Animated</label>
+        <label style="display: flex; align-items: center; gap: 8px; padding: 5px 8px; font-size: 12px"><input type="checkbox"> Renamed in this version</label>
+        <label style="display: flex; align-items: center; gap: 8px; padding: 5px 8px; font-size: 12px"><input type="checkbox"> Wrong size for 32×</label>
+      </div>
+    </aside>
+
+    <main style="flex: 999 1 520px; min-width: 0; display: flex; flex-direction: column">
+      <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 1px solid #2a2b30">
+        <h1 style="margin: 0; font-size: 16px; font-weight: 600">Blocks</h1>
+        <span style="font-size: 12px; color: #9b9ca4">812 textures · 124 done</span>
+        <div style="flex: 1"></div>
+        <label style="display: flex; align-items: center; gap: 8px; height: 30px; padding: 0 10px; background: #18191c; border: 1px solid #34353b; border-radius: 6px; width: 220px; box-sizing: border-box">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9b9ca4" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-4-4"></path></svg>
+          <input type="text" aria-label="Filter blocks" value="planks" style="flex: 1; min-width: 0; background: transparent; border: 0; color: #ececf0; font: inherit; font-size: 12px; outline: none">
+        </label>
+        <div role="group" aria-label="View" style="display: flex; border: 1px solid #34353b; border-radius: 6px; overflow: hidden">
+          <button type="button" aria-label="List view" style="width: 32px; height: 28px; border: 0; background: #26272c; display: flex; align-items: center; justify-content: center"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ececf0" stroke-width="2" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"></path></svg></button>
+          <button type="button" aria-label="Grid view" style="width: 32px; height: 28px; border: 0; background: transparent; display: flex; align-items: center; justify-content: center"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9b9ca4" stroke-width="2" aria-hidden="true"><path d="M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z"></path></svg></button>
+        </div>
+      </div>
+      <div style="overflow-x: auto">
+        <div style="min-width: 560px">
+          <div style="display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.2fr) minmax(0, 1.2fr); gap: 12px; padding: 8px 16px; font-size: 11px; font-weight: 600; letter-spacing: 0.04em; color: #8b8c94; border-bottom: 1px solid #2a2b30">
+            <span>NAME</span><span>SIZE</span><span>ANIMATED</span><span>STATUS</span><span>EDITED</span>
+          </div>
+          <sc-for list="{{rows}}" as="r" hint-placeholder-count="14">
+            <div style="display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.2fr) minmax(0, 1.2fr); gap: 12px; align-items: center; padding: 6px 16px; border-bottom: 1px solid #1e1f23; font-size: 12px; {{r.rowStyle}}">
+              <span style="display: flex; align-items: center; gap: 10px; min-width: 0">
+                <span style="width: 28px; height: 28px; flex: none; display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); border-radius: 3px; overflow: hidden">
+                  <sc-for list="{{r.px}}" as="p" hint-placeholder-count="64"><span style="background: {{p.c}}"></span></sc-for>
+                </span>
+                <span style="font-family: 'JetBrains Mono', monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{r.name}}</span>
+              </span>
+              <span style="color: #c4c5cc">{{r.size}}</span>
+              <span style="color: #9b9ca4">{{r.anim}}</span>
+              <span style="display: flex; align-items: center; gap: 6px; {{r.statusColor}}"><span style="width: 6px; height: 6px; border-radius: 50%; {{r.dot}}"></span>{{r.status}}</span>
+              <span style="color: #9b9ca4">{{r.edited}}</span>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </main>
+
+    <aside style="flex: 0 0 360px; background: #151619; border-left: 1px solid #2a2b30; padding: 18px; display: flex; flex-direction: column; gap: 18px; box-sizing: border-box">
+      <div>
+        <div style="font-family: 'JetBrains Mono', monospace; font-size: 15px; font-weight: 500">oak_planks</div>
+        <div style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #9b9ca4; margin-top: 4px">textures/block/oak_planks.png</div>
+      </div>
+      <div style="display: flex; gap: 12px">
+        <div style="flex: 1; display: flex; flex-direction: column; gap: 6px">
+          <div style="aspect-ratio: 1; display: grid; grid-template-columns: repeat(16, minmax(0, 1fr)); border-radius: 6px; overflow: hidden; border: 1px solid #2a2b30">
+            <sc-for list="{{vanilla}}" as="p" hint-placeholder-count="256"><div style="background: {{p.c}}"></div></sc-for>
+          </div>
+          <div style="font-size: 11px; color: #9b9ca4">Vanilla · 16×16</div>
+        </div>
+        <div style="flex: 1; display: flex; flex-direction: column; gap: 6px">
+          <div style="aspect-ratio: 1; display: grid; grid-template-columns: repeat(32, minmax(0, 1fr)); border-radius: 6px; overflow: hidden; border: 1px solid #2d6b4f">
+            <sc-for list="{{mine}}" as="p" hint-placeholder-count="1024"><div style="background: {{p.c}}"></div></sc-for>
+          </div>
+          <div style="font-size: 11px; color: #3ecf8e">Your pack · 32×32</div>
+        </div>
+      </div>
+      <dl style="margin: 0; display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 8px 12px; font-size: 12px">
+        <dt style="color: #9b9ca4">Status</dt><dd style="margin: 0; color: #3ecf8e">Done · exported today 14:32</dd>
+        <dt style="color: #9b9ca4">Animated</dt><dd style="margin: 0">No</dd>
+        <dt style="color: #9b9ca4">Used by</dt><dd style="margin: 0; display: flex; flex-wrap: wrap; gap: 4px">
+          <span style="background: #1f2024; border: 1px solid #2a2b30; border-radius: 4px; padding: 1px 6px; font-size: 11px">oak_stairs</span>
+          <span style="background: #1f2024; border: 1px solid #2a2b30; border-radius: 4px; padding: 1px 6px; font-size: 11px">oak_slab</span>
+          <span style="background: #1f2024; border: 1px solid #2a2b30; border-radius: 4px; padding: 1px 6px; font-size: 11px">oak_fence</span>
+          <span style="background: #1f2024; border: 1px solid #2a2b30; border-radius: 4px; padding: 1px 6px; font-size: 11px">+7</span>
+        </dd>
+      </dl>
+      <div style="background: #18191c; border: 1px solid #2a2b30; border-radius: 8px; padding: 12px; display: flex; flex-direction: column; gap: 8px">
+        <div style="font-size: 11px; font-weight: 600; letter-spacing: 0.06em; color: #8b8c94">NAME ACROSS VERSIONS</div>
+        <div style="display: flex; justify-content: space-between; font-size: 12px"><span style="color: #9b9ca4">1.12.2 and older</span><span style="font-family: 'JetBrains Mono', monospace">blocks/planks_oak</span></div>
+        <div style="display: flex; justify-content: space-between; font-size: 12px"><span style="color: #9b9ca4">1.13 and newer</span><span style="font-family: 'JetBrains Mono', monospace">block/oak_planks</span></div>
+      </div>
+      <div style="margin-top: auto; display: flex; flex-direction: column; gap: 8px">
+        <button type="button" style="font: inherit; font-weight: 600; height: 38px; border-radius: 6px; border: 0; background: #5b8cff; color: #0a1630">Edit texture</button>
+        <div style="display: flex; gap: 8px">
+          <button type="button" style="flex: 1; font: inherit; font-size: 12px; height: 34px; border-radius: 6px; border: 1px solid #34353b; background: #1f2024; color: #ececf0">Import image</button>
+          <button type="button" style="flex: 1; font: inherit; font-size: 12px; height: 34px; border-radius: 6px; border: 1px solid #34353b; background: #1f2024; color: #ececf0">Open externally</button>
+          <button type="button" style="flex: 1; font: inherit; font-size: 12px; height: 34px; border-radius: 6px; border: 1px solid #34353b; background: transparent; color: #c4c5cc">Revert</button>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <footer style="display: flex; flex-wrap: wrap; gap: 16px; align-items: center; padding: 4px 14px; min-height: 24px; background: #18191c; border-top: 1px solid #2a2b30; font-size: 11px; color: #9b9ca4">
+    <span style="display: flex; align-items: center; gap: 6px"><span style="width: 6px; height: 6px; border-radius: 50%; background: #3ecf8e"></span>Vanilla 1.21.4 loaded</span>
+    <span>482 / 2650 textures done</span>
+    <span style="margin-left: auto; font-family: 'JetBrains Mono', monospace">D:\Packs\Deep Sea Pack</span>
+  </footer>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    var navDefs = [
+      ['home', 'Home', 'M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z'],
+      ['tex', 'Textures', 'M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z'],
+      ['edit', 'Editor', 'M4 20l4-1L19 8l-3-3L5 16l-1 4zM14 7l3 3'],
+      ['anim', 'Animation', 'M4 5h16v14H4zM8 5v14M16 5v14M4 9h4M4 15h4M16 9h4M16 15h4'],
+      ['model', 'Models (later)', 'M12 3l8 4.5v9L12 21l-8-4.5v-9zM12 12l8-4.5M12 12v9M12 12L4 7.5'],
+      ['pack', 'Pack and export', 'M12 3v12M7 10l5 5 5-5M5 21h14'],
+      ['set', 'Settings', 'M12 9a3 3 0 1 0 0 6a3 3 0 1 0 0-6zM12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1']
+    ];
+    var nav = navDefs.map(function (d) {
+      var on = d[0] === 'tex';
+      return { label: d[1], d: d[2], stroke: on ? '#ececf0' : '#8b8c94', style: on ? 'background: #26272c; box-shadow: inset 2px 0 0 #5b8cff;' : '' };
+    });
+    var cats = [['Blocks', '812', 1], ['Items', '1032'], ['GUI', '118'], ['Entities', '402'], ['Particles', '96'], ['Environment', '12'], ['Paintings', '30'], ['Mob effects', '40'], ['Armor', '24'], ['Misc', '84']].map(function (c) {
+      return { name: c[0], count: c[1], style: c[2] ? 'background: #26272c;' : '' };
+    });
+    function rng(seed) { var s = (seed * 9301 + 49297) % 233280; return function () { s = (s * 9301 + 49297) % 233280; return s / 233280; }; }
+    function planks(n, seed, pal) {
+      var r = rng(seed), o = [], band = n / 4;
+      for (var i = 0; i < n * n; i++) {
+        var x = i % n, y = Math.floor(i / n), v = r(), row = Math.floor(y / band);
+        var seam = (row % 2 === 0) ? Math.floor(n * 0.3) : Math.floor(n * 0.75);
+        var k = (y % band === band - 1 || x === seam) ? 2 : (v < 0.72 ? 0 : 1);
+        o.push({ c: pal[k] });
+      }
+      return o;
+    }
+    var defs = [
+      ['oak_planks', '16×16', '—', 'Done', 'Today', ['#a8834f', '#9a7444', '#6e5130'], 1],
+      ['spruce_planks', '16×16', '—', 'Done', 'Today', ['#735433', '#674a2c', '#47321d']],
+      ['birch_planks', '16×16', '—', 'To do', '—', ['#d2c084', '#c4b276', '#9c8c57']],
+      ['jungle_planks', '16×16', '—', 'Changed', 'Today', ['#a8774f', '#9a6b45', '#704a2e']],
+      ['acacia_planks', '16×16', '—', 'Done', 'Yesterday', ['#b8653a', '#a95a32', '#7c3f22']],
+      ['dark_oak_planks', '16×16', '—', 'To do', '—', ['#4c3320', '#432c1b', '#2c1c10']],
+      ['mangrove_planks', '16×16', '—', 'To do', '—', ['#7a3a33', '#6e332d', '#4d211d']],
+      ['cherry_planks', '16×16', '—', 'Done', 'Oct 30', ['#e8bfb5', '#dcafa4', '#b98a80']],
+      ['bamboo_planks', '16×16', '—', 'To do', '—', ['#d4c25a', '#c6b34d', '#9c8b34']],
+      ['bamboo_mosaic', '16×16', '—', 'To do', '—', ['#d4c25a', '#b8a540', '#8c7c2c']],
+      ['crimson_planks', '16×16', '—', 'Done', 'Oct 28', ['#6b3349', '#602d41', '#421d2c']],
+      ['warped_planks', '16×16', '—', 'To do', '—', ['#2d7a73', '#276d67', '#1a4c48']],
+      ['pale_oak_planks', '16×16', '—', 'To do', '—', ['#e6dfd8', '#d9d1c9', '#b3aaa1']],
+      ['bamboo_block', '16×16', '—', 'To do', '—', ['#9c9a3a', '#86842f', '#5e5c20']]
+    ];
+    var st = {
+      'Done': ['color: #3ecf8e;', 'background: #3ecf8e;'],
+      'To do': ['color: #9b9ca4;', 'background: #4a4b52;'],
+      'Changed': ['color: #f5a524;', 'background: #f5a524;']
+    };
+    var rows = defs.map(function (d, i) {
+      var label = d[3] === 'Changed' ? 'Changed since export' : d[3];
+      return { name: d[0], size: d[1], anim: d[2], status: label, edited: d[4], px: planks(8, i * 23 + 9, d[5]), statusColor: st[d[3]][0], dot: st[d[3]][1], rowStyle: d[6] ? 'background: #1c2a45; box-shadow: inset 2px 0 0 #5b8cff;' : '' };
+    });
+    return {
+      nav: nav, cats: cats, rows: rows,
+      vanilla: planks(16, 9, ['#a8834f', '#9a7444', '#6e5130']),
+      mine: planks(32, 77, ['#b48b55', '#a17846', '#6b4a2b'])
+    };
+  }
+}
+</script>
+</body>
+</html>

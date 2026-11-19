@@ -1,0 +1,296 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Pack Creator: interface editor</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#8fb2ff}a:hover{color:#b8ceff}
+</style>
+</helmet>
+<div style="width: 100%; min-height: 900px; box-sizing: border-box; background: #111214; color: #ececf0; font-family: Inter, system-ui, sans-serif; font-size: 13px; display: flex; flex-direction: column">
+
+  <header style="display: flex; flex-wrap: wrap; align-items: center; gap: 16px; padding: 0 14px; min-height: 44px; background: #18191c; border-bottom: 1px solid #2a2b30">
+    <div style="display: flex; align-items: center; gap: 10px">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#5b8cff" stroke-width="1.6" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9zM12 12l8-4.5M12 12v9M12 12L4 7.5"></path></svg>
+      <span style="font-weight: 600">Deep Sea Pack</span>
+      <span style="color: #6b6c74">/</span>
+      <span style="color: #9b9ca4">Interface</span>
+      <span style="color: #6b6c74">/</span>
+      <span>Menus and buttons</span>
+    </div>
+    <div role="group" aria-label="Editor mode" style="display: flex; height: 30px; background: #111214; border: 1px solid #2a2b30; border-radius: 6px; padding: 2px; gap: 2px; box-sizing: border-box">
+      <a href="AppEditor.dc.html" style="display: flex; align-items: center; padding: 0 12px; border-radius: 4px; font-size: 12px; color: #9b9ca4; text-decoration: none">Pixels</a>
+      <span style="display: flex; align-items: center; padding: 0 12px; border-radius: 4px; font-size: 12px; background: #2c2d33; color: #ececf0; font-weight: 600">Layout</span>
+    </div>
+    <div style="flex: 1"></div>
+    <div style="display: flex; align-items: center; gap: 8px; font-size: 12px">
+      <span style="color: #9b9ca4">GUI scale</span>
+      <div role="group" aria-label="GUI scale" style="display: flex; height: 30px; background: #111214; border: 1px solid #2a2b30; border-radius: 6px; padding: 2px; gap: 2px; box-sizing: border-box">
+        <sc-for list="{{scales}}" as="s" hint-placeholder-count="3">
+          <button type="button" onClick="{{s.pick}}" style="font: inherit; font-size: 12px; padding: 0 10px; border: 0; border-radius: 4px; {{s.style}}">{{s.label}}</button>
+        </sc-for>
+      </div>
+      <button type="button" style="font: inherit; font-weight: 600; font-size: 12px; height: 30px; padding: 0 14px; border-radius: 6px; border: 0; background: #5b8cff; color: #0a1630">Save to pack</button>
+    </div>
+  </header>
+
+  <div style="flex: 1; display: flex; flex-wrap: wrap; min-height: 0">
+    <nav aria-label="Sections" style="flex: 0 0 52px; background: #18191c; border-right: 1px solid #2a2b30; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px 0">
+      <sc-for list="{{nav}}" as="n" hint-placeholder-count="8">
+        <a href="#" aria-label="{{n.label}}" title="{{n.label}}" style="width: 36px; height: 36px; border-radius: 8px; display: flex; align-items: center; justify-content: center; {{n.style}}">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="{{n.stroke}}" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{n.d}}"></path></svg>
+        </a>
+      </sc-for>
+    </nav>
+
+    <aside style="flex: 0 0 240px; background: #151619; border-right: 1px solid #2a2b30; padding: 14px 10px; box-sizing: border-box; display: flex; flex-direction: column; gap: 18px">
+      <div style="display: flex; flex-direction: column; gap: 2px">
+        <div style="font-size: 11px; font-weight: 600; letter-spacing: 0.06em; color: #8b8c94; padding: 0 8px 6px">SCREENS</div>
+        <sc-for list="{{screens}}" as="c" hint-placeholder-count="7">
+          <a href="#" style="display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 6px; color: #ececf0; text-decoration: none; font-size: 12px; {{c.style}}">
+            <span style="flex: 1">{{c.name}}</span>
+            <span style="font-size: 11px; color: #9b9ca4">{{c.count}}</span>
+          </a>
+        </sc-for>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 2px">
+        <div style="font-size: 11px; font-weight: 600; letter-spacing: 0.06em; color: #8b8c94; padding: 0 8px 6px">PIECES ON THIS SCREEN</div>
+        <sc-for list="{{sprites}}" as="s" hint-placeholder-count="7">
+          <button type="button" onClick="{{s.pick}}" style="display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; font: inherit; padding: 6px 8px; border: 0; border-radius: 6px; color: #ececf0; {{s.rowStyle}}">
+            <span style="width: 30px; height: 12px; flex: none; border-radius: 2px; {{s.swatch}}"></span>
+            <span style="flex: 1; min-width: 0; font-family: 'JetBrains Mono', monospace; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{s.name}}</span>
+            <span style="font-size: 10px; {{s.statusStyle}}">{{s.status}}</span>
+          </button>
+        </sc-for>
+      </div>
+    </aside>
+
+    <main style="flex: 999 1 520px; min-width: 0; display: flex; flex-direction: column; background: #0d0e10">
+      <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 16px; padding: 0 14px; min-height: 38px; border-bottom: 1px solid #2a2b30; background: #151619; font-size: 12px; color: #c4c5cc">
+        <span style="display: flex; align-items: center; gap: 6px">Background <span style="background: #111214; border: 1px solid #34353b; border-radius: 4px; padding: 2px 8px">In-game world ▾</span></span>
+        <label style="display: flex; align-items: center; gap: 5px"><input type="checkbox" checked="checked"> Show piece outlines</label>
+        <label style="display: flex; align-items: center; gap: 5px"><input type="checkbox" checked="checked"> Show hover states</label>
+        <span style="margin-left: auto; color: #9b9ca4">Click a piece to select it · double-click to draw on it</span>
+      </div>
+      <div style="flex: 1; display: flex; align-items: center; justify-content: center; padding: 32px; min-height: 560px; background: linear-gradient(180deg, #1c2a3a 0%, #22313a 45%, #1e2a22 46%, #18221b 100%)">
+        <div style="display: flex; flex-direction: column; align-items: center; gap: {{gap}}">
+          <div style="font-family: 'JetBrains Mono', monospace; color: #f0f0f0; text-shadow: 2px 2px 0 #2a2a2a; font-size: {{titleSize}}; margin-bottom: 8px">Game paused</div>
+          <sc-for list="{{rows}}" as="row" hint-placeholder-count="6">
+            <div style="display: flex; gap: {{gap}}">
+              <sc-for list="{{row.items}}" as="b" hint-placeholder-count="2">
+                <div style="position: relative; box-sizing: border-box; display: flex; align-items: center; justify-content: center; font-family: 'JetBrains Mono', monospace; {{b.style}}">
+                  <sc-if value="{{b.isSlider}}" hint-placeholder-val="{{false}}">
+                    <div style="position: absolute; top: 0; bottom: 0; box-sizing: border-box; {{b.handleStyle}}"></div>
+                  </sc-if>
+                  <span style="position: relative">{{b.label}}</span>
+                </div>
+              </sc-for>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </main>
+
+    <aside style="flex: 0 0 340px; background: #151619; border-left: 1px solid #2a2b30; display: flex; flex-direction: column">
+      <section style="padding: 14px; border-bottom: 1px solid #2a2b30; display: flex; flex-direction: column; gap: 12px">
+        <div>
+          <div style="font-family: 'JetBrains Mono', monospace; font-size: 14px; font-weight: 500">{{sel.name}}</div>
+          <div style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #9b9ca4; margin-top: 4px">gui/sprites/widget/{{sel.name}}.png</div>
+        </div>
+        <div style="position: relative; height: 64px; display: flex; align-items: center; justify-content: center; background: #0d0e10; border: 1px solid #2a2b30; border-radius: 8px">
+          <div style="position: relative; box-sizing: border-box; {{sel.bigStyle}}">
+            <sc-if value="{{showSliceGuides}}" hint-placeholder-val="{{true}}">
+              <div style="position: absolute; top: -6px; bottom: -6px; left: 6px; border-left: 1px dashed #5b8cff"></div>
+              <div style="position: absolute; top: -6px; bottom: -6px; right: 6px; border-left: 1px dashed #5b8cff"></div>
+              <div style="position: absolute; left: -6px; right: -6px; top: 6px; border-top: 1px dashed #5b8cff"></div>
+              <div style="position: absolute; left: -6px; right: -6px; bottom: 6px; border-top: 1px dashed #5b8cff"></div>
+            </sc-if>
+          </div>
+        </div>
+        <dl style="margin: 0; display: grid; grid-template-columns: 110px minmax(0, 1fr); gap: 6px 12px; font-size: 12px">
+          <dt style="color: #9b9ca4">Vanilla size</dt><dd style="margin: 0">{{sel.size}}</dd>
+          <dt style="color: #9b9ca4">In your pack (2×)</dt><dd style="margin: 0">{{sel.size2}}</dd>
+          <dt style="color: #9b9ca4">Used on</dt><dd style="margin: 0">{{sel.usedOn}}</dd>
+        </dl>
+      </section>
+
+      <section style="padding: 14px; border-bottom: 1px solid #2a2b30; display: flex; flex-direction: column; gap: 12px">
+        <h2 style="margin: 0; font-size: 11px; font-weight: 600; letter-spacing: 0.06em; color: #8b8c94">HOW IT STRETCHES</h2>
+        <div role="group" aria-label="Scaling" style="display: flex; height: 32px; background: #111214; border: 1px solid #34353b; border-radius: 6px; padding: 3px; gap: 3px; box-sizing: border-box">
+          <sc-for list="{{scalingTabs}}" as="t" hint-placeholder-count="3">
+            <button type="button" onClick="{{t.pick}}" style="flex: 1; font: inherit; font-size: 12px; border: 0; border-radius: 4px; {{t.style}}">{{t.label}}</button>
+          </sc-for>
+        </div>
+        <div style="font-size: 11px; color: #9b9ca4">{{scalingHelp}}</div>
+        <sc-if value="{{showSliceGuides}}" hint-placeholder-val="{{true}}">
+          <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px">
+            <label style="display: flex; flex-direction: column; gap: 3px; font-size: 10px; color: #9b9ca4">Left<input type="number" value="3" style="height: 28px; padding: 0 6px; background: #111214; border: 1px solid #34353b; border-radius: 5px; color: #ececf0; font: inherit; font-size: 12px"></label>
+            <label style="display: flex; flex-direction: column; gap: 3px; font-size: 10px; color: #9b9ca4">Top<input type="number" value="3" style="height: 28px; padding: 0 6px; background: #111214; border: 1px solid #34353b; border-radius: 5px; color: #ececf0; font: inherit; font-size: 12px"></label>
+            <label style="display: flex; flex-direction: column; gap: 3px; font-size: 10px; color: #9b9ca4">Right<input type="number" value="3" style="height: 28px; padding: 0 6px; background: #111214; border: 1px solid #34353b; border-radius: 5px; color: #ececf0; font: inherit; font-size: 12px"></label>
+            <label style="display: flex; flex-direction: column; gap: 3px; font-size: 10px; color: #9b9ca4">Bottom<input type="number" value="3" style="height: 28px; padding: 0 6px; background: #111214; border: 1px solid #34353b; border-radius: 5px; color: #ececf0; font: inherit; font-size: 12px"></label>
+          </div>
+        </sc-if>
+        <div style="display: flex; flex-direction: column; gap: 6px; padding: 10px; background: #0d0e10; border: 1px solid #2a2b30; border-radius: 6px">
+          <span style="font-size: 10px; color: #9b9ca4">Preview at 3 widths</span>
+          <sc-for list="{{stretchDemo}}" as="d" hint-placeholder-count="3">
+            <div style="height: 16px; box-sizing: border-box; {{d.style}}"></div>
+          </sc-for>
+        </div>
+      </section>
+
+      <section style="padding: 14px; display: flex; flex-direction: column; gap: 8px">
+        <div style="display: flex; justify-content: space-between; align-items: center">
+          <h2 style="margin: 0; font-size: 11px; font-weight: 600; letter-spacing: 0.06em; color: #8b8c94">GENERATED FILE</h2>
+          <span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #9b9ca4">{{sel.name}}.png.mcmeta</span>
+        </div>
+        <pre style="margin: 0; padding: 10px 12px; background: #0d0e10; border: 1px solid #2a2b30; border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-size: 11px; line-height: 1.5; color: #c4c5cc; white-space: pre-wrap">{{mcmeta}}</pre>
+        <div style="display: flex; gap: 8px; margin-top: 4px">
+          <a href="AppEditor.dc.html" style="flex: 1; display: flex; align-items: center; justify-content: center; font-weight: 600; height: 36px; border-radius: 6px; background: #5b8cff; color: #0a1630; text-decoration: none">Draw this piece</a>
+          <button type="button" style="font: inherit; font-size: 12px; height: 36px; padding: 0 12px; border-radius: 6px; border: 1px solid #34353b; background: transparent; color: #c4c5cc">Revert</button>
+        </div>
+      </section>
+    </aside>
+  </div>
+
+  <footer style="display: flex; flex-wrap: wrap; gap: 16px; align-items: center; padding: 4px 14px; min-height: 24px; background: #18191c; border-top: 1px solid #2a2b30; font-size: 11px; color: #9b9ca4">
+    <span>Menus and buttons · 7 pieces · 3 done</span>
+    <span>Interface pieces exist from Java 1.20.2 · older versions use one big gui image</span>
+    <span style="margin-left: auto; font-family: 'JetBrains Mono', monospace">→ textures/gui/sprites/widget/</span>
+  </footer>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { sprite: 'button', scaling: 'nine_slice', scale: 2 };
+  }
+  renderVals() {
+    var self = this;
+    var S = this.state.scale;
+    var navDefs = [
+      ['home', 'Home', 'M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z'],
+      ['tex', 'Textures', 'M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z'],
+      ['edit', 'Editor', 'M4 20l4-1L19 8l-3-3L5 16l-1 4zM14 7l3 3'],
+      ['gui', 'Interface', 'M4 5h16v14H4zM4 9h16M8 13h8M8 16h5'],
+      ['anim', 'Animation', 'M4 5h16v14H4zM8 5v14M16 5v14M4 9h4M4 15h4M16 9h4M16 15h4'],
+      ['model', 'Models (later)', 'M12 3l8 4.5v9L12 21l-8-4.5v-9zM12 12l8-4.5M12 12v9M12 12L4 7.5'],
+      ['pack', 'Pack and export', 'M12 3v12M7 10l5 5 5-5M5 21h14'],
+      ['set', 'Settings', 'M12 9a3 3 0 1 0 0 6a3 3 0 1 0 0-6zM12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1']
+    ];
+    var nav = navDefs.map(function (d) {
+      var on = d[0] === 'gui';
+      return { label: d[1], d: d[2], stroke: on ? '#ececf0' : '#8b8c94', style: on ? 'background: #26272c; box-shadow: inset 2px 0 0 #5b8cff;' : '' };
+    });
+    var screens = [['Menus and buttons', '7', 1], ['Inventory and chests', '24'], ['HUD: hotbar, hearts, food', '61'], ['Title screen', '9'], ['Recipe book', '18'], ['Advancements', '22'], ['Boss bars', '42']].map(function (c) {
+      return { name: c[0], count: c[1], style: c[2] ? 'background: #26272c;' : '' };
+    });
+
+    var looks = {
+      button: 'background: #6f6f74; border: 2px solid; border-color: #a2a2a8 #3c3c40 #3c3c40 #a2a2a8; box-shadow: 0 0 0 1px #000000; color: #f0f0f0;',
+      button_highlighted: 'background: #7b86a8; border: 2px solid; border-color: #c4ccef #3d4560 #3d4560 #c4ccef; box-shadow: 0 0 0 1px #ffffff; color: #ffffa0;',
+      button_disabled: 'background: #2e2e31; border: 2px solid #232326; box-shadow: 0 0 0 1px #000000; color: #8a8a8a;',
+      slider: 'background: #2a2a2d; border: 2px solid; border-color: #1a1a1c #4a4a50 #4a4a50 #1a1a1c; box-shadow: 0 0 0 1px #000000; color: #f0f0f0;',
+      slider_handle: '',
+      text_field: 'background: #000000; border: 1px solid #a0a0a0; color: #e0e0e0; justify-content: flex-start; padding-left: 8px;',
+      checkbox: 'background: #6f6f74; border: 2px solid; border-color: #a2a2a8 #3c3c40 #3c3c40 #a2a2a8; box-shadow: 0 0 0 1px #000000; color: #f0f0f0;'
+    };
+    var spriteDefs = [
+      ['button', 200, 20, 'Done', 'Resume, Options, Save and quit'],
+      ['button_highlighted', 200, 20, 'Done', 'Any button under the mouse'],
+      ['button_disabled', 200, 20, 'To do', 'Greyed-out buttons'],
+      ['slider', 200, 20, 'Done', 'Volume, FOV, brightness'],
+      ['slider_handle', 8, 20, 'To do', 'The knob on every slider'],
+      ['text_field', 200, 20, 'To do', 'Name and search boxes'],
+      ['checkbox', 20, 20, 'To do', 'On/off options']
+    ];
+    var cur = this.state.sprite;
+    var selDef = spriteDefs[0];
+    var sprites = spriteDefs.map(function (d) {
+      var on = d[0] === cur;
+      if (on) selDef = d;
+      return {
+        name: d[0], status: d[3],
+        statusStyle: d[3] === 'Done' ? 'color: #3ecf8e;' : 'color: #9b9ca4;',
+        swatch: looks[d[0]] ? looks[d[0]].replace(/box-shadow:[^;]*;/, '').replace(/color: #[0-9a-f]+;$/, '').replace(/border: 2px solid;/, 'border: 1px solid;') : 'background: #c8c8c8; border: 1px solid #555;',
+        rowStyle: on ? 'background: #1c2a45; box-shadow: inset 2px 0 0 #5b8cff;' : 'background: transparent;',
+        pick: function () { self.setState({ sprite: d[0] }); }
+      };
+    });
+
+    function el(kind, label, unitsW, extra) {
+      var selected = (kind === cur) || (cur === 'slider_handle' && kind === 'slider');
+      var outline = selected ? 'outline: 2px dashed #5b8cff; outline-offset: 4px;' : '';
+      var style = 'width: ' + (unitsW * S) + 'px; height: ' + (20 * S) + 'px; font-size: ' + (6 + 3 * S) + 'px; ' + looks[kind] + outline + (extra || '');
+      var item = { label: label, style: style, isSlider: kind === 'slider' };
+      if (kind === 'slider') {
+        var hs = cur === 'slider_handle' ? 'outline: 2px dashed #5b8cff; outline-offset: 3px;' : '';
+        item.handleStyle = 'left: ' + Math.round(unitsW * S * 0.78) + 'px; width: ' + (8 * S) + 'px; background: #8b8b90; border: 2px solid; border-color: #c0c0c6 #45454a #45454a #c0c0c6; box-shadow: 0 0 0 1px #000000;' + hs;
+      }
+      return item;
+    }
+    var rows = [
+      { items: [el('button', 'Resume', 200)] },
+      { items: [el('button', 'Options', 98), el('button_highlighted', 'Help', 98)] },
+      { items: [el('slider', 'Music: 80%', 200)] },
+      { items: [el('text_field', 'World name…', 176), el('checkbox', '✓', 20)] },
+      { items: [el('button_disabled', 'Open to friends', 200)] },
+      { items: [el('button', 'Save and quit', 200)] }
+    ];
+
+    var scales = [1, 2, 3].map(function (n) {
+      return { label: n + '×', style: n === S ? 'background: #2c2d33; color: #ececf0; font-weight: 600;' : 'background: transparent; color: #9b9ca4;', pick: function () { self.setState({ scale: n }); } };
+    });
+
+    var sc = this.state.scaling;
+    var scalingTabs = [['stretch', 'Stretch'], ['tile', 'Tile'], ['nine_slice', 'Nine-slice']].map(function (d) {
+      return { label: d[1], style: d[0] === sc ? 'background: #2c3e63; color: #ececf0; font-weight: 600;' : 'background: transparent; color: #9b9ca4;', pick: function () { self.setState({ scaling: d[0] }); } };
+    });
+    var help = {
+      stretch: 'The whole image is stretched to fit. Borders get thicker on wide buttons.',
+      tile: 'The image repeats to fill the space, like floor tiles.',
+      nine_slice: 'Corners stay sharp, edges and middle stretch. Best for buttons and panels.'
+    }[sc];
+
+    var base = 'background: #6f6f74; border-style: solid; border-color: #a2a2a8 #3c3c40 #3c3c40 #a2a2a8;';
+    var stretchDemo = [90, 170, 290].map(function (w) {
+      var s;
+      if (sc === 'nine_slice') { s = base + ' border-width: 2px;'; }
+      else if (sc === 'stretch') { var b = Math.max(1, Math.round(2 * w / 90)); s = base + ' border-width: ' + b + 'px ' + b + 'px;'; }
+      else { s = 'background: repeating-linear-gradient(90deg, #6f6f74 0 40px, #3c3c40 40px 42px, #a2a2a8 42px 44px); border: 2px solid; border-color: #a2a2a8 #3c3c40 #3c3c40 #a2a2a8;'; }
+      return { style: 'width: ' + w + 'px; ' + s };
+    });
+
+    var W = selDef[1], H = selDef[2];
+    var scaling = sc === 'stretch' ? { type: 'stretch' } : (sc === 'tile' ? { type: 'tile', width: W, height: H } : { type: 'nine_slice', width: W, height: H, border: 3 });
+    var mcmeta = JSON.stringify({ gui: { scaling: scaling } }, null, 2);
+
+    var bigW = Math.min(260, Math.round(W * 1.3)), bigH = Math.round(H * 1.3 * (bigW / Math.round(W * 1.3)));
+    var lookSel = looks[selDef[0]] || looks.slider;
+    if (selDef[0] === 'slider_handle') { lookSel = 'background: #8b8b90; border: 2px solid; border-color: #c0c0c6 #45454a #45454a #c0c0c6; box-shadow: 0 0 0 1px #000000;'; }
+    var sel = {
+      name: selDef[0],
+      size: W + ' × ' + H + ' px',
+      size2: (W * 2) + ' × ' + (H * 2) + ' px',
+      usedOn: selDef[4],
+      bigStyle: 'width: ' + bigW + 'px; height: ' + bigH + 'px; ' + lookSel
+    };
+    return {
+      nav: nav, screens: screens, sprites: sprites, rows: rows, scales: scales,
+      gap: (4 * S) + 'px', titleSize: (8 + 4 * S) + 'px',
+      scalingTabs: scalingTabs, scalingHelp: help, showSliceGuides: sc === 'nine_slice',
+      stretchDemo: stretchDemo, mcmeta: mcmeta, sel: sel
+    };
+  }
+}
+</script>
+</body>
+</html>
