@@ -6,9 +6,14 @@ Decisions: `docs/DECISIONS.md`. Facts: `docs/research/domain-facts.md`.
 
 ## Current stage
 
-**Stage 1: foundation and texture browser** — built and tested; installer build
-in progress / last step. Plan: `docs/superpowers/plans/stage-1.md`.
-Next after that: **Stage 2: pixel editor** (write `docs/superpowers/plans/stage-2.md` first).
+**Stage 2: pixel editor** — starting. Plan: `docs/superpowers/plans/stage-2.md`.
+`app/core/src/workfile.rs` (editor working files) is written but not yet
+registered in `lib.rs` nor compiled: add `pub mod workfile;` and the `base64`
+dependency first, then run its tests.
+
+Stage 1 is complete (2026-11-19): installer built at
+`app/target/release/bundle/nsis/Pack Creator_0.1.0_x64-setup.exe` (2.5 MB) and
+the release build was run and checked (images, fonts, security policy).
 
 ## Done
 
@@ -36,11 +41,6 @@ Next after that: **Stage 2: pixel editor** (write `docs/superpowers/plans/stage-
     search, inspector, import (incl. frames), file watching, revert to trash,
     checks and fixes, export for 1.21.11 + 1.20.1 + 1.8.9 with renames,
     reopening the last pack after restart, no-Minecraft and read-only errors.
-
-## Still to do in stage 1
-
-- Confirm the installer from `npx tauri build`
-  (`app/target/release/bundle/nsis/`), then push.
 
 ## Known issues / notes
 
