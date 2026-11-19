@@ -467,6 +467,7 @@ export const api = {
   /** Any image file as raw RGBA, pixel-exact ("Import strip"). */
   readImageRaw: (path: string) => invoke<RawImage>("read_image_raw", { path }),
   reveal: (path: string) => invoke<void>("reveal", { path }),
+  saveShareList: (path: string, text: string) => invoke<void>("save_share_list", { path, text }),
   revertTexture: (path: string) => invoke<boolean>("revert_texture", { path }),
   setPackIcon: (source: string) => invoke<void>("set_pack_icon", { source }),
   editPackIcon: () => invoke<void>("edit_pack_icon"),

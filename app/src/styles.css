@@ -297,6 +297,11 @@ select.input { padding: 0 10px; }
 .scrim { position: fixed; inset: 0; background: rgba(5, 6, 8, 0.6); display: flex; align-items: center; justify-content: center; z-index: 60; }
 .scrim.top { align-items: flex-start; padding-top: 110px; }
 .modal { width: 460px; max-width: calc(100vw - 48px); background: var(--bar); border: 1px solid var(--line-input); border-radius: 10px; padding: 20px; display: flex; flex-direction: column; gap: 12px; box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6); }
+.modal.wide { width: 680px; }
+.sharegrid { display: grid; grid-template-columns: 70px minmax(0, 1fr); gap: 10px 12px; align-items: center; font-size: 12px; }
+.sharegrid .label { color: var(--text-soft); font-weight: 500; }
+.sharegrid .seg button { padding: 0 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sharepreview { height: 260px; resize: vertical; width: 100%; background: var(--canvas); border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px; color: var(--text-soft); font-size: 11px; line-height: 1.5; outline: none; white-space: pre; }
 .modal h2 { font-size: 15px; font-weight: 600; }
 .modal p { font-size: 13px; color: var(--text-soft); user-select: text; overflow-wrap: anywhere; white-space: pre-line; }
 .modal .hintbox { font-size: 12px; color: var(--text-soft); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px; user-select: text; }

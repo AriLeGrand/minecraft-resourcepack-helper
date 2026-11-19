@@ -27,6 +27,9 @@ export, animated, wrong size). The inspector shows the game's texture next to
 yours, the block models that use it and its name in older and newer versions.
 From here you can edit a texture, import an image (kept pixel for pixel),
 open it in another program, or revert it.
+"Share list" turns the list into a to-do list you can send to friends or a
+team: a checklist for Discord, GitHub or Notion, plain text, or a spreadsheet
+file, for the current view or the whole pack, copied or saved as a file.
 
 ![Texture browser](docs/screenshots/browser.png)
 

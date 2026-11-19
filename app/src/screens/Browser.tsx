@@ -9,6 +9,7 @@ import {
   baseName, CATEGORIES, categoryLabel, countRows, dayLabel, filterRows, folderOf, matchesElsewhere, timeLabel,
   virtualWindow,
 } from "../lib/logic";
+import { ShareDialog } from "../components/ShareDialog";
 import { useApp } from "../store";
 
 const ROW_H = 41;
@@ -85,6 +86,7 @@ export function Browser() {
     if (next) select(next.path);
   };
 
+  const [sharing, setSharing] = useState(false);
   const title = filters.only ? "Selected textures" : filters.category === "all" ? "All textures" : categoryLabel(filters.category);
   const total = filters.category === "all" ? rows.length : counts.byCategory[filters.category] ?? 0;
   const done = filters.category === "all"
@@ -143,6 +145,9 @@ export function Browser() {
                 onChange={(e) => setFilters({ search: e.target.value, only: null })}
               />
             </label>
+            <button className="btn" onClick={() => setSharing(true)} disabled={rows.length === 0} title="Share the to-do list (copy or save as a file)">
+              <span className="row" style={{ gap: 6 }}><Icon name="share" size={14} width={2} />Share list</span>
+            </button>
             <div className="viewtoggle" role="group" aria-label="View">
               <button aria-label="List view" className={view === "list" ? "on" : ""} onClick={() => setView("list")}><Icon name="list" size={14} width={2} /></button>
               <button aria-label="Grid view" className={view === "grid" ? "on" : ""} onClick={() => setView("grid")}><Icon name="textures" size={14} width={2} /></button>
@@ -216,6 +221,7 @@ export function Browser() {
 
         <Inspector row={selectedRow} now={now} />
       </div>
+      {sharing && <ShareDialog visible={visible} all={rows} viewTitle={title} onClose={() => setSharing(false)} />}
       <StatusBar>
         {summary && <span>{summary.done} / {summary.total} textures done</span>}
       </StatusBar>

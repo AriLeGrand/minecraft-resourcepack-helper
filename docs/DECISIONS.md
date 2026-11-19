@@ -554,3 +554,18 @@ committed screenshots (D-018 still holds for everything else).
 (`editor/LazyBlockPreview.tsx`); `LiveTexture` lives in its own file so the
 editor and Animation screen do not pull three.js into the main bundle. The
 first 3D view shows an empty box for a moment while the chunk loads.
+
+## After the final stage (2026-11-20)
+
+**D-074 · Sharing the to-do list.** The texture browser's "Share list" turns
+the texture list (with its To do / Done status) into text: a Markdown
+checklist (ticks render in Discord, GitHub, Notion, Obsidian), plain text, or
+CSV for spreadsheets; for the current view (category, search and filters) or
+the whole pack; finished textures listed as ticked or left out. It is copied
+or saved as a file; there is no online sharing or live sync (that would need
+an account and a server). Copy uses Tauri's clipboard plugin: the browser
+clipboard API is refused when the window is not focused, and an earlier
+version then wrongly reported success. Saving goes through Rust
+(`core/src/share.rs`), which only writes `.md`, `.txt` or `.csv` files.
+Formatting is pure TypeScript (`src/lib/share.ts`, tested), since it is
+presentation, not pack data.

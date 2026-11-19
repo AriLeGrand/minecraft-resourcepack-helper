@@ -812,6 +812,13 @@ fn read_image_raw(path: String) -> Result<workfile::RawImage> {
     workfile::read_image_raw(Path::new(&path))
 }
 
+/// Saves a shared to-do list (already formatted by the UI) to a .md, .txt or
+/// .csv file the user chose in the save dialog.
+#[tauri::command(async)]
+fn save_share_list(path: String, text: String) -> Result<()> {
+    packcreator_core::share::write_list(Path::new(&path), &text)
+}
+
 #[tauri::command(async)]
 fn reveal(app: AppHandle, path: String) -> Result<()> {
     use tauri_plugin_opener::OpenerExt;
@@ -1018,6 +1025,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_clipboard_manager::init())
         .manage(AppState::default())
         .register_uri_scheme_protocol("pcimg", |ctx, request| {
             images::serve(ctx.app_handle(), &request)
@@ -1065,6 +1073,7 @@ pub fn run() {
             gui_set_scaling,
             gui_restore_mcmeta,
             reveal,
+            save_share_list,
             revert_texture,
             set_pack_icon,
             edit_pack_icon,

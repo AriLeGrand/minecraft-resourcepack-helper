@@ -21,6 +21,7 @@ pub mod particles;
 pub mod renames;
 pub mod rows;
 pub mod settings;
+pub mod share;
 pub mod textures;
 pub mod version;
 pub mod workfile;
