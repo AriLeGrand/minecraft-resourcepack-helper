@@ -1,6 +1,9 @@
 // Right column of the editor: preview, palette with the colour picker, layers.
-import { memo, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Icon } from "../components/Icon";
+import { useApp } from "../store";
+import { BlockPreview, LiveTexture } from "./BlockPreview";
+import { isBlockTexture } from "./blockMesh";
 import { ColorPicker } from "./ColorPicker";
 import { frametimeOf, isPlayable } from "./anim";
 import { flatten, REFERENCE_OPACITY, type EditorDoc } from "./doc";
@@ -34,10 +37,10 @@ export function PixelView({ buf, box, repeat = 1, label }: { buf: Buf; box: numb
   return <canvas ref={ref} className="pixel" role="img" aria-label={label} style={{ width: Math.round(w * s), height: Math.round(h * s) }} />;
 }
 
-const LATER = "arrives in a later stage";
-
-export const PreviewPanel = memo(function PreviewPanel({ doc: saved, preview }: { doc: EditorDoc; preview: Preview | null }) {
-  const mode = useEditor((s) => s.previewTab);
+export const PreviewPanel = memo(function PreviewPanel({ doc: saved, preview, packDir }: { doc: EditorDoc; preview: Preview | null; packDir: string }) {
+  const chosen = useEditor((s) => s.previewTab);
+  const block = isBlockTexture(saved.path);
+  const mode = chosen ?? (block ? "3d" : "tiled");
   const setMode = useEditor((s) => s.setPreviewTab);
   // The side preview follows the canvas with low priority: while a tool is
   // dragged, the canvas is drawn first and this catches up when there is time.
@@ -50,7 +53,12 @@ export const PreviewPanel = memo(function PreviewPanel({ doc: saved, preview }: 
       <div className="head">
         <h2 className="caps">Preview</h2>
         <div className="ed-tabs" role="tablist" aria-label="Preview mode">
-          <button role="tab" disabled title={`3D preview ${LATER}`}>3D</button>
+          <button
+            role="tab" aria-selected={mode === "3d"} className={mode === "3d" ? "on" : ""}
+            title="The texture on a block in 3D (drag to turn)" onClick={() => setMode("3d")}
+          >
+            3D
+          </button>
           <button role="tab" aria-selected={mode === "tiled"} className={mode === "tiled" ? "on" : ""} onClick={() => setMode("tiled")}>Tiled</button>
           <button role="tab" aria-selected={mode === "original"} className={mode === "original" ? "on" : ""} onClick={() => setMode("original")}>Original</button>
           <button
@@ -61,8 +69,13 @@ export const PreviewPanel = memo(function PreviewPanel({ doc: saved, preview }: 
           </button>
         </div>
       </div>
+      {mode === "3d" && block ? (
+        <Block3D key={`${packDir}|${saved.path}`} flat={flat} path={saved.path} packDir={packDir} />
+      ) : (
       <div className="ed-preview">
-        {mode === "animated" ? (
+        {mode === "3d" ? (
+          <div className="bp-note">The 3D view is for block textures. This texture is not drawn on a block in the game; see Tiled or Original.</div>
+        ) : mode === "animated" ? (
           <AnimatedPreview doc={saved} />
         ) : mode === "tiled" ? (
           <PixelView buf={flat} box={196} repeat={3} label="Texture repeated 3 by 3" />
@@ -81,11 +94,21 @@ export const PreviewPanel = memo(function PreviewPanel({ doc: saved, preview }: 
           </div>
         )}
       </div>
+      )}
     </section>
   );
 });
 
-/** The texture playing at the game's speed (flat; the 3D view comes later). */
+/** The 3D view, fed with the document's current frame (visible layers) on every change. */
+function Block3D({ flat, path, packDir }: { flat: Buf; path: string; packDir: string }) {
+  const [live] = useState(() => new LiveTexture());
+  // before the view's own effects, so it starts with the right pixels
+  useLayoutEffect(() => live.set(flat), [live, flat]);
+  const versionDir = useApp((s) => s.pack?.project.version_dir ?? "");
+  return <BlockPreview texture={path} live={live} packDir={packDir} versionDir={versionDir} height={214} />;
+}
+
+/** The texture playing at the game's speed (flat). */
 function AnimatedPreview({ doc }: { doc: EditorDoc }) {
   const slot = useAnimPlayer(doc, { playing: isPlayable(doc), loop: true });
   const scale = Math.max(1, Math.floor(160 / Math.max(doc.width, doc.height)));

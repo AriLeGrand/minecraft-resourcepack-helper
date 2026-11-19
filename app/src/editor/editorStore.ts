@@ -53,7 +53,7 @@ export interface Tab {
   paletteSource: "vanilla" | "image" | "saved";
 }
 
-export type PreviewTab = "tiled" | "original" | "animated";
+export type PreviewTab = "3d" | "tiled" | "original" | "animated";
 
 export interface TextEdit {
   at: Pt;
@@ -73,7 +73,8 @@ interface EditorState {
   /** Texture pixel under the pointer. */
   cursor: Pt | null;
   viewport: { w: number; h: number };
-  previewTab: PreviewTab;
+  /** `null` until one is picked: 3D for block textures, else Tiled. */
+  previewTab: PreviewTab | null;
   /** Text being typed with the Text tool. */
   text: TextEdit | null;
 
@@ -315,7 +316,7 @@ export const useEditor = create<EditorState>((set, get) => {
     clipboard: null,
     cursor: null,
     viewport: { w: 800, h: 600 },
-    previewTab: "tiled",
+    previewTab: null,
     text: null,
 
     openTexture: async (path) => {

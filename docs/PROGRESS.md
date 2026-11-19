@@ -6,8 +6,44 @@ Decisions: `docs/DECISIONS.md`. Facts: `docs/research/domain-facts.md`.
 
 ## Current stage
 
-**Next: Stage 4 — game previews** (3D block preview with three.js in the editor
-and animation preview tabs, particle viewer).
+**Stage 4: game previews** — in progress. Plan: `docs/superpowers/plans/stage-4.md`.
+**Next: Part B (particle viewer, steps B1-B6).**
+
+**Part A: 3D block preview** — done (2026-11-19). Decisions D-056 to D-060.
+- Rust `app/core/src/models.rs` (11 tests, synthetic model files): resolves a
+  block model (pack first, then the extracted game), parents with a depth
+  limit, loop and missing-parent errors, texture merging and `#variable`
+  chains, nearest `elements`, default UVs, face rotation / tint / cullface,
+  element rotation, `ambientocclusion`, built-in models reported;
+  `models_for_texture` (cube + models that use the texture, most useful
+  first, at most 24). Commands `block_model` and `models_for_texture` (both
+  checked with `own_pack`), wrappers in `app/src/lib/api.ts`. Checked against
+  the real extracted folders once (not in the tests): all 2390 1.21.11 and
+  1080 1.8.9 block models resolve without an error.
+- `app/src/editor/blockMesh.ts` (+ 8 tests): face corners, UVs, face and
+  element rotation, rescale, shade, tint colours.
+- `app/src/editor/BlockPreview.tsx`: three.js 0.170.0 view with a model
+  picker, drag / wheel / double-click, reset, light background; the edited
+  texture comes live from the document (`LiveTexture`), the others from the
+  pack or the game. Editor preview tab "3D" (default for block textures, a
+  note for others); the Animation screen's CSS cube is replaced by it, fed by
+  the existing player (`onPaint` in `Player.tsx`).
+- Checked in the real app (`tauri dev`, `tools/shot.mjs`): block/oak_planks
+  (cube, 24 models in the picker incl. stairs / slab / fence), drawing two
+  lines showed on the block at once (then undone), stairs and fence turned
+  by dragging, light background, grass_block_top (grass_block chosen, top and
+  side overlay tinted green), short_grass (cross, cut-out, tinted), torch and
+  wall_torch (tilted element), item/apple (Tiled by default, note on 3D),
+  block/andesite in the Animation screen (cube and flat view change frame
+  together, interpolation visible). Screenshots
+  `app/target/devdata/screenshots/8-*.png` (git-ignored).
+
+Known limits of Part A:
+- No ambient occlusion, no cull-face removal, no blockstate rotations (the
+  model as it is in the file), no item models; one biome colour (plains).
+- The model list is not cached (about 150 ms per texture in a debug build,
+  more on a slow disk); the picker shows only "Cube" until it arrives.
+- Models from other namespaces (mods) are refused.
 
 **Stage 3: animation** — complete (2026-11-19). Plan: `docs/superpowers/plans/stage-3.md`.
 Decisions D-047 to D-055.
@@ -44,7 +80,6 @@ Known issues / limits of stage 3:
   import that replaces the size rebuilds a ping-pong without durations.
 - After undoing back to the saved state the tab still counts as unsaved (as in
   stage 2).
-- The editor's "Animated" tab is flat; 3D comes with stage 4.
 - Frames are reordered with buttons, not by dragging.
 
 **Stage 2: pixel editor** — complete (2026-11-19). Plan: `docs/superpowers/plans/stage-2.md`.

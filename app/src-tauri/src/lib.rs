@@ -10,6 +10,7 @@ use packcreator_core::extract;
 use packcreator_core::import::{self, ImageInfo, ImportResult};
 use packcreator_core::mcmeta::Animation;
 use packcreator_core::minecraft::{self, InstalledVersion};
+use packcreator_core::models;
 use packcreator_core::pack::{self, PackSummary, Project};
 use packcreator_core::rows::{self, NameEra, TextureRow};
 use packcreator_core::settings::{self, RecentPack, Settings};
@@ -655,6 +656,37 @@ fn animation_mcmeta(
     workfile::mcmeta_preview(&dir, &path, animation.as_ref(), &times, times.len())
 }
 
+/// The pack folder and the extracted game folder of the editor tab's pack.
+fn model_roots(state: &State<AppState>, pack_dir: &str) -> Result<(PathBuf, PathBuf)> {
+    let inner = state.lock();
+    let p = own_pack(&inner, pack_dir)?;
+    let vanilla = extract::vanilla_dir(&inner.cache_dir, &p.project.version_dir);
+    Ok((p.dir.clone(), vanilla))
+}
+
+/// A block model, resolved for the 3D preview (the pack's model files win).
+#[tauri::command(async)]
+fn block_model(
+    state: State<AppState>,
+    name: String,
+    pack_dir: String,
+) -> Result<models::BlockModel> {
+    let (pack, vanilla) = model_roots(&state, &pack_dir)?;
+    models::block_model(Some(&pack), &vanilla, &name)
+}
+
+/// The models the 3D preview offers for a texture: the cube, then the block
+/// models that use it, most useful first.
+#[tauri::command(async)]
+fn models_for_texture(
+    state: State<AppState>,
+    path: String,
+    pack_dir: String,
+) -> Result<Vec<models::ModelChoice>> {
+    let (pack, vanilla) = model_roots(&state, &pack_dir)?;
+    Ok(models::models_for_texture(Some(&pack), &vanilla, &path))
+}
+
 /// Reads an image file as raw RGBA, pixel-exact ("Import strip").
 #[tauri::command(async)]
 fn read_image_raw(path: String) -> Result<workfile::RawImage> {
@@ -905,6 +937,8 @@ pub fn run() {
             editor_save,
             animation_mcmeta,
             read_image_raw,
+            block_model,
+            models_for_texture,
             reveal,
             revert_texture,
             set_pack_icon,

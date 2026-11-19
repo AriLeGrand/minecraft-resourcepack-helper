@@ -412,7 +412,7 @@ export function Editor() {
           <FrameStrip doc={doc} />
         </main>
         <aside className="ed-side">
-          <PreviewPanel doc={doc} preview={tab.preview} />
+          <PreviewPanel doc={doc} preview={tab.preview} packDir={tab.packDir} />
           <PalettePanel palette={doc.palette} hasVanilla={doc.vanilla !== null} source={tab.paletteSource} />
           <LayersPanel doc={doc} />
         </aside>

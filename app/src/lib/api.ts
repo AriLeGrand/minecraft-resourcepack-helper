@@ -234,6 +234,44 @@ export interface OpenedRaw {
   vanilla_frames: number;
 }
 
+/** Block model types (Rust `core/src/models.rs`); coordinates in 0..16 block units. */
+export type FaceDir = "down" | "up" | "north" | "south" | "west" | "east";
+
+export interface ModelFace {
+  /** Texture path such as `block/oak_planks`, `null` when its variable leads nowhere. */
+  texture: string | null;
+  /** `[u1, v1, u2, v2]` in 0..16 texture units. */
+  uv: [number, number, number, number];
+  /** 0, 90, 180 or 270, clockwise. */
+  rotation: number;
+  tintindex: number | null;
+  cullface: string | null;
+}
+
+export interface ModelElement {
+  from: [number, number, number];
+  to: [number, number, number];
+  rotation: { origin: [number, number, number]; axis: "x" | "y" | "z"; angle: number; rescale: boolean } | null;
+  shade: boolean;
+  faces: Partial<Record<FaceDir, ModelFace>>;
+}
+
+export interface BlockModel {
+  name: string;
+  chain: string[];
+  from_pack: boolean;
+  ambientocclusion: boolean;
+  textures: Record<string, string>;
+  elements: ModelElement[];
+  /** Set when there is nothing to draw (`builtin/entity`, `builtin/generated`, `none`). */
+  builtin: string | null;
+}
+
+export interface ModelChoice {
+  name: string;
+  label: string;
+}
+
 export interface SettingsPatch {
   minecraft_dir?: string | null;
   external_editor?: string | null;
@@ -280,6 +318,10 @@ export const api = {
    */
   animationMcmeta: (path: string, animation: Animation | null, times: (number | null)[], packDir: string) =>
     invoke<string>("animation_mcmeta", { path, animation, times, packDir }),
+  /** A block model resolved for the 3D preview (the pack's model files win over the game's). */
+  blockModel: (name: string, packDir: string) => invoke<BlockModel>("block_model", { name, packDir }),
+  /** Models to offer for a texture: the cube (`name` ":cube") first, then block models using it. */
+  modelsForTexture: (path: string, packDir: string) => invoke<ModelChoice[]>("models_for_texture", { path, packDir }),
   /** Any image file as raw RGBA, pixel-exact ("Import strip"). */
   readImageRaw: (path: string) => invoke<RawImage>("read_image_raw", { path }),
   reveal: (path: string) => invoke<void>("reveal", { path }),

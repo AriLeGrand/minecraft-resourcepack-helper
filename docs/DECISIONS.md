@@ -348,3 +348,64 @@ driven by `tools/shot.mjs`, and Tauri's `invoke` cannot be replaced from the
 page. In development builds only, `window.__packCreatorDev.importStrip(path)`
 runs the import from a path (the same code after the dialog). It is not in
 release builds.
+
+## Stage 4
+
+**D-056 · Block models are resolved in Rust.** `core/src/models.rs` reads the
+model files (the pack's `assets/minecraft/models/` first, then the extracted
+game folder), follows `parent` (at most 32 steps, loops and missing parents
+are refused with the chain in the message), merges `textures` from the root
+down (children win), takes `elements` from the nearest model that has them and
+follows `#variable` chains to texture paths without `minecraft:`. Faces
+without `uv` get the game's default from `from` / `to`; face rotation is
+rounded to 0/90/180/270; `tintindex` < 0 counts as none. Names may be
+`minecraft:block/x`, `block/x` or a bare `x` (taken as `block/x`); other
+namespaces are refused. A chain ending in `builtin/…`, or one without any
+elements (chests, beds, signs in 1.21), is reported in `builtin` and drawn as
+the plain cube with a note.
+
+**D-057 · Which models are offered.** "Cube" always comes first. Then every
+block model file (pack and game, the pack's wins by name) whose text contains
+the texture's file name is resolved, and kept when one of its faces uses the
+texture (a texture used only as `particle` does not count). Order: the block
+named like the texture (also `planks_oak` ↔ `oak_planks` for 1.8.9), then
+stairs, slab, wall, fence, pane, everything else; corner and part variants
+(`_inner`, `_outer`, `_top`, `_post`, `_side`, 1.8.9 `_n` / `_ne`…) after all
+of those; at most 24. The scan takes about 150 ms in a debug build for
+1.21.11 (2390 files) and is not cached.
+
+**D-058 · 3D preview drawing.** three.js 0.170.0 (pinned, bundled by Vite, no
+network). Geometry is built in `editor/blockMesh.ts` (pure, tested): face
+corners in the game's orientation, UVs per corner, face rotation clockwise,
+element rotation about its origin with `rescale` = 1/cos(angle) on the two
+other axes, shade per face direction (up 1.0, down 0.5, north/south 0.8,
+east/west 0.6, none with `shade: false`). Colours are passed through without
+colour management (texture `NoColorSpace`, linear output), so a pixel shows as
+the game would before lighting. Nearest filtering, no mip-maps, `alphaTest`
+0.1 with blending for translucent pixels. Faces with no area are dropped.
+Tinted faces get the plains colours: grass #91BD59, leaves and vines #77AB2F,
+birch #80A755, spruce #619961, water #3F76E4, lily pad #208030. Orthographic
+camera, drag to turn, wheel to zoom, double-click or the reset button to go
+back, light / dark background (kept for the session). The scene is drawn only
+when something changes; GPU objects are freed when the model changes and the
+WebGL context when the view goes away. No ambient occlusion and no cull-face
+removal (one block alone shows all its faces).
+
+**D-059 · Live textures.** The texture being edited comes from the document:
+the editor's 3D tab gets the current frame with visible layers (the same
+deferred composite the other preview tabs use) through a `LiveTexture` canvas
+that the three.js texture re-uploads (`needsUpdate`, a new GPU texture only when
+the size changes). Other textures of the model come from the pack when it has
+the file, else from the game (first frame of a strip). In the Animation screen
+the 3D view takes the pictures the existing player paints (`onPaint` in
+`Player.tsx`), so the cube plays on the same 50 ms tick clock, interpolation
+included.
+
+**D-060 · Where 3D shows.** The editor's preview tab is chosen
+automatically until one is clicked: 3D for block textures (`block/…`,
+`blocks/…`), Tiled for everything else; a non-block texture on the 3D tab shows
+a short note. The model shown first is the most useful model of the list (the
+block of the same name, so grass_block for grass_block_top); the Animation
+screen starts with the plain cube. The pick is remembered per texture for the
+session. The Animation screen's CSS cube is gone; non-block textures show only
+the flat preview there.

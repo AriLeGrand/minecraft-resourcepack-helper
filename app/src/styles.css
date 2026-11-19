@@ -410,6 +410,28 @@ select.input { padding: 0 10px; }
 .ed-preview .pair > div { display: flex; flex-direction: column; align-items: center; gap: 6px; }
 .ed-preview .cell { width: 112px; height: 112px; display: flex; align-items: center; justify-content: center; border-radius: 3px; overflow: hidden; }
 .ed-preview .none { font-size: 11px; color: var(--text-2); padding: 6px; }
+.bp { position: relative; width: 100%; }
+.bp-view {
+  position: relative; overflow: hidden; cursor: grab; touch-action: none;
+  background: radial-gradient(circle at 50% 40%, #1d2026, #111214); border: 1px solid var(--line); border-radius: 8px;
+}
+.bp-view:active { cursor: grabbing; }
+.bp-view.light { background: radial-gradient(circle at 50% 40%, #f2f3f6, #c9ccd4); }
+.bp.bare .bp-view { background: transparent; border: 0; border-radius: 6px; }
+.bp.bare .bp-view.light { background: radial-gradient(circle at 50% 40%, #f2f3f6, #c9ccd4); }
+.bp-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.bp-bar { position: absolute; left: 6px; right: 6px; bottom: 6px; display: flex; gap: 4px; align-items: center; pointer-events: none; }
+.bp-bar > * { pointer-events: auto; }
+.bp-model { flex: 0 1 auto; min-width: 0; max-width: 100%; margin-right: auto; background: rgba(17, 18, 20, 0.85); }
+.bp-btn {
+  flex: none; width: 22px; height: 22px; padding: 0; display: flex; align-items: center; justify-content: center;
+  border: 1px solid var(--line-input); border-radius: 4px; background: rgba(17, 18, 20, 0.85); color: var(--text-soft);
+}
+.bp-btn:hover { background: var(--hover); color: var(--text); }
+.bp-btn.on { color: var(--warn); }
+.bp-error { position: absolute; left: 8px; right: 8px; top: 8px; font-size: 11px; color: var(--warn); pointer-events: none; }
+.bp-note { font-size: 12px; color: var(--text-2); text-align: center; padding: 0 24px; line-height: 1.5; }
+.an-3d { flex: 1 1 0; min-width: 0; max-width: 170px; }
 .ed-swatches { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 3px; }
 .ed-swatches button { aspect-ratio: 1; border-radius: 3px; border: 0; padding: 0; }
 .ed-swatches button.bg { box-shadow: 0 0 0 1px var(--muted); }

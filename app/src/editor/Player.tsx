@@ -15,6 +15,8 @@ export interface PlayerOptions {
   onEnded?: () => void;
   /** What is shown changed (called outside React rendering; update the DOM directly). */
   onShow?: (at: At, entries: Entry[]) => void;
+  /** The picture shown changed (e.g. for the 3D view's texture). */
+  onPaint?: (buf: Buf) => void;
 }
 
 function paint(canvas: HTMLCanvasElement, buf: Buf) {
@@ -64,6 +66,7 @@ export function useAnimPlayer(doc: EditorDoc, opts: PlayerOptions) {
     const next = at.next !== null ? imgs[at.next] : undefined;
     const buf = next ? blendFrames(cur, next, at.sub, at.ticks) : cur;
     for (const c of canvases.current) if (c) paint(c, buf);
+    o.onPaint?.(buf);
     o.onShow?.(at, list);
   }, []);
 

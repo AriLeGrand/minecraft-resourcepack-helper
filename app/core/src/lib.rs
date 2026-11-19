@@ -11,6 +11,7 @@ pub mod extract;
 pub mod import;
 pub mod mcmeta;
 pub mod minecraft;
+pub mod models;
 pub mod pack;
 pub mod pack_format;
 pub mod particles;

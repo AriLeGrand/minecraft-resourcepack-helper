@@ -13,6 +13,8 @@ import { Canvas } from "../editor/Canvas";
 import { isAnimated, PACK_ICON, targetLabel, type EditorDoc } from "../editor/doc";
 import { activeTab, fileName, useEditor, type Tab } from "../editor/editorStore";
 import { PixelView } from "../editor/Panels";
+import { BlockPreview, LiveTexture } from "../editor/BlockPreview";
+import { isBlockTexture } from "../editor/blockMesh";
 import { useAnimPlayer } from "../editor/Player";
 import { base64ToBytes, rgbaToHex, type Buf } from "../editor/pixels";
 import { flatFrame } from "../editor/render";
@@ -277,23 +279,23 @@ const Toolbar = memo(function Toolbar({ count, frameIndex, playing, loop, playab
   );
 });
 
-/** Flat image and a small block, both playing at the game's speed. */
-const LivePreview = memo(function LivePreview({ doc, playing, loop, onEnded, onEntry }: {
-  doc: EditorDoc; playing: boolean; loop: boolean; onEnded: () => void; onEntry: (entry: number | null) => void;
+/** Flat image and a 3D block, both playing at the game's speed. */
+const LivePreview = memo(function LivePreview({ doc, packDir, playing, loop, onEnded, onEntry }: {
+  doc: EditorDoc; packDir: string; playing: boolean; loop: boolean; onEnded: () => void; onEntry: (entry: number | null) => void;
 }) {
   const counter = useRef<HTMLSpanElement>(null);
   const count = doc.frames.length;
+  const versionDir = useApp((s) => s.pack?.project.version_dir ?? "");
+  // the 3D view takes the player's pictures: one clock for both
+  const [live] = useState(() => new LiveTexture());
+  const onPaint = useCallback((buf: Buf) => live.set(buf), [live]);
   const onShow = useCallback((at: At) => {
     if (counter.current) counter.current.textContent = `frame ${at.image + 1} / ${count}`;
     onEntry(at.entry);
   }, [count, onEntry]);
-  const slot = useAnimPlayer(doc, { playing, loop, onEnded, onShow });
+  const slot = useAnimPlayer(doc, { playing, loop, onEnded, onShow, onPaint });
   const scale = 112 / Math.max(doc.width, doc.height);
-  const faces: { cls: string; shade: number }[] = [
-    { cls: "front", shade: 0.18 },
-    { cls: "right", shade: 0.38 },
-    { cls: "top", shade: 0 },
-  ];
+  const block = isBlockTexture(doc.path);
   return (
     <section className="an-panel">
       <div className="head">
@@ -305,16 +307,11 @@ const LivePreview = memo(function LivePreview({ doc, playing, loop, onEnded, onE
           ref={slot(0)} className="pixel" role="img" aria-label="The texture as the game shows it"
           style={{ width: Math.round(doc.width * scale), height: Math.round(doc.height * scale) }}
         />
-        <div className="an-cubebox" aria-hidden="true">
-          <div className="an-cube">
-            {faces.map((f, i) => (
-              <div key={f.cls} className={`face ${f.cls}`}>
-                <canvas ref={slot(i + 1)} className="pixel" />
-                {f.shade > 0 && <div className="shade" style={{ background: `rgba(0, 0, 0, ${f.shade})` }} />}
-              </div>
-            ))}
+        {block && (
+          <div className="an-3d">
+            <BlockPreview texture={doc.path} live={live} packDir={packDir} versionDir={versionDir} height={132} cubeFirst bare />
           </div>
-        </div>
+        )}
       </div>
     </section>
   );
@@ -594,7 +591,7 @@ export function Animation() {
           </div>
         </main>
         <aside className="an-side">
-          <LivePreview doc={doc} playing={playing && playable} loop={loop} onEnded={onEnded} onEntry={onEntry} />
+          <LivePreview doc={doc} packDir={tab.packDir} playing={playing && playable} loop={loop} onEnded={onEnded} onEntry={onEntry} />
           <Settings doc={doc} chipRefs={chipRefs} />
           <Generated tab={tab} />
         </aside>
