@@ -6,10 +6,44 @@ Decisions: `docs/DECISIONS.md`. Facts: `docs/research/domain-facts.md`.
 
 ## Current stage
 
+**Final stage** — documentation done (2026-11-19).
+**Next: build the release installer** (`cd app && npx tauri build`, then run
+the installed app once and check it), and push the branch.
+
+Done in the final stage:
+- `README.md` rewritten for Pack Creator (what it is, screens, install, quick
+  start, where files go, building from source, the old plugin, not affiliated
+  with Mojang / Microsoft). `docs/LIMITATIONS.md`: known limitations and the
+  "later" list.
+- `tools/demo/make_demo_minecraft.py`: builds a fake `.minecraft` (1.21.11 and
+  1.8.9 "jars" whose every file is drawn or written by the script: textures,
+  animations, GUI sprites with nine-slice files, old `widgets.png` /
+  `icons.png` / `particles.png` sheets at the app's own rectangles and cells,
+  particle JSON, block models). It reads no game file.
+- README screenshots `docs/screenshots/*.png` (committed: demo content only,
+  D-018) taken with the demo game, separate config and cache under
+  `app/target/devdata/demo/`, pack "Deep Sea Pack" (1.21.11, 32×): start,
+  texture browser, editor with the 3D stairs, animation, particles, interface
+  (button redrawn in teal), pack and export (zip + 1.8.9 copy exported).
+- The 3D preview (three.js) is loaded on demand (`editor/LazyBlockPreview.tsx`,
+  `LiveTexture` moved to `editor/liveTexture.ts`): main bundle 383 kB instead
+  of over 500 kB, no Vite size warning. Checked in `tauri dev`: editor 3D tab
+  (cube, oak_stairs) and the Animation screen's cube.
+- All checks pass: fmt, clippy, 147 Rust tests, typecheck, lint, 319
+  front-end tests, `npm run build`.
+
+To run the app on the demo game (Git Bash, from `app/`):
+
+```
+python ../tools/demo/make_demo_minecraft.py target/devdata/demo/.minecraft
+# write target/devdata/demo/config/settings.json with "minecraft_dir" set to that folder
+export WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=9223
+export PACKCREATOR_CONFIG_DIR=$PWD/target/devdata/demo/config PACKCREATOR_CACHE_DIR=$PWD/target/devdata/demo/cache
+npx tauri dev
+```
+
 **Stage 5: interface editor** — complete (2026-11-19). Plan: `docs/superpowers/plans/stage-5.md`.
 Decisions D-065 to D-071.
-**Next: Final stage — full test pass, release installer, README, known
-limitations and the "later" list.**
 
 - Rust `app/core/src/gui.rs` (11 tests): read / write `gui.scaling`
   (stretch / tile / nine_slice, border number or sides, `stretch_inner`, every
@@ -262,7 +296,8 @@ the release build was run and checked (images, fonts, security policy).
 - Debug builds extract slowly (about 25 s for 1.21.11); release builds are fast.
 - The file `minecraft-resourcepack-helper..aseprite-extension` in the repo
   root is the owner's untracked build of the old plugin; leave it alone.
-- Screenshots contain game textures: never commit them (D-018).
+- Screenshots contain game textures: never commit them (D-018). The only
+  committed screenshots are `docs/screenshots/*.png`, taken with the demo game.
 
 ## How to run
 

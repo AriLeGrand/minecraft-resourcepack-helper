@@ -540,3 +540,17 @@ image is a whole multiple of 256; any other size opens unrestricted with an
 explanation). A shared image in the pack counts as done for all its pieces.
 There are no stretch rules before 1.20.2: the panel says so, and the Rust
 commands refuse them for such packs.
+
+## Final stage
+
+**D-072 · Demo game for README screenshots.** `tools/demo/make_demo_minecraft.py`
+draws a fake `.minecraft` (1.21.11 and 1.8.9) entirely from code: no game file
+is read, copied or traced. It reads only the app's own position tables
+(`particle_sheet.json`, `gui_regions.json`) to put old-sheet pieces in the
+right places. Screenshots taken with it (`docs/screenshots/`) are the only
+committed screenshots (D-018 still holds for everything else).
+
+**D-073 · three.js is loaded on demand.** The 3D view is imported lazily
+(`editor/LazyBlockPreview.tsx`); `LiveTexture` lives in its own file so the
+editor and Animation screen do not pull three.js into the main bundle. The
+first 3D view shows an empty box for a moment while the chunk loads.

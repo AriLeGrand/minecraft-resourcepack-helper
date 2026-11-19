@@ -9,35 +9,15 @@
 import { memo, useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { api, images, toError, type BlockModel, type ModelChoice } from "../lib/api";
-import type { Buf } from "./pixels";
 import { cubeModel, modelFaces, QUAD_TRIANGLES, tintFor } from "./blockMesh";
 import { releaseAfterMouse } from "./focus";
+import type { LiveTexture } from "./liveTexture";
 import { Icon } from "../components/Icon";
 
 const RESET = "M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7";
 const SUN = "M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6L7 7M17 17l1.4 1.4M5.6 18.4L7 17M17 7l1.4-1.4M12 8a4 4 0 1 0 0 8a4 4 0 1 0 0-8z";
 
-/**
- * Pixels of the texture being edited, shared with the 3D view without React:
- * `set` paints the canvas and tells the view, which uploads it again.
- */
-export class LiveTexture {
-  readonly canvas = document.createElement("canvas");
-  private listeners = new Set<() => void>();
-  set(buf: Buf) {
-    const c = this.canvas;
-    if (c.width !== buf.w) c.width = buf.w;
-    if (c.height !== buf.h) c.height = buf.h;
-    c.getContext("2d")?.putImageData(new ImageData(new Uint8ClampedArray(buf.data), buf.w, buf.h), 0, 0);
-    for (const fn of this.listeners) fn();
-  }
-  subscribe(fn: () => void): () => void {
-    this.listeners.add(fn);
-    return () => this.listeners.delete(fn);
-  }
-}
-
-export const CUBE = ":cube";
+const CUBE = ":cube";
 const DEFAULT_VIEW = { yaw: Math.PI / 4, pitch: Math.PI / 6, zoom: 1 };
 
 // what was picked per texture, and the background, for the rest of the session
@@ -89,7 +69,7 @@ function missingTexture(): THREE.Texture {
   return hardPixels(new THREE.CanvasTexture(c));
 }
 
-interface Props {
+export interface BlockPreviewProps {
   /** Path of the texture being edited (`block/oak_planks`). */
   texture: string;
   live: LiveTexture;
@@ -104,7 +84,7 @@ interface Props {
   label?: string;
 }
 
-export const BlockPreview = memo(function BlockPreview({ texture, live, packDir, versionDir, height, cubeFirst = false, bare = false, label }: Props) {
+export const BlockPreview = memo(function BlockPreview({ texture, live, packDir, versionDir, height, cubeFirst = false, bare = false, label }: BlockPreviewProps) {
   const host = useRef<HTMLDivElement>(null);
   const [choices, setChoices] = useState<ModelChoice[]>([{ name: CUBE, label: "Cube" }]);
   const [choice, setChoice] = useState<string | null>(picked.get(texture) ?? null);

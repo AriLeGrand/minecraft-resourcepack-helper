@@ -2,7 +2,8 @@
 import { memo, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Icon } from "../components/Icon";
 import { useApp } from "../store";
-import { BlockPreview, LiveTexture } from "./BlockPreview";
+import { BlockPreview } from "./LazyBlockPreview";
+import { LiveTexture } from "./liveTexture";
 import { isBlockTexture } from "./blockMesh";
 import { ColorPicker } from "./ColorPicker";
 import { frametimeOf, isPlayable } from "./anim";
