@@ -15,6 +15,7 @@ pub mod pack;
 pub mod pack_format;
 pub mod particles;
 pub mod renames;
+pub mod rows;
 pub mod settings;
 pub mod textures;
 pub mod version;

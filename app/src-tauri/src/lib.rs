@@ -1,0 +1,834 @@
+//! Desktop shell: thin commands over `packcreator-core`, the image protocol
+//! and the file watcher. No pack logic lives here.
+
+mod images;
+mod watch;
+
+use packcreator_core::error::{CoreError, Result};
+use packcreator_core::export::{self, AltTarget, Check, ExportKind, ExportOptions, ExportOutput};
+use packcreator_core::extract;
+use packcreator_core::import::{self, ImageInfo, ImportResult};
+use packcreator_core::mcmeta::Animation;
+use packcreator_core::minecraft::{self, InstalledVersion};
+use packcreator_core::pack::{self, PackSummary, Project};
+use packcreator_core::rows::{self, NameEra, TextureRow};
+use packcreator_core::settings::{self, RecentPack, Settings};
+use packcreator_core::textures::{TextureEntry, VanillaIndex};
+use packcreator_core::McVersion;
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex};
+use tauri::{AppHandle, Emitter, Manager, State};
+
+pub struct OpenPack {
+    pub dir: PathBuf,
+    pub project: Project,
+}
+
+#[derive(Default)]
+pub struct Inner {
+    pub config_dir: PathBuf,
+    pub cache_dir: PathBuf,
+    pub settings: Settings,
+    pub minecraft_dir: Option<PathBuf>,
+    pub versions: Vec<InstalledVersion>,
+    pub indexes: HashMap<String, Arc<VanillaIndex>>,
+    pub pack: Option<OpenPack>,
+    pub watcher: Option<watch::PackWatcher>,
+}
+
+#[derive(Default)]
+pub struct AppState(pub Mutex<Inner>);
+
+impl AppState {
+    fn lock(&self) -> std::sync::MutexGuard<'_, Inner> {
+        self.0.lock().unwrap_or_else(|e| e.into_inner())
+    }
+}
+
+fn no_pack() -> CoreError {
+    CoreError::new("no_pack", "No pack is open.")
+        .hint("Create a pack or open one from the Home screen.")
+}
+
+impl Inner {
+    fn version(&self, dir_name: &str) -> Result<InstalledVersion> {
+        self.versions.iter().find(|v| v.dir_name == dir_name).cloned().ok_or_else(|| {
+            CoreError::new("no_version", format!("Minecraft {dir_name} is not installed on this computer."))
+                .hint("Install it from the Minecraft launcher and start it once, or pick another version.")
+        })
+    }
+
+    fn index(&mut self, dir_name: &str) -> Option<Arc<VanillaIndex>> {
+        if let Some(i) = self.indexes.get(dir_name) {
+            return Some(i.clone());
+        }
+        let v = self.versions.iter().find(|v| v.dir_name == dir_name)?;
+        let idx = Arc::new(extract::load_index(&self.cache_dir, v)?);
+        self.indexes.insert(dir_name.to_owned(), idx.clone());
+        Some(idx)
+    }
+
+    fn refresh_versions(&mut self) -> Option<CoreError> {
+        self.indexes.clear();
+        let dir = self
+            .settings
+            .minecraft_dir
+            .as_ref()
+            .map(PathBuf::from)
+            .or_else(minecraft::default_minecraft_dir);
+        self.minecraft_dir = dir.clone();
+        match dir {
+            None => {
+                self.versions.clear();
+                Some(CoreError::new(
+                    "no_minecraft",
+                    "The Minecraft folder could not be located.",
+                ))
+            }
+            Some(d) => match minecraft::list_versions(&d) {
+                Ok(v) => {
+                    self.versions = v;
+                    None
+                }
+                Err(e) => {
+                    self.versions.clear();
+                    Some(e)
+                }
+            },
+        }
+    }
+
+    fn pack(&self) -> Result<&OpenPack> {
+        self.pack.as_ref().ok_or_else(no_pack)
+    }
+
+    fn pack_version(&self) -> Result<(InstalledVersion, Option<McVersion>)> {
+        let p = self.pack()?;
+        let v = self.version(&p.project.version_dir)?;
+        let mc = v.mc_version();
+        Ok((v, mc))
+    }
+}
+
+// ------------------------------------------------------------ view types
+
+#[derive(Serialize, Clone)]
+pub struct VersionView {
+    #[serde(flatten)]
+    pub v: InstalledVersion,
+    pub extracted: bool,
+    pub usable: bool,
+    /// `1.21.4`, or the folder name when the version is unknown.
+    pub label: String,
+}
+
+#[derive(Serialize)]
+pub struct Bootstrap {
+    pub app_version: String,
+    pub settings: Settings,
+    pub minecraft_dir: Option<String>,
+    pub minecraft_error: Option<CoreError>,
+    pub versions: Vec<VersionView>,
+    pub default_packs_dir: String,
+}
+
+#[derive(Serialize)]
+pub struct PackState {
+    pub dir: String,
+    pub project: Project,
+    pub version: Option<VersionView>,
+    pub vanilla_ready: bool,
+    pub export_dir: String,
+}
+
+fn version_views(inner: &Inner) -> Vec<VersionView> {
+    inner
+        .versions
+        .iter()
+        .map(|v| VersionView {
+            extracted: extract::is_extracted(&inner.cache_dir, v),
+            usable: v.usable(),
+            label: v.id.clone().unwrap_or_else(|| v.dir_name.clone()),
+            v: v.clone(),
+        })
+        .collect()
+}
+
+fn default_packs_dir(app: &AppHandle, inner: &Inner) -> String {
+    if let Some(d) = &inner.settings.packs_dir {
+        return d.clone();
+    }
+    let base = app
+        .path()
+        .document_dir()
+        .or_else(|_| app.path().home_dir())
+        .unwrap_or_else(|_| PathBuf::from("."));
+    base.join("Minecraft Packs").to_string_lossy().into_owned()
+}
+
+fn export_dir(inner: &Inner, pack_dir: &Path) -> PathBuf {
+    match &inner.settings.export_dir {
+        Some(d) if !d.trim().is_empty() => PathBuf::from(d),
+        _ => pack_dir.parent().unwrap_or(pack_dir).join("export"),
+    }
+}
+
+fn pack_state(inner: &Inner) -> Result<PackState> {
+    let p = inner.pack()?;
+    let views = version_views(inner);
+    let version = views
+        .into_iter()
+        .find(|v| v.v.dir_name == p.project.version_dir);
+    Ok(PackState {
+        dir: p.dir.to_string_lossy().into_owned(),
+        project: p.project.clone(),
+        vanilla_ready: version.as_ref().is_some_and(|v| v.extracted),
+        version,
+        export_dir: export_dir(inner, &p.dir).to_string_lossy().into_owned(),
+    })
+}
+
+fn bootstrap_view(app: &AppHandle, inner: &Inner, err: Option<CoreError>) -> Bootstrap {
+    Bootstrap {
+        app_version: app.package_info().version.to_string(),
+        settings: inner.settings.clone(),
+        minecraft_dir: inner
+            .minecraft_dir
+            .as_ref()
+            .map(|p| p.to_string_lossy().into_owned()),
+        minecraft_error: err,
+        versions: version_views(inner),
+        default_packs_dir: default_packs_dir(app, inner),
+    }
+}
+
+fn save_settings_now(inner: &Inner) -> Result<()> {
+    settings::save(&inner.config_dir, &inner.settings)
+}
+
+fn remember_pack(inner: &mut Inner) {
+    let Some(p) = &inner.pack else { return };
+    let scan = pack::scan_pack(&p.dir);
+    let dir_name = p.project.version_dir.clone();
+    let recent = RecentPack {
+        path: p.dir.to_string_lossy().into_owned(),
+        name: p.project.name.clone(),
+        version: p
+            .project
+            .version_id
+            .clone()
+            .unwrap_or_else(|| dir_name.clone()),
+        resolution: p.project.resolution,
+        opened_ms: pack::now_ms(),
+        done: 0,
+        total: 0,
+    };
+    let idx = inner.index(&dir_name);
+    let summary = pack::summarize(&scan, idx.as_deref());
+    let recent = RecentPack {
+        done: summary.done,
+        total: summary.total,
+        ..recent
+    };
+    inner.settings.touch_recent(recent);
+    let _ = save_settings_now(inner);
+}
+
+fn set_open_pack(app: &AppHandle, inner: &mut Inner, dir: PathBuf, project: Project) {
+    inner.watcher = watch::PackWatcher::start(app.clone(), &dir);
+    inner.pack = Some(OpenPack { dir, project });
+    remember_pack(inner);
+}
+
+// --------------------------------------------------------------- commands
+
+#[tauri::command(async)]
+fn bootstrap(app: AppHandle, state: State<AppState>) -> Bootstrap {
+    let mut inner = state.lock();
+    let err = inner.refresh_versions();
+    bootstrap_view(&app, &inner, err)
+}
+
+#[derive(Deserialize)]
+struct SettingsPatch {
+    minecraft_dir: Option<Option<String>>,
+    external_editor: Option<Option<String>>,
+    export_dir: Option<Option<String>>,
+    packs_dir: Option<Option<String>>,
+    export_kind_folder: Option<bool>,
+    export_install: Option<bool>,
+    export_only_changed: Option<bool>,
+}
+
+fn clean(v: Option<String>) -> Option<String> {
+    v.map(|s| s.trim().to_owned()).filter(|s| !s.is_empty())
+}
+
+#[tauri::command(async)]
+fn update_settings(
+    app: AppHandle,
+    state: State<AppState>,
+    patch: SettingsPatch,
+) -> Result<Bootstrap> {
+    let mut inner = state.lock();
+    let mut rescan = false;
+    if let Some(v) = patch.minecraft_dir {
+        inner.settings.minecraft_dir = clean(v);
+        rescan = true;
+    }
+    if let Some(v) = patch.external_editor {
+        inner.settings.external_editor = clean(v);
+    }
+    if let Some(v) = patch.export_dir {
+        inner.settings.export_dir = clean(v);
+    }
+    if let Some(v) = patch.packs_dir {
+        inner.settings.packs_dir = clean(v);
+    }
+    if let Some(v) = patch.export_kind_folder {
+        inner.settings.export_kind_folder = v;
+    }
+    if let Some(v) = patch.export_install {
+        inner.settings.export_install = v;
+    }
+    if let Some(v) = patch.export_only_changed {
+        inner.settings.export_only_changed = v;
+    }
+    save_settings_now(&inner)?;
+    let err = if rescan {
+        inner.refresh_versions()
+    } else {
+        None
+    };
+    Ok(bootstrap_view(&app, &inner, err))
+}
+
+#[tauri::command(async)]
+fn forget_recent(app: AppHandle, state: State<AppState>, path: String) -> Result<Bootstrap> {
+    let mut inner = state.lock();
+    inner.settings.forget_recent(&path);
+    save_settings_now(&inner)?;
+    Ok(bootstrap_view(&app, &inner, None))
+}
+
+#[derive(Serialize, Clone)]
+struct Progress {
+    dir_name: String,
+    done: usize,
+    total: usize,
+}
+
+/// Extracts the textures of one version into the cache (a no-op when done).
+#[tauri::command(async)]
+fn extract_version(app: AppHandle, state: State<AppState>, dir_name: String) -> Result<usize> {
+    let (cache, version) = {
+        let inner = state.lock();
+        (inner.cache_dir.clone(), inner.version(&dir_name)?)
+    };
+    // the lock is not held while files are written
+    let name = dir_name.clone();
+    let index = extract::extract_version(&cache, &version, &mut |done, total| {
+        let _ = app.emit(
+            "extract-progress",
+            Progress {
+                dir_name: name.clone(),
+                done,
+                total,
+            },
+        );
+    })?;
+    let count = index.entries.len();
+    state.lock().indexes.insert(dir_name, Arc::new(index));
+    Ok(count)
+}
+
+#[tauri::command(async)]
+fn clear_cache(state: State<AppState>, dir_name: String) -> Result<()> {
+    let mut inner = state.lock();
+    inner.indexes.remove(&dir_name);
+    extract::clear_version(&inner.cache_dir, &dir_name)
+}
+
+#[derive(Deserialize)]
+struct NewPack {
+    name: String,
+    description: Option<String>,
+    version_dir: String,
+    resolution: u32,
+    location: String,
+}
+
+#[tauri::command(async)]
+fn create_pack(app: AppHandle, state: State<AppState>, input: NewPack) -> Result<PackState> {
+    let mut inner = state.lock();
+    let version = inner.version(&input.version_dir)?;
+    if !version.usable() {
+        return Err(CoreError::new(
+            "no_jar",
+            format!("Minecraft {} cannot be used yet.", version.dir_name),
+        )
+        .hint("Start this version once from the Minecraft launcher, then try again."));
+    }
+    let dir = PathBuf::from(input.location.trim());
+    if !dir.is_absolute() {
+        return Err(CoreError::new(
+            "bad_path",
+            "Choose a full folder path for the pack, for example D:\\Packs\\My Pack.",
+        ));
+    }
+    let description = input
+        .description
+        .unwrap_or_else(|| format!("{} resource pack", input.name.trim()));
+    let project = pack::create_pack(&dir, &input.name, &description, &version, input.resolution)?;
+    if let Some(parent) = dir.parent() {
+        inner.settings.packs_dir = Some(parent.to_string_lossy().into_owned());
+    }
+    set_open_pack(&app, &mut inner, dir, project);
+    pack_state(&inner)
+}
+
+#[tauri::command(async)]
+fn open_pack(app: AppHandle, state: State<AppState>, path: String) -> Result<PackState> {
+    let mut inner = state.lock();
+    let dir = PathBuf::from(path);
+    let project = pack::open_pack(&dir, &inner.versions)?;
+    set_open_pack(&app, &mut inner, dir, project);
+    pack_state(&inner)
+}
+
+#[tauri::command(async)]
+fn import_zip(
+    app: AppHandle,
+    state: State<AppState>,
+    zip: String,
+    dest: String,
+) -> Result<PackState> {
+    let mut inner = state.lock();
+    let dir = PathBuf::from(dest);
+    export::import_zip(Path::new(&zip), &dir)?;
+    let project = pack::open_pack(&dir, &inner.versions)?;
+    set_open_pack(&app, &mut inner, dir, project);
+    pack_state(&inner)
+}
+
+#[tauri::command(async)]
+fn close_pack(state: State<AppState>) {
+    let mut inner = state.lock();
+    remember_pack(&mut inner);
+    inner.pack = None;
+    inner.watcher = None;
+    inner.settings.last_pack = None;
+    let _ = save_settings_now(&inner);
+}
+
+#[tauri::command(async)]
+fn get_pack(state: State<AppState>) -> Result<PackState> {
+    pack_state(&state.lock())
+}
+
+#[derive(Deserialize)]
+struct ProjectPatch {
+    name: Option<String>,
+    description: Option<String>,
+    also_export: Option<Vec<String>>,
+    resolution: Option<u32>,
+}
+
+#[tauri::command(async)]
+fn update_project(state: State<AppState>, patch: ProjectPatch) -> Result<PackState> {
+    let mut inner = state.lock();
+    let p = inner.pack.as_mut().ok_or_else(no_pack)?;
+    if let Some(n) = patch.name {
+        let n = n.trim();
+        if n.is_empty() {
+            return Err(CoreError::new("bad_name", "Give the pack a name."));
+        }
+        p.project.name = n.to_owned();
+    }
+    if let Some(d) = patch.description {
+        p.project.description = d;
+    }
+    if let Some(a) = patch.also_export {
+        p.project.also_export = a;
+    }
+    if let Some(r) = patch.resolution {
+        if !pack::RESOLUTIONS.contains(&r) {
+            return Err(CoreError::new(
+                "bad_resolution",
+                format!("{r}× is not a supported resolution."),
+            ));
+        }
+        p.project.resolution = r;
+    }
+    pack::save_project(&p.dir, &p.project)?;
+    pack::write_pack_mcmeta(&p.dir, &p.project)?;
+    pack_state(&inner)
+}
+
+#[derive(Serialize)]
+struct TextureList {
+    rows: Vec<TextureRow>,
+    summary: PackSummary,
+}
+
+#[tauri::command(async)]
+fn load_textures(state: State<AppState>) -> Result<TextureList> {
+    let mut inner = state.lock();
+    let (dir, project) = {
+        let p = inner.pack()?;
+        (p.dir.clone(), p.project.clone())
+    };
+    let (_, mc) = inner.pack_version()?;
+    let index = inner.index(&project.version_dir).ok_or_else(|| {
+        CoreError::new(
+            "not_extracted",
+            "The game textures for this version are not extracted yet.",
+        )
+    })?;
+    drop(inner);
+    let scan = pack::scan_pack(&dir);
+    Ok(TextureList {
+        rows: rows::build_rows(&index, &scan, &project, mc.as_ref()),
+        summary: pack::summarize(&scan, Some(&index)),
+    })
+}
+
+#[derive(Serialize)]
+struct TextureDetail {
+    entry: Option<TextureEntry>,
+    eras: Vec<NameEra>,
+    pack_file: String,
+}
+
+#[tauri::command(async)]
+fn texture_detail(state: State<AppState>, path: String) -> Result<TextureDetail> {
+    let mut inner = state.lock();
+    let (dir, version_dir) = {
+        let p = inner.pack()?;
+        (p.dir.clone(), p.project.version_dir.clone())
+    };
+    let (_, mc) = inner.pack_version()?;
+    let index = inner.index(&version_dir);
+    Ok(TextureDetail {
+        entry: index.and_then(|i| i.get(&path).cloned()),
+        eras: mc.map(|v| rows::name_eras(&path, &v)).unwrap_or_default(),
+        pack_file: packcreator_core::textures::texture_file(&dir, &path)?
+            .to_string_lossy()
+            .into_owned(),
+    })
+}
+
+#[tauri::command(async)]
+fn inspect_image(path: String) -> Result<ImageInfo> {
+    import::inspect_image(Path::new(&path))
+}
+
+#[tauri::command(async)]
+fn import_texture(
+    state: State<AppState>,
+    path: String,
+    source: String,
+    frametime: Option<u32>,
+) -> Result<ImportResult> {
+    let dir = state.lock().pack()?.dir.clone();
+    let anim = frametime.map(|f| Animation {
+        frametime: f.max(1),
+        ..Default::default()
+    });
+    import::import_image(&dir, &path, Path::new(&source), anim.as_ref())
+}
+
+/// Makes sure the pack has a file for this texture (starting from the game's
+/// texture at the pack resolution) and returns its path.
+fn working_file(inner: &Inner, path: &str) -> Result<PathBuf> {
+    let p = inner.pack()?;
+    let root = extract::vanilla_dir(&inner.cache_dir, &p.project.version_dir);
+    let cat = packcreator_core::textures::category_of(path);
+    let scale = if cat.uses_pack_resolution() {
+        (p.project.resolution / 16).max(1)
+    } else {
+        1
+    };
+    import::start_from_vanilla(&root, &p.dir, path, scale)
+}
+
+#[tauri::command(async)]
+fn open_external(app: AppHandle, state: State<AppState>, path: String) -> Result<String> {
+    let (file, editor) = {
+        let inner = state.lock();
+        (
+            working_file(&inner, &path)?,
+            inner.settings.external_editor.clone(),
+        )
+    };
+    launch(&app, &file, editor.as_deref())?;
+    Ok(file.to_string_lossy().into_owned())
+}
+
+fn launch(app: &AppHandle, file: &Path, editor: Option<&str>) -> Result<()> {
+    use tauri_plugin_opener::OpenerExt;
+    match editor {
+        Some(exe) => std::process::Command::new(exe).arg(file).spawn().map(|_| ()).map_err(|e| {
+            CoreError::new("editor", format!("Could not start {exe}: {e}"))
+                .hint("Check the external editor path in Settings, or clear it to use the default program for PNG files.")
+        }),
+        None => app.opener().open_path(file.to_string_lossy(), None::<&str>).map_err(|e| {
+            CoreError::new("editor", format!("Windows could not open the file: {e}"))
+                .hint("Choose an editor in Settings (for example Aseprite.exe).")
+        }),
+    }
+}
+
+#[tauri::command(async)]
+fn reveal(app: AppHandle, path: String) -> Result<()> {
+    use tauri_plugin_opener::OpenerExt;
+    app.opener().reveal_item_in_dir(&path).map_err(|e| {
+        CoreError::new(
+            "reveal",
+            format!("Could not show {path} in the file explorer: {e}"),
+        )
+    })
+}
+
+#[tauri::command(async)]
+fn revert_texture(state: State<AppState>, path: String) -> Result<bool> {
+    let dir = state.lock().pack()?.dir.clone();
+    import::revert(&dir, &path)
+}
+
+#[tauri::command(async)]
+fn set_pack_icon(state: State<AppState>, source: String) -> Result<()> {
+    let dir = state.lock().pack()?.dir.clone();
+    let info = import::inspect_image(Path::new(&source))?;
+    if info.width != info.height {
+        return Err(CoreError::new(
+            "bad_icon",
+            format!(
+                "The icon must be square; this image is {}×{}.",
+                info.width, info.height
+            ),
+        )
+        .hint("Use a square image such as 128×128 or 256×256."));
+    }
+    if !info.is_png {
+        return Err(CoreError::new("bad_icon", "The icon must be a PNG file."));
+    }
+    let dest = dir.join("pack.png");
+    import::move_to_trash(&dir, &dest, pack::now_ms())?;
+    std::fs::copy(&source, &dest)
+        .map(|_| ())
+        .map_err(|e| CoreError::io(&dest, &e))
+}
+
+#[tauri::command(async)]
+fn edit_pack_icon(app: AppHandle, state: State<AppState>) -> Result<()> {
+    let (file, editor) = {
+        let inner = state.lock();
+        (
+            inner.pack()?.dir.join("pack.png"),
+            inner.settings.external_editor.clone(),
+        )
+    };
+    launch(&app, &file, editor.as_deref())
+}
+
+struct CheckContext {
+    dir: PathBuf,
+    project: Project,
+    index: Option<Arc<VanillaIndex>>,
+    version: Option<McVersion>,
+}
+
+fn check_context(state: &State<AppState>) -> Result<CheckContext> {
+    let mut inner = state.lock();
+    let (dir, project) = {
+        let p = inner.pack()?;
+        (p.dir.clone(), p.project.clone())
+    };
+    let version = inner.pack_version().ok().and_then(|(_, mc)| mc);
+    let index = inner.index(&project.version_dir);
+    Ok(CheckContext {
+        dir,
+        project,
+        index,
+        version,
+    })
+}
+
+#[tauri::command(async)]
+fn run_checks(state: State<AppState>) -> Result<Vec<Check>> {
+    let c = check_context(&state)?;
+    let scan = pack::scan_pack(&c.dir);
+    Ok(export::run_checks(
+        &c.dir,
+        &c.project,
+        &scan,
+        c.index.as_deref(),
+        c.version.as_ref(),
+    ))
+}
+
+#[tauri::command(async)]
+fn apply_fix(state: State<AppState>, id: String) -> Result<String> {
+    let c = check_context(&state)?;
+    let scan = pack::scan_pack(&c.dir);
+    export::apply_fix(
+        &c.dir,
+        &c.project,
+        &id,
+        &scan,
+        c.index.as_deref(),
+        c.version.as_ref(),
+    )
+}
+
+#[derive(Deserialize)]
+struct ExportRequest {
+    folder: bool,
+    install: bool,
+    only_changed: bool,
+    also: Vec<String>,
+}
+
+#[derive(Serialize)]
+struct ExportReport {
+    outputs: Vec<ExportOutput>,
+    pack: PackState,
+}
+
+#[tauri::command(async)]
+fn export_pack(state: State<AppState>, request: ExportRequest) -> Result<ExportReport> {
+    let (dir, project, main, alts, opts) = {
+        let mut inner = state.lock();
+        let (dir, project) = {
+            let p = inner.pack()?;
+            (p.dir.clone(), p.project.clone())
+        };
+        let (_, mc) = inner.pack_version()?;
+        let main = mc.ok_or_else(|| {
+            CoreError::new(
+                "no_version",
+                "The pack's Minecraft version could not be identified.",
+            )
+        })?;
+        let mut alts = Vec::new();
+        for name in &request.also {
+            let v = inner.version(name)?;
+            let (Some(version), Some(format)) = (v.mc_version(), v.format) else {
+                return Err(CoreError::new(
+                    "no_version",
+                    format!("{name} cannot be used as an export target."),
+                )
+                .hint("Start that version once from the Minecraft launcher."));
+            };
+            alts.push(AltTarget {
+                label: v.id.clone().unwrap_or_else(|| v.dir_name.clone()),
+                version,
+                format,
+                index: inner.index(name).map(|i| (*i).clone()),
+            });
+        }
+        let install_dir = if request.install {
+            let mc_dir = inner.minecraft_dir.clone().ok_or_else(|| {
+                CoreError::new(
+                    "no_minecraft",
+                    "The Minecraft folder is not known, so the pack cannot be installed.",
+                )
+                .hint(
+                    "Set the Minecraft folder in Settings, or turn off \"Install into Minecraft\".",
+                )
+            })?;
+            Some(mc_dir.join("resourcepacks"))
+        } else {
+            None
+        };
+        let opts = ExportOptions {
+            kind: if request.folder {
+                ExportKind::Folder
+            } else {
+                ExportKind::Zip
+            },
+            out_dir: export_dir(&inner, &dir),
+            install_dir,
+            only_changed: request.only_changed,
+            vanilla_root: Some(extract::vanilla_dir(&inner.cache_dir, &project.version_dir)),
+        };
+        inner.settings.export_kind_folder = request.folder;
+        inner.settings.export_install = request.install;
+        inner.settings.export_only_changed = request.only_changed;
+        let _ = save_settings_now(&inner);
+        (dir, project, main, alts, opts)
+    };
+    let outputs = export::export_pack(&dir, &project, &main, &alts, &opts)?;
+    let mut inner = state.lock();
+    if let Some(p) = inner.pack.as_mut() {
+        p.project.last_export_ms = Some(pack::now_ms());
+        p.project.also_export = request.also;
+        pack::save_project(&p.dir, &p.project)?;
+    }
+    remember_pack(&mut inner);
+    Ok(ExportReport {
+        outputs,
+        pack: pack_state(&inner)?,
+    })
+}
+
+// ----------------------------------------------------------------- setup
+
+fn env_dir(key: &str) -> Option<PathBuf> {
+    std::env::var_os(key)
+        .map(PathBuf::from)
+        .filter(|p| !p.as_os_str().is_empty())
+}
+
+pub fn run() {
+    tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_opener::init())
+        .manage(AppState::default())
+        .register_uri_scheme_protocol("pcimg", |ctx, request| {
+            images::serve(ctx.app_handle(), &request)
+        })
+        .setup(|app| {
+            let state = app.state::<AppState>();
+            let mut inner = state.lock();
+            // The two environment variables let tests run against a scratch folder.
+            inner.config_dir = env_dir("PACKCREATOR_CONFIG_DIR")
+                .or_else(|| app.path().app_config_dir().ok())
+                .unwrap_or_else(|| PathBuf::from("."));
+            inner.cache_dir = env_dir("PACKCREATOR_CACHE_DIR")
+                .or_else(|| app.path().app_cache_dir().ok())
+                .unwrap_or_else(|| PathBuf::from("./cache"));
+            inner.settings = settings::load(&inner.config_dir);
+            Ok(())
+        })
+        .invoke_handler(tauri::generate_handler![
+            bootstrap,
+            update_settings,
+            forget_recent,
+            extract_version,
+            clear_cache,
+            create_pack,
+            open_pack,
+            import_zip,
+            close_pack,
+            get_pack,
+            update_project,
+            load_textures,
+            texture_detail,
+            inspect_image,
+            import_texture,
+            open_external,
+            reveal,
+            revert_texture,
+            set_pack_icon,
+            edit_pack_icon,
+            run_checks,
+            apply_fix,
+            export_pack,
+        ])
+        .run(tauri::generate_context!())
+        .expect("error while running Pack Creator");
+}

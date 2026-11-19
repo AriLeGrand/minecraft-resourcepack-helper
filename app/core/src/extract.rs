@@ -44,8 +44,31 @@ pub fn load_index(cache_root: &Path, version: &InstalledVersion) -> Option<Vanil
         .then_some(idx)
 }
 
+/// Small file written next to the index so "is it extracted?" does not have
+/// to parse the whole index.
+#[derive(serde::Serialize, serde::Deserialize, PartialEq)]
+struct Stamp {
+    schema: u32,
+    jar_size: u64,
+    jar_modified_ms: u64,
+}
+
+fn stamp_file(dir: &Path) -> PathBuf {
+    dir.join("stamp.json")
+}
+
 pub fn is_extracted(cache_root: &Path, version: &InstalledVersion) -> bool {
-    load_index(cache_root, version).is_some()
+    let dir = vanilla_dir(cache_root, &version.dir_name);
+    let want = Stamp {
+        schema: INDEX_SCHEMA,
+        jar_size: version.jar_size,
+        jar_modified_ms: version.jar_modified_ms,
+    };
+    fs::read_to_string(stamp_file(&dir))
+        .ok()
+        .and_then(|t| serde_json::from_str::<Stamp>(&t).ok())
+        .is_some_and(|s| s == want)
+        && index_file(&dir).is_file()
 }
 
 fn wanted(name: &str) -> bool {
@@ -178,6 +201,18 @@ pub fn extract_version(
         serde_json::to_vec(&index).expect("index serialises"),
     )
     .ctx(&idx_path)?;
+
+    let stamp = Stamp {
+        schema: INDEX_SCHEMA,
+        jar_size: version.jar_size,
+        jar_modified_ms: version.jar_modified_ms,
+    };
+    let stamp_path = stamp_file(&tmp_dir);
+    fs::write(
+        &stamp_path,
+        serde_json::to_vec(&stamp).expect("stamp serialises"),
+    )
+    .ctx(&stamp_path)?;
 
     if final_dir.exists() {
         fs::remove_dir_all(&final_dir).ctx(&final_dir)?;
