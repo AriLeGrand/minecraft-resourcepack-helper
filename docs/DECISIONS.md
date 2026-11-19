@@ -53,3 +53,53 @@ format.
 
 **D-009 · Research scripts are Python** (`tools/research/`, standard library
 only). They are developer tools, not part of the app, and never write textures.
+
+## Stage 1 (2026-11-19)
+
+**D-010 · UI stack.** React 18 + Zustand + Vite 6 + TypeScript 5.6, plain CSS
+with the design tokens as variables (`app/src/styles.css`). Fonts (Inter,
+JetBrains Mono) are bundled so the app works offline. Versions are pinned to
+ones known to work together rather than the very newest.
+
+**D-011 · Images in the UI.** Textures are shown through a custom `pcimg`
+protocol served by Rust. It can only read the vanilla cache, the open pack and
+`pack.png` of recent packs, so the web view has no general access to the disk.
+
+**D-012 · Thumbnails.** Small still textures are shown directly (the file is
+the thumbnail). A separate thumbnail is only generated for animated strips
+(first frame) and images larger than 64 px.
+
+**D-013 · Extraction also keeps model, blockstate, particle and atlas JSON.**
+Small files, needed for "used by" now and for the 3D and particle previews
+later. Class files and everything else in the jar are never extracted.
+
+**D-014 · "Edit texture" before the editor exists.** Until stage 2, "Edit
+texture" and double-click open the texture in the external editor. The working
+file starts as the game's texture enlarged to the pack resolution with hard
+pixels (blocks and items only; GUI and entities keep their size).
+
+**D-015 · Nothing the user made is deleted.** Revert, re-import and icon
+replacement move the previous file to `.packcreator/trash/<time>/` in the pack.
+Export refuses to replace a folder that is not a previous export.
+
+**D-016 · "All textures" entry and wording.** The category list has an extra
+"All textures" row. The filter "Renamed in this version" is labelled "Renamed
+in other versions" (it lists textures whose file name differs in some other
+version, which is what matters when porting).
+
+**D-017 · "Port to another version" (start screen).** It opens the pack and
+goes to Pack and export, where "Also export a copy for" does the renaming. A
+dedicated porting screen is listed under "Later" in the design.
+
+**D-018 · Screenshots are not committed.** Screenshots of the real app show
+game textures, so they are saved under `app/target/devdata/screenshots/`
+(ignored by git). README screenshots (final stage) must be taken with a
+synthetic game folder.
+
+**D-019 · Test hooks.** `PACKCREATOR_CONFIG_DIR` and `PACKCREATOR_CACHE_DIR`
+point the app at scratch folders; `tools/shot.mjs` drives the real window
+through the WebView2 debugging port.
+
+**D-020 · Old names with the new folder are not auto-fixed.** A file such as
+`block/grass_top.png` (old name, new folder) is reported as "not used by this
+version" rather than renamed, because that path never existed in any version.
