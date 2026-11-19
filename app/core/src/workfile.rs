@@ -381,6 +381,90 @@ fn discard(files: &[&PathBuf]) {
     }
 }
 
+/// Per-frame durations stored with the images (the timeline).
+fn frame_times(doc: &WorkDoc) -> Vec<Option<u32>> {
+    doc.frames.iter().map(|f| f.time).collect()
+}
+
+/// The animation that a save writes: per-frame times become a frame list
+/// when there is no explicit play order, and the play order is checked
+/// against the number of images.
+pub fn effective_animation(
+    animation: Option<&Animation>,
+    times: &[Option<u32>],
+    image_count: usize,
+) -> Result<Animation> {
+    let mut anim = animation.cloned().unwrap_or_default();
+    if times.iter().any(Option::is_some) && anim.frames.is_none() {
+        anim.frames = Some(
+            times
+                .iter()
+                .enumerate()
+                .map(|(i, t)| mcmeta::Frame {
+                    index: i as u32,
+                    time: *t,
+                })
+                .collect(),
+        );
+    }
+    if let Some(list) = &anim.frames {
+        if let Some(bad) = list.iter().find(|f| f.index as usize >= image_count) {
+            return Err(CoreError::new(
+                "bad_frames",
+                format!(
+                    "The frame order uses frame {} but the texture only has {image_count} frame(s).",
+                    bad.index + 1
+                ),
+            )
+            .hint("Edit the frame order in the animation settings so it only uses existing frames."));
+        }
+        if list.is_empty() {
+            return Err(CoreError::new("bad_frames", "The frame order is empty.")
+                .hint("Add at least one frame to the frame order, or choose \"In order\"."));
+        }
+    }
+    Ok(anim)
+}
+
+/// The `.mcmeta` text for `anim`, keeping every other key of `existing`.
+pub fn merged_mcmeta(existing: Option<&str>, anim: &Animation) -> Result<String> {
+    mcmeta::write_animation(existing, anim).or_else(|_| mcmeta::write_animation(None, anim))
+}
+
+/// What a save would write into `<texture>.png.mcmeta` (shown in the
+/// animation screen before saving). Uses the pack's current file, if any.
+pub fn mcmeta_preview(
+    pack_dir: &Path,
+    tex_path: &str,
+    animation: Option<&Animation>,
+    times: &[Option<u32>],
+    image_count: usize,
+) -> Result<String> {
+    let t = target(pack_dir, None, tex_path)?;
+    let anim = effective_animation(animation, times, image_count)?;
+    let existing = fs::read_to_string(mcmeta_file(&t.png)).ok();
+    merged_mcmeta(existing.as_deref(), &anim)
+}
+
+/// Reads any image as raw RGBA, exactly (used by "Import strip").
+pub fn read_image_raw(path: &Path) -> Result<RawImage> {
+    let data = fs::read(path).ctx(path)?;
+    let img = image::load_from_memory(&data)
+        .map_err(|_| {
+            CoreError::new(
+                "bad_image",
+                format!("{} is not an image this app can read.", path.display()),
+            )
+            .hint("Use a PNG file (JPEG, BMP and GIF also work).")
+        })?
+        .to_rgba8();
+    Ok(RawImage {
+        width: img.width(),
+        height: img.height(),
+        rgba: b64(img.as_raw()),
+    })
+}
+
 /// Saves a document: the flattened PNG (frames stacked vertically) goes into
 /// the pack, the `.mcmeta` is written when the texture is animated, and the
 /// layers go into the working file. Returns the document as stored.
@@ -419,25 +503,10 @@ pub fn save(pack_dir: &Path, tex_path: &str, doc: &WorkDoc, flat_png: &[u8]) -> 
     // 1. everything that can fail without touching a file
     let animated = doc.animation.is_some() || doc.frames.len() > 1;
     let meta_text = if animated {
-        let mut anim = doc.animation.clone().unwrap_or_default();
-        // per-frame durations from the timeline become the frame list
-        if doc.frames.iter().any(|f| f.time.is_some()) && anim.frames.is_none() {
-            anim.frames = Some(
-                doc.frames
-                    .iter()
-                    .enumerate()
-                    .map(|(i, f)| mcmeta::Frame {
-                        index: i as u32,
-                        time: f.time,
-                    })
-                    .collect(),
-            );
-        }
+        let anim =
+            effective_animation(doc.animation.as_ref(), &frame_times(doc), doc.frames.len())?;
         let existing = fs::read_to_string(&meta).ok();
-        Some(
-            mcmeta::write_animation(existing.as_deref(), &anim)
-                .or_else(|_| mcmeta::write_animation(None, &anim))?,
-        )
+        Some(merged_mcmeta(existing.as_deref(), &anim)?)
     } else {
         None
     };
@@ -1075,6 +1144,86 @@ mod tests {
             save_raw(&pack, "block/stone", &doc, &b64(&px[..64]))
                 .unwrap_err()
                 .kind,
+            "bad_image"
+        );
+    }
+
+    #[test]
+    fn mcmeta_preview_matches_what_save_writes_and_checks_the_order() {
+        let (_t, vanilla, pack) = setup();
+        let o = open(&pack, &vanilla, "block/prismarine", 2).unwrap();
+        let file = texture_file(&pack, "block/prismarine").unwrap();
+        fs::create_dir_all(file.parent().unwrap()).unwrap();
+        fs::write(
+            mcmeta_file(&file),
+            r#"{"texture":{"blur":true},"animation":{"frametime":9}}"#,
+        )
+        .unwrap();
+        let mut anim = o.doc.animation.clone().unwrap();
+        anim.frametime = 2;
+        anim.frames = Some(
+            [0, 1, 2, 3, 2, 1]
+                .iter()
+                .map(|&i| mcmeta::Frame {
+                    index: i,
+                    time: None,
+                })
+                .collect(),
+        );
+        let times = vec![None; 4];
+        let text = mcmeta_preview(&pack, "block/prismarine", Some(&anim), &times, 4).unwrap();
+        let v: serde_json::Value = serde_json::from_str(&text).unwrap();
+        assert_eq!(v["texture"]["blur"], true);
+        assert_eq!(
+            v["animation"]["frames"],
+            serde_json::json!([0, 1, 2, 3, 2, 1])
+        );
+        let mut doc = o.doc.clone();
+        doc.animation = Some(anim.clone());
+        save(&pack, "block/prismarine", &doc, &flat(32, 128, 3)).unwrap();
+        assert_eq!(fs::read_to_string(mcmeta_file(&file)).unwrap(), text);
+        // an order that points past the last image is refused
+        let e = mcmeta_preview(&pack, "block/prismarine", Some(&anim), &times, 3).unwrap_err();
+        assert_eq!(e.kind, "bad_frames");
+        doc.frames.pop();
+        assert_eq!(
+            save(&pack, "block/prismarine", &doc, &flat(32, 96, 3))
+                .unwrap_err()
+                .kind,
+            "bad_frames"
+        );
+        assert_eq!(
+            fs::read_to_string(mcmeta_file(&file)).unwrap(),
+            text,
+            "a refused save changes nothing"
+        );
+        // per-frame times without an explicit order become a frame list
+        let a = effective_animation(None, &[None, Some(10)], 2).unwrap();
+        assert_eq!(
+            a.frames.unwrap()[1],
+            mcmeta::Frame {
+                index: 1,
+                time: Some(10)
+            }
+        );
+        assert!(effective_animation(None, &[None, None], 2)
+            .unwrap()
+            .frames
+            .is_none());
+    }
+
+    #[test]
+    fn read_image_raw_is_pixel_exact() {
+        let tmp = tempfile::tempdir().unwrap();
+        let p = tmp.path().join("strip.png");
+        fs::write(&p, png(16, 64, 7)).unwrap();
+        let r = read_image_raw(&p).unwrap();
+        assert_eq!((r.width, r.height), (16, 64));
+        let want = image::load_from_memory(&png(16, 64, 7)).unwrap().to_rgba8();
+        assert_eq!(decode_b64(&r.rgba).unwrap(), want.into_raw());
+        fs::write(tmp.path().join("x.txt"), "nope").unwrap();
+        assert_eq!(
+            read_image_raw(&tmp.path().join("x.txt")).unwrap_err().kind,
             "bad_image"
         );
     }

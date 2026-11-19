@@ -641,6 +641,26 @@ fn editor_save(
     workfile::save_raw(&dir, &path, &doc, &flat)
 }
 
+/// The `.mcmeta` text a save of this animation would write (merged with the
+/// pack's existing file), for the animation screen.
+#[tauri::command(async)]
+fn animation_mcmeta(
+    state: State<AppState>,
+    path: String,
+    animation: Option<packcreator_core::mcmeta::Animation>,
+    times: Vec<Option<u32>>,
+    pack_dir: String,
+) -> Result<String> {
+    let dir = own_pack(&state.lock(), &pack_dir)?.dir.clone();
+    workfile::mcmeta_preview(&dir, &path, animation.as_ref(), &times, times.len())
+}
+
+/// Reads an image file as raw RGBA, pixel-exact ("Import strip").
+#[tauri::command(async)]
+fn read_image_raw(path: String) -> Result<workfile::RawImage> {
+    workfile::read_image_raw(Path::new(&path))
+}
+
 #[tauri::command(async)]
 fn reveal(app: AppHandle, path: String) -> Result<()> {
     use tauri_plugin_opener::OpenerExt;
@@ -883,6 +903,8 @@ pub fn run() {
             open_external,
             editor_open,
             editor_save,
+            animation_mcmeta,
+            read_image_raw,
             reveal,
             revert_texture,
             set_pack_icon,

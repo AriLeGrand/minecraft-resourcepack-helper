@@ -317,4 +317,46 @@ mod tests {
             12
         );
     }
+
+    /// Every `.mcmeta` of the game versions extracted on this computer reads
+    /// back unchanged after being rewritten (developer machines only: skipped
+    /// when there is no extracted cache).
+    #[test]
+    fn every_extracted_vanilla_mcmeta_round_trips() {
+        let cache = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../target/devdata/cache/vanilla");
+        let Ok(versions) = std::fs::read_dir(&cache) else {
+            return;
+        };
+        let mut checked = 0;
+        for v in versions.flatten() {
+            for e in walkdir::WalkDir::new(v.path()).into_iter().flatten() {
+                if !e.file_name().to_string_lossy().ends_with(".png.mcmeta") {
+                    continue;
+                }
+                let text = std::fs::read_to_string(e.path()).unwrap();
+                let original: Value =
+                    serde_json::from_str(text.trim_start_matches('\u{feff}')).unwrap();
+                let Some(anim) = parse_animation(&text).unwrap() else {
+                    continue;
+                };
+                let rewritten: Value =
+                    serde_json::from_str(&write_animation(Some(&text), &anim).unwrap()).unwrap();
+                assert_eq!(
+                    parse_animation(&rewritten.to_string()).unwrap().unwrap(),
+                    anim,
+                    "{}",
+                    e.path().display()
+                );
+                // nothing outside the animation section changes
+                for (k, val) in original.as_object().unwrap() {
+                    if k != "animation" {
+                        assert_eq!(&rewritten[k], val, "{}", e.path().display());
+                    }
+                }
+                checked += 1;
+            }
+        }
+        eprintln!("round-tripped {checked} vanilla .mcmeta files");
+    }
 }
