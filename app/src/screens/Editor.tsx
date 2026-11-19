@@ -12,6 +12,8 @@ import { rgbaToHex, type Symmetry } from "../editor/pixels";
 import { focusInfo, isTypingTarget, keyBelongsToControl, shortcutFor } from "../editor/shortcuts";
 import { INKS, SELECT_TOOLS, TOOLS, toolDef, usesFilled, usesTolerance, type InkChoice } from "../editor/tools";
 import { folderOf } from "../lib/logic";
+import { cellsLabel, uniqueCells } from "../particles/cells";
+import type { Region } from "../editor/region";
 import { useApp } from "../store";
 
 /** True while the user has text marked on the page (Ctrl+C must copy that text). */
@@ -312,6 +314,28 @@ const FrameStrip = memo(function FrameStrip({ doc }: { doc: EditorDoc }) {
   );
 });
 
+/** "Edit only these cells": what is editable, what it is shared with, and the way out. */
+const RegionBanner = memo(function RegionBanner({ tabId, region }: { tabId: number; region: Region }) {
+  const leave = useEditor((s) => s.leaveRegion);
+  const go = useApp((s) => s.go);
+  const n = uniqueCells(region.cells).length;
+  return (
+    <div className="ed-region" role="status">
+      <Icon name="lock" size={14} width={2} color="var(--link)" />
+      <span>
+        Editing only <b className="mono">{region.particle}</b> (cell{n === 1 ? "" : "s"} {cellsLabel(region.cells)}).{" "}
+        {region.shared.length > 0
+          ? <>Shared with: <span className="mono">{region.shared.join(", ")}</span>. A change shows on those particles too.</>
+          : "No other particle uses these cells."}{" "}
+        Pixels outside stay exactly as they are.
+      </span>
+      <span className="grow" />
+      <button className="an-btn" onClick={() => go("particles")}>Back to particles</button>
+      <button className="an-btn" title="Every pixel of the sheet becomes editable again" onClick={() => leave(tabId)}>Edit the whole sheet</button>
+    </div>
+  );
+});
+
 function EmptyEditor() {
   const go = useApp((s) => s.go);
   return (
@@ -408,6 +432,7 @@ export function Editor() {
         <main className="ed-main">
           <FileTabs />
           <OptionsBar />
+          {tab.region && <RegionBanner tabId={tab.id} region={tab.region} />}
           <Canvas tab={tab} />
           <FrameStrip doc={doc} />
         </main>

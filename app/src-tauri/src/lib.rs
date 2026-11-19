@@ -12,6 +12,8 @@ use packcreator_core::mcmeta::Animation;
 use packcreator_core::minecraft::{self, InstalledVersion};
 use packcreator_core::models;
 use packcreator_core::pack::{self, PackSummary, Project};
+use packcreator_core::particle_list;
+use packcreator_core::particles::ParticleSheet;
 use packcreator_core::rows::{self, NameEra, TextureRow};
 use packcreator_core::settings::{self, RecentPack, Settings};
 use packcreator_core::textures::{TextureEntry, VanillaIndex};
@@ -621,7 +623,9 @@ fn editor_open(
     let p = own_pack(&inner, &pack_dir)?;
     let root = extract::vanilla_dir(&inner.cache_dir, &p.project.version_dir);
     let cat = packcreator_core::textures::category_of(&path);
-    let scale = if path != workfile::ICON_PATH && cat.uses_pack_resolution() {
+    // the shared particle sheet of old versions follows the pack resolution too
+    let sheet = path == ParticleSheet::builtin().file;
+    let scale = if path != workfile::ICON_PATH && (cat.uses_pack_resolution() || sheet) {
         (p.project.resolution / 16).max(1)
     } else {
         1
@@ -685,6 +689,34 @@ fn models_for_texture(
 ) -> Result<Vec<models::ModelChoice>> {
     let (pack, vanilla) = model_roots(&state, &pack_dir)?;
     Ok(models::models_for_texture(Some(&pack), &vanilla, &path))
+}
+
+/// Every particle of the pack's version, for the particle viewer.
+#[tauri::command(async)]
+fn particle_list(state: State<AppState>, pack_dir: String) -> Result<particle_list::ParticleList> {
+    let (pack, vanilla, version) = {
+        let inner = state.lock();
+        let p = own_pack(&inner, &pack_dir)?;
+        let version = inner.pack_version().ok().and_then(|(_, mc)| mc);
+        (
+            p.dir.clone(),
+            extract::vanilla_dir(&inner.cache_dir, &p.project.version_dir),
+            version,
+        )
+    };
+    particle_list::list(&pack, &vanilla, version.as_ref())
+}
+
+/// "Add frame": copies the particle's last frame into a new image in the pack
+/// and appends it to the pack's `particles/<id>.json`.
+#[tauri::command(async)]
+fn particle_add_frame(
+    state: State<AppState>,
+    id: String,
+    pack_dir: String,
+) -> Result<particle_list::AddedFrame> {
+    let (pack, vanilla) = model_roots(&state, &pack_dir)?;
+    particle_list::add_frame(&pack, &vanilla, &id)
 }
 
 /// Reads an image file as raw RGBA, pixel-exact ("Import strip").
@@ -939,6 +971,8 @@ pub fn run() {
             read_image_raw,
             block_model,
             models_for_texture,
+            particle_list,
+            particle_add_frame,
             reveal,
             revert_texture,
             set_pack_icon,

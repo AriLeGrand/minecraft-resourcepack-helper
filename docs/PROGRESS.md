@@ -6,8 +6,46 @@ Decisions: `docs/DECISIONS.md`. Facts: `docs/research/domain-facts.md`.
 
 ## Current stage
 
-**Stage 4: game previews** — in progress. Plan: `docs/superpowers/plans/stage-4.md`.
-**Next: Part B (particle viewer, steps B1-B6).**
+**Stage 4: game previews** — complete (2026-11-19). Plan: `docs/superpowers/plans/stage-4.md`.
+**Next: Stage 5, the interface (GUI) editor.**
+
+**Part B: particle viewer** — done (2026-11-19). Decisions D-061 to D-064.
+- Rust `app/core/src/particle_list.rs` (7 tests, synthetic files): the list
+  for the pack's version (separate images from 1.14, the shared sheet before),
+  status per particle, `write_frames` (only when the list changes, other keys
+  kept), `add_frame`. Commands `particle_list` and `particle_add_frame`
+  (checked with `own_pack`). `editor_open` enlarges the legacy sheet to the
+  pack resolution like blocks.
+- `app/src/particles/sim.ts` + `cells.ts` (14 tests): deterministic scene
+  simulation, families, frame index over age / random, tints; cell maths.
+- `app/src/editor/region.ts` (+ `region.test.ts`, 22 tests): "edit only these
+  cells" — tools, fill, paste, move, delete and the eraser clipped; a save keeps
+  every pixel outside the cells; banner in the editor, dimmed sheet outside the
+  cells on the canvas; frame operations refused in that mode.
+- `app/src/screens/Particles.tsx`: the screen as in the mockup (list with
+  search, swatches and counts, scene Night / Day / Underwater, ¼× / 1× / 2×,
+  Your pack / Vanilla, torch / block toggle, frames grid, Edit frames, Add
+  frame, particle file; legacy: sheet with the cells highlighted, only this
+  particle, shared-cell warning, Edit only these cells; the movement warning).
+- Checked in the real app (`tauri dev`, `tools/shot.mjs`): Deep Sea Pack
+  (1.21.11): 104 particles; smoke, flame, campfire_cosy_smoke, explosion,
+  heart, enchant and bubble play with their real images; scenes, speeds,
+  Vanilla, torch shown; Edit frames opened `particle/generic_7`, a drawn and
+  saved frame made smoke "partly" done; Add frame on heart wrote
+  `particles/heart.json` (heart, heart_1) and `heart_1.png` (byte copy of the
+  game's heart.png). New pack "Legacy Test" (1.8.9, 16×) made through the app:
+  35 particles (31 in 1.8.9), smoke shows cells 0–7 and the shared-with list,
+  explosion its own 4×4 file; heart → Edit only these cells, strokes across the
+  whole canvas, select all + Delete, a stroke in the cell, Ctrl+S. On disk:
+  128×128, 16320 pixels outside cell 80 identical to the game's sheet, 0
+  changed; 42 of the 64 cell pixels changed. Screenshots
+  `app/target/devdata/screenshots/9-*.png` (git-ignored).
+
+Known limits of Part B:
+- Movement, sizes and tints are approximations per family, not the game's code.
+- A legacy sheet particle counts as done when the pack has `particles.png`.
+- The scene shows saved files; unsaved editor changes appear after saving.
+- Particles without images (block, item, dust pillars…) show grey squares.
 
 **Part A: 3D block preview** — done (2026-11-19). Decisions D-056 to D-060.
 - Rust `app/core/src/models.rs` (11 tests, synthetic model files): resolves a

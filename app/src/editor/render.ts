@@ -1,6 +1,7 @@
 // Drawing of the editor canvas. This is the only editor module that needs a
 // browser. Canvases are used for display only: pixels that get saved never
 // pass through one (a canvas premultiplies alpha and would damage them).
+import type { Rect } from "../particles/cells";
 import { flatten, onionFrames, viewLayers, type EditorDoc, type Layer } from "./doc";
 import { composite, type Buf, type Mask, type Pt, type Symmetry } from "./pixels";
 import type { Bitmap } from "./tools";
@@ -70,6 +71,8 @@ export interface Scene {
   onion: boolean;
   /** Pixels the brush would touch at the pointer, or `null` when the pointer is elsewhere. */
   cursor: Pt[] | null;
+  /** "Edit only these cells": the editable rectangles; everything else is dimmed. */
+  region?: Rect[] | null;
 }
 
 // A neighbour frame flattened for the onion skin, kept while that frame and
@@ -161,6 +164,22 @@ export function drawScene(canvas: HTMLCanvasElement, s: Scene) {
       ctx.lineTo(v.panX + gx1 * v.zoom, sy);
     }
     ctx.stroke();
+  }
+
+  // "edit only these cells": the rest of the image is dimmed, the cells outlined
+  if (s.region && s.region.length > 0) {
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(v.panX, v.panY, W, H);
+    for (const r of s.region) ctx.rect(v.panX + r.x * v.zoom, v.panY + r.y * v.zoom, r.w * v.zoom, r.h * v.zoom);
+    ctx.fillStyle = "rgba(13, 14, 16, 0.62)";
+    ctx.fill("evenodd");
+    ctx.strokeStyle = ACCENT;
+    ctx.lineWidth = 1;
+    for (const r of s.region) {
+      ctx.strokeRect(Math.round(v.panX + r.x * v.zoom) + 0.5, Math.round(v.panY + r.y * v.zoom) + 0.5, Math.round(r.w * v.zoom) - 1, Math.round(r.h * v.zoom) - 1);
+    }
+    ctx.restore();
   }
 
   // frame around the real image

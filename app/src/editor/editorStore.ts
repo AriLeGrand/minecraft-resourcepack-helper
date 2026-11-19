@@ -20,6 +20,8 @@ import {
 } from "./pixels";
 import { clampSize, defaultOptions, pasteFloating, selectAllMask, toolDef, type Floating, type ToolId, type ToolOptions } from "./tools";
 import { centerView, fitView, stepZoom, zoomAbout, type View } from "./view";
+import { cellsLabel, uniqueCells } from "../particles/cells";
+import { cellsRegion, clipToMask, type Region } from "./region";
 
 /** Lifted pixels that the Move tool can keep moving without damaging what is under them. */
 export interface Float {
@@ -51,6 +53,16 @@ export interface Tab {
   /** Goes up with every change of the pixels (a save only clears "unsaved" when nothing changed meanwhile). */
   edits: number;
   paletteSource: "vanilla" | "image" | "saved";
+  /** "Edit only these cells": pixels outside this region never change. `null` = the whole image. */
+  region: Region | null;
+}
+
+/** What "Edit only these cells" needs to know about the particle. */
+export interface CellsRequest {
+  particle: string;
+  cells: number[];
+  shared: string[];
+  grid: number;
 }
 
 export type PreviewTab = "3d" | "tiled" | "original" | "animated";
@@ -79,6 +91,10 @@ interface EditorState {
   text: TextEdit | null;
 
   openTexture: (path: string) => Promise<void>;
+  /** Opens the shared particle sheet with only these cells editable. */
+  openCells: (path: string, req: CellsRequest) => Promise<void>;
+  /** Back to editing the whole image. */
+  leaveRegion: (id?: number) => void;
   activate: (id: number) => void;
   closeTab: (id: number) => Promise<boolean>;
   save: (id?: number) => Promise<boolean>;
@@ -189,7 +205,7 @@ function newTab(doc: EditorDoc, packDir: string): Tab {
   }
   return {
     id: nextTabId++, packDir, doc, history: emptyHistory(), preview: null, float: null, view: null,
-    disk: diskStamp(doc.path), saving: false, edits: 0, paletteSource,
+    disk: diskStamp(doc.path), saving: false, edits: 0, paletteSource, region: null,
   };
 }
 
@@ -268,6 +284,10 @@ export const useEditor = create<EditorState>((set, get) => {
     flushPending();
     const tab = tabId === undefined ? current() : get().tabs.find((t) => t.id === tabId);
     if (!tab) return false;
+    if (tab.region) {
+      warn(`Frames cannot change while only the cells of ${tab.region.particle} are being edited: the sheet is one image. Choose “Edit the whole sheet” first.`);
+      return false;
+    }
     const doc = fn(tab.doc);
     if (doc === tab.doc) return false;
     const resized = doc.width !== tab.doc.width || doc.height !== tab.doc.height;
@@ -353,6 +373,38 @@ export const useEditor = create<EditorState>((set, get) => {
       }
     },
 
+    openCells: async (path, req) => {
+      const app = useApp.getState();
+      await get().openTexture(path);
+      const packDir = app.pack?.dir;
+      const tab = get().tabs.find((t) => t.doc.path === path && t.packDir === packDir);
+      if (!tab) return;
+      const { doc } = tab;
+      const label = `cell${uniqueCells(req.cells).length === 1 ? "" : "s"} ${cellsLabel(req.cells)}`;
+      const region = cellsRegion(doc, req);
+      if (!region) {
+        app.showError(
+          {
+            message: `${fileName(path)} is ${doc.width}×${doc.height}${doc.frames.length > 1 ? ` with ${doc.frames.length} frames` : ""}, so the cells of ${req.particle} cannot be found on it.`,
+            hint: `The sheet must be one square image whose size is a multiple of ${req.grid} (128×128 in the game). It is open as a whole image; be careful with the other particles' cells.`,
+          },
+          "Only these cells could not be selected",
+        );
+        return;
+      }
+      flushPending();
+      update(tab.id, (t) => ({ ...t, region, preview: null, float: null }));
+      app.setStatus(`Editing only ${req.particle} (${label}). Everything else on the sheet stays as it is.`);
+    },
+
+    leaveRegion: (id) => {
+      const tab = id === undefined ? current() : get().tabs.find((t) => t.id === id);
+      if (!tab?.region) return;
+      flushPending();
+      update(tab.id, (t) => ({ ...t, region: null, preview: null, float: null }));
+      useApp.getState().setStatus(`Editing the whole of ${fileName(tab.doc.path)}`);
+    },
+
     activate: (id) => {
       if (get().activeId === id) return;
       flushPending();
@@ -384,7 +436,10 @@ export const useEditor = create<EditorState>((set, get) => {
       try {
         // always the document's own path: never the path of whatever is on screen
         // ... and only into its own pack: Rust checks the folder again before it writes
-        await api.editorSave(doc.path, toRaw(doc), bytesToBase64(flatStrip(doc).data), tab.packDir);
+        let flat = flatStrip(doc);
+        // only the region may differ from the image as it was when the mode began
+        if (tab.region) flat = clipToMask(flat, tab.region.base, tab.region.mask);
+        await api.editorSave(doc.path, toRaw(doc), bytesToBase64(flat.data), tab.packDir);
       } catch (e) {
         update(tab.id, (t) => ({ ...t, saving: false }));
         app.showError(e, `${name} could not be saved`);
@@ -437,6 +492,8 @@ export const useEditor = create<EditorState>((set, get) => {
             const sameSize = fresh.width === t.doc.width && fresh.height === t.doc.height;
             return {
               ...next, id: t.id, disk: stamp, view: sameSize ? t.view : null,
+              // the cells stay the only editable part; the file as it is now is what they protect
+              region: t.region && sameSize && next.doc.frames.length === 1 ? { ...t.region, base: flatStrip(next.doc) } : null,
               doc: { ...next.doc, frameIndex: Math.min(t.doc.frameIndex, next.doc.frames.length - 1), referenceVisible: t.doc.referenceVisible },
             };
           });
@@ -494,12 +551,15 @@ export const useEditor = create<EditorState>((set, get) => {
     setPreview: (preview) => {
       const tab = current();
       if (!tab || (tab.preview === null && preview === null)) return;
+      if (preview?.cel && tab.region) preview = { ...preview, cel: clipToMask(preview.cel, activeCel(tab.doc), tab.region.mask) };
       update(tab.id, (t) => ({ ...t, preview }));
     },
 
     applyEdit: (label, next) => {
       const tab = current();
       if (!tab) return;
+      // "Edit only these cells": whatever a tool did outside the region is taken back
+      if (next.cel && tab.region) next = { ...next, cel: clipToMask(next.cel, activeCel(tab.doc), tab.region.mask) };
       const cmd = editCommand(label, tab.doc, next);
       let doc = tab.doc;
       if (cmd?.cels.length && next.cel) doc = { ...setCel(doc, doc.frameIndex, doc.activeLayer, next.cel), dirty: true };

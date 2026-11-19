@@ -61,9 +61,9 @@ export function Canvas({ tab }: { tab: Tab }) {
     if (canvas.height !== h) canvas.height = h;
     drawScene(canvas, {
       doc, view, width: viewport.w, height: viewport.h, dpr, tiled: options.tiled, symmetry: options.symmetry,
-      onion: options.onionSkin, cursor: brush,
+      onion: options.onionSkin, cursor: brush, region: tab.region?.rects ?? null,
     });
-  }, [doc, view, viewport, options.tiled, options.symmetry, options.onionSkin, brush]);
+  }, [doc, view, viewport, options.tiled, options.symmetry, options.onionSkin, brush, tab.region]);
 
   // While a tool is dragged the preview is worked out once per screen refresh,
   // however many pointer events arrive in between.

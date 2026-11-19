@@ -14,6 +14,7 @@ pub mod minecraft;
 pub mod models;
 pub mod pack;
 pub mod pack_format;
+pub mod particle_list;
 pub mod particles;
 pub mod renames;
 pub mod rows;

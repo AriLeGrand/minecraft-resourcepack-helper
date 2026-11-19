@@ -4,6 +4,7 @@
 import { activeCel, pickColor } from "./doc";
 import { activeTab, setPendingFlush, useEditor, type Tab } from "./editorStore";
 import type { Buf, Pt, SelectMode } from "./pixels";
+import { editMask } from "./region";
 import {
   applyStroke, constrainEnd, DRAG_SHAPES, floatSelection, FREEHAND, growsInPlace, growStroke, lift, place, select, selectMode,
   SELECT_TOOLS, toolDef, type Bitmap, type Floating, type Stroke, type StrokeRun, type ToolId,
@@ -53,7 +54,7 @@ function strokeOf(tab: Tab, s: { tool: ToolId; snapshot: Buf; points: Pt[]; butt
   const st = store();
   return {
     tool: s.tool, snapshot: s.snapshot, points: s.points, button: s.button, fg: st.fg, bg: st.bg,
-    options: st.options, mask: tab.doc.selection, seed: s.seed ?? 1, bitmap: s.bitmap,
+    options: st.options, mask: editMask(tab.doc.selection, tab.region), seed: s.seed ?? 1, bitmap: s.bitmap,
   };
 }
 
@@ -254,7 +255,8 @@ export function pointerDown(i: PointerInfo) {
   if (tool === "move") {
     const f = tab.float;
     const valid = f && f.result === snapshot && f.selection === doc.selection;
-    session = { kind: "move", floating: valid ? f.floating : lift(snapshot, doc.selection), start: i.p, dx: 0, dy: 0 };
+    // in "edit only these cells" only the region's pixels are lifted
+    session = { kind: "move", floating: valid ? f.floating : lift(snapshot, editMask(doc.selection, tab.region)), start: i.p, dx: 0, dy: 0 };
     return;
   }
   if (tool === "bucket") {

@@ -409,3 +409,53 @@ block of the same name, so grass_block for grass_block_top); the Animation
 screen starts with the plain cube. The pick is remembered per texture for the
 session. The Animation screen's CSS cube is gone; non-block textures show only
 the flat preview there.
+
+**D-061 · Particle list.** `core/src/particle_list.rs`. 1.14 and newer: every
+`particles/<id>.json` of the game and of the pack (the pack's file wins, a
+pack-only id is listed too); frame names lose `minecraft:` and live in
+`textures/particle/`; names from another namespace are listed as "skipped" and
+left alone. Status per particle: done when the pack has every frame image,
+partly when some. A broken JSON file in the pack is an error that names the
+file. 1.13.2 and older (`ParticleSheet::applies_to`): every particle of the
+sheet map plus the particles with their own file (explosion, footstep);
+particles added in a later version are listed but dimmed and not counted. A
+sheet particle counts as done when the pack has `particles.png` (the sheet is
+one file; the app cannot tell which cells were redrawn).
+
+**D-062 · Particle files are written only when the frame list changes.**
+`write_frames` merges into the file that applies now (the pack's, else the
+game's), keeps every other key and their order, and writes nothing when the
+list is the same. "Add frame" copies the last frame (the pack's image, else the
+game's) to the next free name (`generic_7` → the next number no file uses,
+`heart` → `heart_1`) and appends it; if the list cannot be written the new
+image is removed again.
+
+**D-063 · "Edit only these cells".** The editor tab gets a fixed region (the
+particle's cells, scaled to the sheet's real size; the sheet must be one square
+image whose width is a multiple of 16). Three guards: the tools' mask is the
+user's selection limited to the region (`editMask`, also what Move lifts);
+every pixel change (`applyEdit`, the live preview) is clipped back to the
+pixels outside the region; and a save writes the flattened sheet with every
+pixel outside the region taken from the sheet as it was when the mode began
+(so hidden layers or layer opacity cannot change other particles either).
+Frame operations are refused in this mode (the sheet is one image). A banner
+names the particle, its cells and the particles that share them, with "Edit
+the whole sheet" to leave the mode. When the pack has no `particles.png` the
+game's sheet is the start, enlarged to the pack resolution with hard pixels
+(the sheet now follows the pack scale like blocks and items; other particle
+textures keep their own size).
+
+**D-064 · Particle scene.** `src/particles/sim.ts`, pure and deterministic
+(mulberry32 RNG, fixed-step `step(state, family, dt, speed)`). Movement presets
+per family chosen from the id (smoke, campfire, flame, drip, splash, bubble,
+inward, burst, float, spark, drift, generic), clearly approximate. Images are
+the real ones: the pack's file when "Your pack" is shown and the pack has it,
+else the game's; for old versions the cells are cut from the sheet (or the 4×4
+grid of `entity/explosion.png`). Frames: "age" uses the game's sprite-set rule
+`index = age × (n − 1) / lifetime`; "random" keeps one image picked at birth
+(enchant, portal, splash, rain, nautilus… and the sheet map's `random`).
+Some ids get the game's colour tint (grey smoke, purple portal, blue water
+drops), drawn by multiplying the image. Nearest-neighbour drawing, at most 120
+particles. The layout follows the pack's version; the mockup's "Pack" toggle is
+shown read-only. "Save to pack" in the top bar shows only when an editor tab of
+this particle's images has unsaved changes.

@@ -272,6 +272,44 @@ export interface ModelChoice {
   label: string;
 }
 
+/** Particle viewer (Rust `core/src/particle_list.rs`). */
+export type ParticleLayout = "separate" | "sheet";
+export type ParticleStatus = "todo" | "partly" | "done";
+
+export interface ParticleInfo {
+  id: string;
+  /** Separate: frame texture paths in order. Sheet: the texture with the cells (or the particle's own file). */
+  textures: string[];
+  in_pack: boolean[];
+  status: ParticleStatus;
+  size: [number, number] | null;
+  json_from_pack: boolean;
+  json: string | null;
+  skipped: string[];
+  /** Sheet only: "age", "random", "single" or "state". */
+  mode: string | null;
+  /** Sheet only: cell indexes in play order. */
+  cells: number[];
+  shared_with: string[];
+  /** Sheet only: columns of the frame grid in the particle's own file (explosion: 4). */
+  grid: number;
+  in_version: boolean;
+}
+
+export interface ParticleList {
+  layout: ParticleLayout;
+  particles: ParticleInfo[];
+  done: number;
+  total: number;
+  sheet: string | null;
+  sheet_grid: number;
+}
+
+export interface AddedFrame {
+  texture: string;
+  json: string;
+}
+
 export interface SettingsPatch {
   minecraft_dir?: string | null;
   external_editor?: string | null;
@@ -322,6 +360,10 @@ export const api = {
   blockModel: (name: string, packDir: string) => invoke<BlockModel>("block_model", { name, packDir }),
   /** Models to offer for a texture: the cube (`name` ":cube") first, then block models using it. */
   modelsForTexture: (path: string, packDir: string) => invoke<ModelChoice[]>("models_for_texture", { path, packDir }),
+  /** Every particle of the pack's version (the pack's files win over the game's). */
+  particleList: (packDir: string) => invoke<ParticleList>("particle_list", { packDir }),
+  /** Copies the particle's last frame into a new image and appends it to the pack's particle file. */
+  particleAddFrame: (id: string, packDir: string) => invoke<AddedFrame>("particle_add_frame", { id, packDir }),
   /** Any image file as raw RGBA, pixel-exact ("Import strip"). */
   readImageRaw: (path: string) => invoke<RawImage>("read_image_raw", { path }),
   reveal: (path: string) => invoke<void>("reveal", { path }),
