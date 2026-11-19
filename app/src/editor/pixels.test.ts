@@ -365,3 +365,75 @@ describe("palette, scaling, frames, base64", () => {
     expect(base64ToBytes(bytesToBase64(big))).toEqual(big);
   });
 });
+
+describe("review fixes: shading and tiled edges", () => {
+  it("shading keeps a grey grey (no red cast), however often it is applied", () => {
+    const darker = applyInk([128, 128, 128, 255], RED, "darken", 100);
+    expect(darker[0]).toBe(darker[1]);
+    expect(darker[1]).toBe(darker[2]);
+    expect(darker[0]).toBeLessThan(128);
+    const lighter = applyInk([200, 200, 200, 255], RED, "lighten", 100);
+    expect([lighter[0] === lighter[1], lighter[1] === lighter[2], lighter[0] > 200]).toEqual([true, true, true]);
+    let c: Rgba = [180, 180, 180, 77];
+    for (let i = 0; i < 12; i++) c = applyInk(c, RED, "darken", 100);
+    expect([c[0] === c[1] && c[1] === c[2], c[3]]).toEqual([true, 77]);
+  });
+  it("shading with nothing to do changes nothing, and a pass does not drift the hue", () => {
+    expect(applyInk([123, 77, 31, 255], RED, "darken", 0)).toEqual([123, 77, 31, 255]);
+    expect(applyInk([123, 77, 31, 255], RED, "lighten", 0)).toEqual([123, 77, 31, 255]);
+    const start: Rgba = [123, 77, 31, 255];
+    let c = start;
+    for (let i = 0; i < 3; i++) c = applyInk(c, RED, "lighten", 100);
+    for (let i = 0; i < 3; i++) c = applyInk(c, RED, "darken", 100);
+    const hue = (p: Rgba) => rgbToHsv(p[0], p[1], p[2])[0];
+    expect(Math.abs(hue(c) - hue(start))).toBeLessThanOrEqual(2);
+    // a coloured pixel still gets the small saturation shift
+    const dark = applyInk([100, 150, 140, 255], RED, "darken", 100);
+    expect(rgbToHsv(dark[0], dark[1], dark[2])[1]).toBeGreaterThan(rgbToHsv(100, 150, 140)[1]);
+  });
+  it("tiled: an area continues across the edges for the wand and the bucket", () => {
+    // '#' at both ends of the row are one area when the texture repeats
+    const b = newBuf(4, 1);
+    setPx(b, 0, 0, RED);
+    setPx(b, 3, 0, RED);
+    expect(Array.from(floodMask(b, 0, 0, 0, true))).toEqual([1, 0, 0, 0]);
+    expect(Array.from(floodMask(b, 0, 0, 0, true, true))).toEqual([1, 0, 0, 1]);
+    // top and bottom too
+    const col = newBuf(1, 4);
+    setPx(col, 0, 0, BLUE);
+    setPx(col, 0, 3, BLUE);
+    expect(Array.from(floodMask(col, 0, 3, 0, true, true))).toEqual([1, 0, 0, 1]);
+  });
+  it("tiled: blur at an edge mixes with the pixels across it, so a repeating texture gets no seam", () => {
+    const src = newBuf(4, 1);
+    setPx(src, 3, 0, [200, 0, 0, 255]);
+    const plain = cloneBuf(src);
+    blurPoints(plain, src, [[0, 0]], null);
+    expect(getPx(plain, 0, 0)).toEqual(CLEAR);
+    const tiled = cloneBuf(src);
+    blurPoints(tiled, src, [[0, 0]], null, true);
+    expect(getPx(tiled, 0, 0)[0]).toBe(200);
+    expect(getPx(tiled, 0, 0)[3]).toBeGreaterThan(0);
+    // the same blur in the middle of a wide image and at the edge of a repeating one agree
+    const wide = newBuf(5, 3);
+    for (let y = 0; y < 3; y++) setPx(wide, 1, y, [200, 0, 0, 255]);
+    const mid = cloneBuf(wide);
+    blurPoints(mid, wide, [[2, 1]], null);
+    const rep = newBuf(4, 1);
+    setPx(rep, 3, 0, [200, 0, 0, 255]);
+    const edge = cloneBuf(rep);
+    blurPoints(edge, rep, [[0, 0]], null, true);
+    expect(getPx(edge, 0, 0)).toEqual(getPx(mid, 2, 1));
+  });
+  it("tiled: jumble swaps across the edges and still only moves pixels around", () => {
+    const b = newBuf(2, 1);
+    setPx(b, 0, 0, RED);
+    // a neighbour to the left of column 0 is column 1 when the texture repeats
+    jumblePoints(b, [[0, 0]], null, () => 0, true);
+    expect(art(b)).toEqual([".#"]);
+    const plain = newBuf(2, 1);
+    setPx(plain, 0, 0, RED);
+    jumblePoints(plain, [[0, 0]], null, () => 0);
+    expect(art(plain)).toEqual(["#."]);
+  });
+});

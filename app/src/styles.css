@@ -343,14 +343,19 @@ select.input { padding: 0 10px; }
 .ed-filetabs { display: flex; flex: none; height: 32px; background: var(--bar); border-bottom: 1px solid var(--line); overflow-x: auto; overflow-y: hidden; }
 .ed-filetabs::-webkit-scrollbar { height: 4px; }
 .ftab {
-  display: flex; align-items: center; gap: 8px; padding: 0 8px 0 12px; max-width: 220px; flex: none; font-size: 12px;
+  display: flex; align-items: center; gap: 2px; padding: 0 8px 0 0; max-width: 220px; flex: none; font-size: 12px;
   color: var(--text-2); border-right: 1px solid var(--line); cursor: default;
 }
+.ftab .pick {
+  display: flex; align-items: center; gap: 8px; align-self: stretch; min-width: 0; padding: 0 6px 0 12px;
+  border: 0; background: transparent; color: inherit; font-size: 12px; cursor: default;
+}
+.ftab .pick:focus-visible { outline-offset: -2px; }
 .ftab:hover { background: #1d1e22; }
 .ftab.on { background: var(--panel); color: var(--text); box-shadow: inset 0 2px 0 var(--accent); }
 .ftab .dirty { width: 7px; height: 7px; border-radius: 50%; background: var(--warn); flex: none; }
-.ftab button { width: 18px; height: 18px; border: 0; border-radius: 4px; background: transparent; padding: 0; display: flex; align-items: center; justify-content: center; color: var(--text-2); flex: none; }
-.ftab button:hover { background: var(--hover); color: var(--text); }
+.ftab .close { width: 18px; height: 18px; border: 0; border-radius: 4px; background: transparent; padding: 0; display: flex; align-items: center; justify-content: center; color: var(--text-2); flex: none; }
+.ftab .close:hover { background: var(--hover); color: var(--text); }
 .ed-options {
   display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; padding: 4px 14px; min-height: 38px; flex: none;
   border-bottom: 1px solid var(--line); background: var(--panel); font-size: 12px; color: var(--text-soft);
@@ -365,6 +370,13 @@ select.input { padding: 0 10px; }
 .ed-num:focus-within { border-color: var(--accent); }
 .ed-select { background: var(--bg); border: 1px solid var(--line-input); border-radius: 4px; height: 22px; padding: 0 4px; font-size: 12px; color: var(--text-soft); outline: none; }
 .ed-select:focus { border-color: var(--accent); }
+.ed-cmds { display: inline-flex; flex-wrap: wrap; gap: 4px; }
+.ed-cmds button { height: 22px; padding: 0 8px; border-radius: 4px; border: 1px solid var(--line); background: transparent; color: var(--text-soft); font-size: 11px; white-space: nowrap; }
+.ed-cmds button:hover:not(:disabled) { background: var(--hover); color: var(--text); }
+.ed-cmds button:disabled { color: var(--muted); }
+.ed-palsrc { display: flex; align-items: center; gap: 4px; }
+.ed-palsrc button { width: 22px; height: 22px; flex: none; border-radius: 4px; border: 1px solid var(--line); background: transparent; color: var(--text-soft); padding: 0; display: flex; align-items: center; justify-content: center; }
+.ed-palsrc button:hover { background: var(--hover); color: var(--text); }
 .ed-canvas { flex: 1; min-height: 0; position: relative; overflow: hidden; }
 .ed-canvas canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
 .ed-zoom {

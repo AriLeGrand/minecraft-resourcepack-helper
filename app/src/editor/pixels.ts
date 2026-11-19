@@ -51,8 +51,8 @@ export function hexToRgba(hex: string): Rgba | null {
   return null;
 }
 
-/** h 0-360, s and v 0-100. */
-export function rgbToHsv(r: number, g: number, b: number): [number, number, number] {
+/** h 0-360, s and v 0-100, not rounded (for colour maths; the read-out uses `rgbToHsv`). */
+export function rgbToHsvExact(r: number, g: number, b: number): [number, number, number] {
   const max = Math.max(r, g, b);
   const min = Math.min(r, g, b);
   const d = max - min;
@@ -64,7 +64,13 @@ export function rgbToHsv(r: number, g: number, b: number): [number, number, numb
     h *= 60;
     if (h < 0) h += 360;
   }
-  return [Math.round(h), Math.round(max === 0 ? 0 : (d / max) * 100), Math.round((max / 255) * 100)];
+  return [h, max === 0 ? 0 : (d / max) * 100, (max / 255) * 100];
+}
+
+/** h 0-360, s and v 0-100, whole numbers. */
+export function rgbToHsv(r: number, g: number, b: number): [number, number, number] {
+  const [h, s, v] = rgbToHsvExact(r, g, b);
+  return [Math.round(h), Math.round(s), Math.round(v)];
 }
 
 export function hsvToRgb(h: number, s: number, v: number): [number, number, number] {
@@ -122,12 +128,15 @@ export function applyInk(dst: Rgba, color: Rgba, ink: Ink, opacity: number): Rgb
     }
     case "lighten":
     case "darken": {
-      if (dst[3] === 0) return dst;
-      const [h, s, v] = rgbToHsv(dst[0], dst[1], dst[2]);
       const step = SHADE_STEP * o * (ink === "lighten" ? 1 : -1);
+      // nothing to do must change nothing (not even by rounding)
+      if (dst[3] === 0 || step === 0) return dst;
+      // unrounded, so a pass never drifts the hue
+      const [h, s, v] = rgbToHsvExact(dst[0], dst[1], dst[2]);
       const nv = Math.max(0, Math.min(100, v + step));
-      // a little saturation shift keeps shades from looking washed out
-      const ns = Math.max(0, Math.min(100, s - step * 0.4));
+      // a little saturation shift keeps shades from looking washed out;
+      // a grey has no colour to strengthen (it would turn red, hue 0)
+      const ns = s === 0 ? 0 : Math.max(0, Math.min(100, s - step * 0.4));
       const [r, g, b] = hsvToRgb(h, ns, nv);
       return [r, g, b, dst[3]];
     }
@@ -369,8 +378,12 @@ export function paint(buf: Buf, pts: Pt[], o: PaintOptions) {
 
 // --------------------------------------------------------------- fill, wand
 
-/** Pixels reachable from (x, y) with a similar colour (or all similar pixels when not contiguous). */
-export function floodMask(buf: Buf, x: number, y: number, tolerance: number, contiguous: boolean): Mask {
+/**
+ * Pixels reachable from (x, y) with a similar colour (or all similar pixels
+ * when not contiguous). `tiled`: the area continues across the edges, as it
+ * does when the texture is repeated.
+ */
+export function floodMask(buf: Buf, x: number, y: number, tolerance: number, contiguous: boolean, tiled = false): Mask {
   const mask = new Uint8Array(buf.w * buf.h);
   if (!inside(buf, x, y)) return mask;
   const target = getPx(buf, x, y);
@@ -396,7 +409,10 @@ export function floodMask(buf: Buf, x: number, y: number, tolerance: number, con
     const px = i % buf.w;
     const py = (i - px) / buf.w;
     const tryAt = (nx: number, ny: number) => {
-      if (nx < 0 || ny < 0 || nx >= buf.w || ny >= buf.h) return;
+      if (tiled) {
+        nx = (nx + buf.w) % buf.w;
+        ny = (ny + buf.h) % buf.h;
+      } else if (nx < 0 || ny < 0 || nx >= buf.w || ny >= buf.h) return;
       const j = ny * buf.w + nx;
       if (!mask[j] && close(j)) {
         mask[j] = 1;
@@ -470,16 +486,23 @@ export function gradient(buf: Buf, a: Pt, b: Pt, c0: Rgba, c1: Rgba, mask: Mask 
   }
 }
 
-/** Soft blur of the given pixels, reading from `source` (the image before the stroke). */
-export function blurPoints(buf: Buf, source: Buf, pts: Pt[], mask: Mask | null) {
+/**
+ * Soft blur of the given pixels, reading from `source` (the image before the
+ * stroke). `tiled`: pixels at an edge also mix with the ones across it, so a
+ * texture that repeats gets no seam.
+ */
+export function blurPoints(buf: Buf, source: Buf, pts: Pt[], mask: Mask | null, tiled = false) {
   for (const [x, y] of pts) {
     if (mask && !mask[y * buf.w + x]) continue;
     let r = 0, g = 0, b = 0, a = 0, n = 0;
     for (let dy = -1; dy <= 1; dy++) {
       for (let dx = -1; dx <= 1; dx++) {
-        const nx = x + dx;
-        const ny = y + dy;
-        if (!inside(source, nx, ny)) continue;
+        let nx = x + dx;
+        let ny = y + dy;
+        if (tiled) {
+          nx = (nx + source.w) % source.w;
+          ny = (ny + source.h) % source.h;
+        } else if (!inside(source, nx, ny)) continue;
         const p = getPx(source, nx, ny);
         const wgt = (dx === 0 && dy === 0 ? 4 : 1) * (p[3] / 255);
         r += p[0] * wgt;
@@ -494,12 +517,15 @@ export function blurPoints(buf: Buf, source: Buf, pts: Pt[], mask: Mask | null) 
   }
 }
 
-/** Jumble: swaps each pixel with a random neighbour. */
-export function jumblePoints(buf: Buf, pts: Pt[], mask: Mask | null, random: () => number) {
+/** Jumble: swaps each pixel with a random neighbour (across the edges when `tiled`). */
+export function jumblePoints(buf: Buf, pts: Pt[], mask: Mask | null, random: () => number, tiled = false) {
   for (const [x, y] of pts) {
-    const nx = x + Math.round(random() * 2 - 1);
-    const ny = y + Math.round(random() * 2 - 1);
-    if (!inside(buf, nx, ny)) continue;
+    let nx = x + Math.round(random() * 2 - 1);
+    let ny = y + Math.round(random() * 2 - 1);
+    if (tiled) {
+      nx = (nx + buf.w) % buf.w;
+      ny = (ny + buf.h) % buf.h;
+    } else if (!inside(buf, nx, ny)) continue;
     if (mask && (!mask[y * buf.w + x] || !mask[ny * buf.w + nx])) continue;
     const a = getPx(buf, x, y);
     setPx(buf, x, y, getPx(buf, nx, ny));

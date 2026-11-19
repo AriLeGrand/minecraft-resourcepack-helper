@@ -1,7 +1,8 @@
 // Undo / redo: a stack of commands. Pixel edits are stored as the smallest
-// rectangle that changed (before and after), per frame and layer. Layer
-// add / delete / duplicate / reorder store the layer list before and after
-// (the pixel buffers are shared, not copied).
+// rectangle that changed (before and after), per frame and layer. Changes of
+// the layer list (add / delete / duplicate / reorder, and a layer's name,
+// visibility or opacity) store the layer list before and after (the pixel
+// buffers are shared, not copied).
 import { sameMask, setCel, structureOf, withStructure, type EditorDoc, type Structure } from "./doc";
 import type { Buf, Mask } from "./pixels";
 
@@ -28,6 +29,11 @@ export interface Command {
   cels: CelPatch[];
   selection?: { before: Mask | null; after: Mask | null };
   structure?: { before: Structure; after: Structure };
+  /**
+   * Steps with the same key that follow each other at once are one step
+   * (a slider being dragged must not fill the stack). See `pushMerged`.
+   */
+  mergeKey?: string;
 }
 
 export interface History {
@@ -85,6 +91,20 @@ export function applyPatch(buf: Buf, p: Patch, side: "before" | "after"): Buf {
 export function push(h: History, cmd: Command, cap = HISTORY_CAP): History {
   const undo = [...h.undo, cmd];
   return { undo: undo.length > cap ? undo.slice(undo.length - cap) : undo, redo: [] };
+}
+
+/**
+ * Like `push`, but a command with the same `mergeKey` as the last step is
+ * folded into it: the step then leads from where the first one started to
+ * where this one ends.
+ */
+export function pushMerged(h: History, cmd: Command, cap = HISTORY_CAP): History {
+  const last = h.undo[h.undo.length - 1];
+  if (!last || !cmd.mergeKey || last.mergeKey !== cmd.mergeKey || !last.structure || !cmd.structure || h.redo.length > 0) {
+    return push(h, cmd, cap);
+  }
+  const merged: Command = { ...last, structure: { before: last.structure.before, after: cmd.structure.after } };
+  return { undo: [...h.undo.slice(0, -1), merged], redo: [] };
 }
 
 export function stepUndo(h: History): { history: History; command: Command } | null {
@@ -149,7 +169,7 @@ export function editCommand(
   return cmd;
 }
 
-/** Command for a change of the layer list (add, delete, duplicate, reorder). */
+/** Command for a change of the layer list (add, delete, duplicate, reorder, name, visibility, opacity). */
 export function structureCommand(label: string, before: EditorDoc, after: EditorDoc): Command {
   return { label, cels: [], structure: { before: structureOf(before), after: structureOf(after) } };
 }

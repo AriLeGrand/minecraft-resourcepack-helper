@@ -593,14 +593,34 @@ fn launch(app: &AppHandle, file: &Path, editor: Option<&str>) -> Result<()> {
     }
 }
 
-/// Opens a texture in the built-in editor. Nothing is written until it is saved.
-#[tauri::command(async)]
-fn editor_open(state: State<AppState>, path: String) -> Result<workfile::OpenedRaw> {
-    let inner = state.lock();
+/// The open pack, but only when it is the pack the editor tab belongs to.
+/// The check runs under the state lock, so a pack that is being switched at
+/// this moment can never receive another pack's texture.
+fn own_pack<'a>(inner: &'a Inner, pack_dir: &str) -> Result<&'a OpenPack> {
     let p = inner.pack()?;
+    if p.dir != Path::new(pack_dir) {
+        return Err(CoreError::new(
+            "wrong_pack",
+            "This texture belongs to a pack that is not the open one, so nothing was read or written.",
+        )
+        .hint(format!("Open the pack in {pack_dir} again, then try once more.")));
+    }
+    Ok(p)
+}
+
+/// Opens a texture (or the pack icon) in the built-in editor. Nothing is
+/// written until it is saved.
+#[tauri::command(async)]
+fn editor_open(
+    state: State<AppState>,
+    path: String,
+    pack_dir: String,
+) -> Result<workfile::OpenedRaw> {
+    let inner = state.lock();
+    let p = own_pack(&inner, &pack_dir)?;
     let root = extract::vanilla_dir(&inner.cache_dir, &p.project.version_dir);
     let cat = packcreator_core::textures::category_of(&path);
-    let scale = if cat.uses_pack_resolution() {
+    let scale = if path != workfile::ICON_PATH && cat.uses_pack_resolution() {
         (p.project.resolution / 16).max(1)
     } else {
         1
@@ -615,8 +635,9 @@ fn editor_save(
     path: String,
     doc: workfile::RawDoc,
     flat: String,
+    pack_dir: String,
 ) -> Result<()> {
-    let dir = state.lock().pack()?.dir.clone();
+    let dir = own_pack(&state.lock(), &pack_dir)?.dir.clone();
     workfile::save_raw(&dir, &path, &doc, &flat)
 }
 

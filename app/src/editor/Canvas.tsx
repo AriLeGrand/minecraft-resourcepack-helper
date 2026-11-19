@@ -1,10 +1,13 @@
 // The drawing area: one HTML canvas. It converts mouse positions to texture
 // pixels, pans and zooms, and hands everything else to the controller.
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { cancelPending, commitPending, isBusy, pointerDown, pointerMove, pointerUp, sessionKind, sprayTick, updateText } from "./controller";
-import { shownDoc, useEditor, viewOf, type Tab } from "./editorStore";
+import { useApp } from "../store";
+import {
+  cancelPending, commitPending, isBusy, pointerDown, pointerMove, pointerUp, sessionKind, setPreviewScheduler, sprayTick, updateText,
+} from "./controller";
+import { fileName, useEditor, viewOf, withPreview, type Tab } from "./editorStore";
 import { drawScene, rasterText } from "./render";
-import { isTypingTarget } from "./shortcuts";
+import { focusInfo, isTypingTarget, keyBelongsToControl } from "./shortcuts";
 import { cursorPoints } from "./tools";
 import { panBy, pixelToScreen, screenToPixel, stepZoom, zoomAbout, zoomLabel, type View } from "./view";
 
@@ -24,7 +27,9 @@ export function Canvas({ tab }: { tab: Tab }) {
   const pan = useRef<{ x: number; y: number; view: View } | null>(null);
   const spray = useRef<number | null>(null);
 
-  const doc = useMemo(() => shownDoc(tab), [tab]);
+  // only the document and the preview decide what is drawn: panning and zooming
+  // (which replace the tab too) keep the same document, so nothing is composited again
+  const doc = useMemo(() => withPreview(tab.doc, tab.preview), [tab.doc, tab.preview]);
   const view = useMemo(() => viewOf(tab, viewport), [tab, viewport]);
   const viewRef = useRef(view);
   viewRef.current = view;
@@ -55,9 +60,31 @@ export function Canvas({ tab }: { tab: Tab }) {
     if (canvas.width !== w) canvas.width = w;
     if (canvas.height !== h) canvas.height = h;
     drawScene(canvas, {
-      doc, view, width: viewport.w, height: viewport.h, dpr, tiled: options.tiled, symmetry: options.symmetry, cursor: brush,
+      doc, view, width: viewport.w, height: viewport.h, dpr, tiled: options.tiled, symmetry: options.symmetry,
+      onion: options.onionSkin, cursor: brush,
     });
-  }, [doc, view, viewport, options.tiled, options.symmetry, brush]);
+  }, [doc, view, viewport, options.tiled, options.symmetry, options.onionSkin, brush]);
+
+  // While a tool is dragged the preview is worked out once per screen refresh,
+  // however many pointer events arrive in between.
+  useEffect(() => {
+    let frame = 0;
+    let pending: (() => void) | null = null;
+    setPreviewScheduler((run) => {
+      pending = run;
+      if (frame) return;
+      frame = requestAnimationFrame(() => {
+        frame = 0;
+        const job = pending;
+        pending = null;
+        job?.();
+      });
+    });
+    return () => {
+      setPreviewScheduler(null);
+      if (frame) cancelAnimationFrame(frame);
+    };
+  }, []);
 
   // wheel zooms about the pointer (needs a non-passive listener to stop page scrolling)
   useEffect(() => {
@@ -73,19 +100,31 @@ export function Canvas({ tab }: { tab: Tab }) {
     return () => el.removeEventListener("wheel", onWheel);
   }, [setView]);
 
-  // holding Space pans with any tool
+  // Holding Space pans with any tool. Not while a question or the search is
+  // open, not while typing, and not when Space belongs to a button or checkbox
+  // that was reached with the keyboard (there it presses the control).
   useEffect(() => {
+    let taken = false;
     const down = (e: KeyboardEvent) => {
-      if (e.code !== "Space" || isTypingTarget(e.target as HTMLElement | null)) return;
+      if (e.code !== "Space") return;
+      const app = useApp.getState();
+      const target = e.target as HTMLElement | null;
+      if (app.modal || app.palette || isTypingTarget(target) || keyBelongsToControl(focusInfo(target), " ")) return;
       e.preventDefault();
+      taken = true;
       if (!e.repeat) setSpace(true);
     };
     const up = (e: KeyboardEvent) => {
       if (e.code !== "Space") return;
-      if (!isTypingTarget(e.target as HTMLElement | null)) e.preventDefault();
+      // only swallow the release of a press that was used for panning
+      if (taken) e.preventDefault();
+      taken = false;
       setSpace(false);
     };
-    const blur = () => setSpace(false);
+    const blur = () => {
+      taken = false;
+      setSpace(false);
+    };
     window.addEventListener("keydown", down);
     window.addEventListener("keyup", up);
     window.addEventListener("blur", blur);
@@ -102,7 +141,7 @@ export function Canvas({ tab }: { tab: Tab }) {
   };
   useEffect(() => stopSpray, []);
 
-  const info = (e: React.PointerEvent | React.MouseEvent) => {
+  const info = (e: { clientX: number; clientY: number; button: number; shiftKey: boolean; altKey: boolean }) => {
     const r = canvasRef.current!.getBoundingClientRect();
     return {
       p: screenToPixel(viewRef.current, e.clientX - r.left, e.clientY - r.top),
@@ -142,9 +181,13 @@ export function Canvas({ tab }: { tab: Tab }) {
       setView(panBy(pan.current.view, e.clientX - pan.current.x, e.clientY - pan.current.y));
       return;
     }
-    const i = info(e);
-    useEditor.getState().setCursor(i.p);
-    pointerMove(i);
+    useEditor.getState().setCursor(info(e).p);
+    // the browser hands over one event per screen refresh; the positions the
+    // pointer went through in between come with it, so a fast stroke loses none
+    const native = e.nativeEvent;
+    const parts = typeof native.getCoalescedEvents === "function" ? native.getCoalescedEvents() : [];
+    if (parts.length > 1) for (const part of parts) pointerMove(info(part));
+    else pointerMove(info(e));
   };
 
   const onPointerUp = (e: React.PointerEvent<HTMLCanvasElement>) => {
@@ -165,6 +208,8 @@ export function Canvas({ tab }: { tab: Tab }) {
     <div className="ed-canvas" ref={wrapRef}>
       <canvas
         ref={canvasRef}
+        role="img"
+        aria-label={`Texture canvas: ${fileName(tab.doc.path)}, ${tab.doc.width} by ${tab.doc.height} pixels`}
         style={{ cursor: cursorStyle }}
         onPointerDown={onPointerDown}
         // a click on the canvas must not take the focus away from the text being typed
@@ -191,7 +236,9 @@ export function Canvas({ tab }: { tab: Tab }) {
           onKeyDown={(e) => {
             if (e.key === "Enter") commitPending();
             else if (e.key === "Escape") cancelPending();
-            e.stopPropagation();
+            // everything typed here is text, except Ctrl+S: it goes on to the
+            // editor, which finishes the text and saves
+            if (!((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s")) e.stopPropagation();
           }}
           onBlur={() => commitPending()}
         />

@@ -22,12 +22,14 @@ vi.mock("../lib/api", () => ({
 
 import type { PackState, TextureRow } from "../lib/api";
 import { useApp } from "../store";
-import { cancelPending, commitPending, isBusy, pointerDown, pointerMove, pointerUp, resetController, sprayTick, updateText } from "./controller";
-import { activeCel, flatStrip, fromRaw, patchLayer } from "./doc";
+import {
+  cancelPending, commitPending, isBusy, pointerDown, pointerMove, pointerUp, resetController, setPreviewScheduler, sprayTick, updateText,
+} from "./controller";
+import { activeCel, flatStrip, fromRaw, PACK_ICON, patchLayer } from "./doc";
 import { activeTab, openForTest, shownDoc, useEditor } from "./editorStore";
 import { base64ToBytes, getPx, type Pt } from "./pixels";
 import { art, BLUE, bufFrom, GREEN, maskArt, opened, RED, solid } from "./testutil";
-import { defaultOptions } from "./tools";
+import { applyStroke, defaultOptions } from "./tools";
 
 const ed = () => useEditor.getState();
 const tab = () => activeTab(ed())!;
@@ -60,6 +62,8 @@ function row(path: string, modified_ms: number): TextureRow {
 
 beforeEach(() => {
   resetController();
+  setPreviewScheduler(null);
+  vi.restoreAllMocks();
   Object.values(rust).forEach((f) => f.mockReset());
   rust.loadTextures.mockResolvedValue({ rows: [], summary: null });
   rust.editorSave.mockResolvedValue(undefined);
@@ -584,5 +588,355 @@ describe("files changed by another program", () => {
     await tick();
     expect(rust.editorOpen).not.toHaveBeenCalled();
     expect(useApp.getState().toasts.every((t) => t.kind === "ok")).toBe(true);
+  });
+});
+
+describe("review fixes: undo of layer properties", () => {
+  it("makes opacity, visibility and name undo steps that survive undoing a layer step", () => {
+    open(["#."]);
+    const clock = vi.spyOn(Date, "now");
+    let t = 10_000;
+    const later = () => clock.mockReturnValue((t += 5000));
+    const base = () => tab().doc.layers[0];
+    ed().addLayer();
+    later();
+    ed().patchLayer(0, { opacity: 40 });
+    ed().deleteLayer(1);
+    later();
+    ed().patchLayer(0, { opacity: 80 });
+    ed().patchLayer(0, { name: "Stone" });
+    ed().patchLayer(0, { visible: false });
+    expect(tab().history.undo.map((c) => c.label)).toEqual(["Add layer", "Layer opacity", "Delete layer", "Layer opacity", "Rename layer", "Hide layer"]);
+    ed().undo();
+    expect([base().name, base().opacity, base().visible]).toEqual(["Stone", 80, true]);
+    ed().undo();
+    expect([base().name, base().opacity]).toEqual(["Base", 80]);
+    ed().undo();
+    expect([base().opacity, tab().doc.layers.length]).toEqual([40, 1]);
+    // the review's case: undoing the delete must not put Base back to an older opacity
+    ed().undo();
+    expect([base().opacity, tab().doc.layers.length]).toEqual([40, 2]);
+    ed().undo();
+    expect([base().opacity, tab().doc.layers.length]).toEqual([100, 2]);
+    ed().undo();
+    expect(tab().doc.layers.length).toBe(1);
+    for (let i = 0; i < 6; i++) ed().redo();
+    expect([base().name, base().opacity, base().visible, tab().doc.layers.length]).toEqual(["Stone", 80, false, 1]);
+    expect(tab().doc.dirty).toBe(true);
+  });
+
+  it("keeps a redone copy at the opacity it was given (duplicate, set 50%, undo twice, redo twice)", () => {
+    open(["#."]);
+    ed().duplicateLayer(0);
+    ed().patchLayer(1, { opacity: 50 });
+    ed().undo();
+    ed().undo();
+    expect(tab().doc.layers.length).toBe(1);
+    ed().redo();
+    ed().redo();
+    expect(tab().doc.layers.map((l) => l.opacity)).toEqual([100, 50]);
+  });
+
+  it("counts one drag of the opacity slider as one undo step", () => {
+    open(["#."]);
+    const clock = vi.spyOn(Date, "now");
+    clock.mockReturnValue(1000);
+    ed().patchLayer(0, { opacity: 90 });
+    clock.mockReturnValue(1100);
+    ed().patchLayer(0, { opacity: 70 });
+    clock.mockReturnValue(1300);
+    ed().patchLayer(0, { opacity: 50 });
+    expect(tab().history.undo.length).toBe(1);
+    // a new drag a while later is a step of its own
+    clock.mockReturnValue(9000);
+    ed().patchLayer(0, { opacity: 30 });
+    expect(tab().history.undo.length).toBe(2);
+    ed().undo();
+    expect(tab().doc.layers[0].opacity).toBe(50);
+    ed().undo();
+    expect(tab().doc.layers[0].opacity).toBe(100);
+    ed().redo();
+    expect(tab().doc.layers[0].opacity).toBe(50);
+  });
+
+  it("does not make a lock an undo step, and undo does not take a lock away", () => {
+    open(["#."]);
+    ed().addLayer();
+    ed().patchLayer(0, { locked: true });
+    expect(tab().history.undo.map((c) => c.label)).toEqual(["Add layer"]);
+    ed().undo();
+    expect(tab().doc.layers.map((l) => [l.name, l.locked])).toEqual([["Base", true]]);
+    ed().redo();
+    expect(tab().doc.layers.map((l) => l.locked)).toEqual([true, false]);
+  });
+});
+
+describe("review fixes: never lose work", () => {
+  it("keeps a half-made polygon when its file changes on disk, instead of loading over it", async () => {
+    useApp.setState({ rows: [row("block/poly", 1)] });
+    open(["...", "...", "..."], "block/poly");
+    ed().setTool("polygon");
+    for (const p of [[0, 0], [2, 0], [2, 2]] as Pt[]) {
+      pointerDown(at(p));
+      pointerUp(at(p));
+    }
+    expect([isBusy(), tab().doc.dirty]).toEqual([true, false]);
+    // a refresh that has nothing to do with this file leaves the polygon alone
+    await ed().syncWithDisk();
+    expect([isBusy(), tab().history.undo.length]).toEqual([true, 0]);
+
+    useApp.setState({ rows: [row("block/poly", 2)] });
+    rust.editorOpen.mockResolvedValue(opened([[bufFrom(["###", "###", "###"], { "#": GREEN })]], { path: "block/poly" }));
+    await ed().syncWithDisk();
+    expect(rust.editorOpen).not.toHaveBeenCalled();
+    expect(art(cel())).toEqual(["###", ".##", "..#"]);
+    expect(getPx(cel(), 0, 0)).toEqual(RED);
+    expect([tab().doc.dirty, tab().history.undo.length, isBusy()]).toEqual([true, 1, false]);
+    expect(useApp.getState().toasts.some((t) => t.kind === "warn" && /poly\.png was changed by another program/.test(t.text))).toBe(true);
+  });
+
+  it("keeps a stroke that is still being drawn when its file changes on disk", async () => {
+    useApp.setState({ rows: [row("block/s", 1)] });
+    open(["...."], "block/s");
+    pointerDown(at([0, 0]));
+    pointerMove(at([2, 0]));
+    useApp.setState({ rows: [row("block/s", 2)] });
+    rust.editorOpen.mockResolvedValue(opened([[bufFrom(["...."])]], { path: "block/s" }));
+    await ed().syncWithDisk();
+    expect(art(cel())).toEqual(["###."]);
+    expect([tab().doc.dirty, tab().history.undo.length]).toEqual([true, 1]);
+    expect(rust.editorOpen).not.toHaveBeenCalled();
+  });
+
+  it("keeps what was started while the changed file was being read", async () => {
+    useApp.setState({ rows: [row("block/r", 1)] });
+    open(["...."], "block/r");
+    useApp.setState({ rows: [row("block/r", 2)] });
+    let deliver!: () => void;
+    rust.editorOpen.mockImplementation(() => new Promise((resolve) => {
+      deliver = () => resolve(opened([[bufFrom(["####"], { "#": GREEN })]], { path: "block/r" }));
+    }));
+    const syncing = ed().syncWithDisk();
+    await tick();
+    // typed text that is not committed yet
+    ed().setTool("text");
+    pointerDown(at([0, 0]));
+    pointerUp(at([0, 0]));
+    updateText("i", { w: 1, h: 1, data: new Uint8Array([1]) });
+    deliver();
+    await syncing;
+    expect(getPx(cel(), 0, 0)).toEqual(RED);
+    expect(getPx(cel(), 1, 0)[3]).toBe(0);
+    expect([tab().doc.dirty, tab().history.undo.length]).toEqual([true, 1]);
+  });
+
+  it("asks again when something was drawn while the answer 'Save' was being written", async () => {
+    const t = open([".."]);
+    drag([[0, 0]]);
+    let written!: () => void;
+    rust.editorSave.mockImplementationOnce(() => new Promise<void>((resolve) => { written = resolve; }));
+    const closing = ed().closeTab(t.id);
+    answer("Save");
+    await tick();
+    expect(rust.editorSave).toHaveBeenCalledTimes(1);
+    // the question is gone and the file is still being written: the canvas takes input
+    drag([[1, 0]]);
+    written();
+    await tick();
+    await tick();
+    // the tab is not closed over the new pixel: the question comes back
+    expect(ed().tabs.length).toBe(1);
+    expect(useApp.getState().modal?.title).toBe("Save changes to test.png?");
+    answer("Save");
+    expect(await closing).toBe(true);
+    expect(rust.editorSave).toHaveBeenCalledTimes(2);
+    expect([...base64ToBytes(rust.editorSave.mock.calls[1][2])]).toEqual([...RED, ...RED]);
+    expect(ed().tabs.length).toBe(0);
+  });
+
+  it("stays open when the second question is answered with Cancel", async () => {
+    const t = open([".."]);
+    drag([[0, 0]]);
+    let written!: () => void;
+    rust.editorSave.mockImplementationOnce(() => new Promise<void>((resolve) => { written = resolve; }));
+    const leaving = useApp.getState().closePack();
+    answer("Save");
+    await tick();
+    drag([[1, 0]]);
+    written();
+    await tick();
+    await tick();
+    answer("Cancel");
+    expect(await leaving).toBe(false);
+    expect(rust.closePack).not.toHaveBeenCalled();
+    expect([ed().tabs.length, tab().id, tab().doc.dirty, art(cel())]).toEqual([1, t.id, true, ["##"]]);
+  });
+
+  it("sends the tab's own pack folder with every read and write", async () => {
+    rust.editorOpen.mockResolvedValue(opened([[bufFrom(["#."])]], { path: "block/stone" }));
+    await ed().openTexture("block/stone");
+    expect(rust.editorOpen.mock.calls[0]).toEqual(["block/stone", "/pack"]);
+    drag([[1, 0]]);
+    await ed().save();
+    expect(rust.editorSave.mock.calls[0][0]).toBe("block/stone");
+    expect(rust.editorSave.mock.calls[0][3]).toBe("/pack");
+    useApp.setState({ rows: [row("block/stone", 7)] });
+    await ed().syncWithDisk();
+    expect(rust.editorOpen.mock.calls[1]).toEqual(["block/stone", "/pack"]);
+  });
+
+  it("opens no tab when the pack was switched while the texture was being read", async () => {
+    let deliver!: () => void;
+    rust.editorOpen.mockImplementation(() => new Promise((resolve) => {
+      deliver = () => resolve(opened([[bufFrom(["#."])]], { path: "block/late" }));
+    }));
+    const opening = ed().openTexture("block/late");
+    useApp.setState({ pack: { ...PACK, dir: "/other", vanilla_ready: true } as PackState });
+    deliver();
+    await opening;
+    expect(ed().tabs.length).toBe(0);
+  });
+});
+
+describe("review fixes: clipboard and move", () => {
+  it("cuts from the document as it is after the tool in use was finished", () => {
+    open(["##..", "##..", "..##", "..##"]);
+    ed().setTool("marquee");
+    drag([[0, 0], [1, 1]]);
+    // a new selection is being dragged over the other block when Ctrl+X is pressed
+    pointerDown(at([2, 2]));
+    pointerMove(at([3, 3]));
+    ed().cut();
+    expect(maskArt(tab().doc.selection, 4)).toEqual(["....", "....", "..##", "..##"]);
+    expect([ed().clipboard!.x, ed().clipboard!.y, ed().clipboard!.buf.w]).toEqual([2, 2, 2]);
+    // the block that was copied is the block that was cleared
+    expect(art(cel())).toEqual(["##..", "##..", "....", "...."]);
+  });
+
+  it("cuts a shape that was still being placed together with the rest, and undo brings it back", () => {
+    open(["...", "...", "..."]);
+    ed().setTool("polygon");
+    for (const p of [[0, 0], [2, 0], [2, 2]] as Pt[]) {
+      pointerDown(at(p));
+      pointerUp(at(p));
+    }
+    ed().cut();
+    expect(art(cel())).toEqual(["...", "...", "..."]);
+    expect(art(ed().clipboard!.buf)).toEqual(["###", ".##", "..#"]);
+    expect(tab().history.undo.map((c) => c.label)).toEqual(["Contour / polygon", "Cut"]);
+    ed().undo();
+    expect(art(cel())).toEqual(["###", ".##", "..#"]);
+  });
+
+  it("keeps the whole selection when it is moved over the edge and back", () => {
+    open(["##..", "##..", "...."]);
+    ed().setTool("marquee");
+    drag([[0, 0], [1, 1]]);
+    ed().setTool("move");
+    drag([[1, 1], [0, 1]]);
+    expect(art(cel())).toEqual(["#...", "#...", "...."]);
+    expect(maskArt(tab().doc.selection, 4)).toEqual(["#...", "#...", "...."]);
+    drag([[0, 1], [1, 1]]);
+    // all four pixels are back, and all four are selected again
+    expect(art(cel())).toEqual(["##..", "##..", "...."]);
+    expect(maskArt(tab().doc.selection, 4)).toEqual(["##..", "##..", "...."]);
+    ed().deleteSelection();
+    expect(art(cel())).toEqual(["....", "....", "...."]);
+    // each move is still one undo step with its selection
+    ed().undo();
+    ed().undo();
+    expect(maskArt(tab().doc.selection, 4)).toEqual(["#...", "#...", "...."]);
+  });
+
+  it("picks a colour from the copies around the image in tiled mode", () => {
+    openForTest(fromRaw(opened([[bufFrom(["ab"], { a: GREEN, b: [9, 8, 7, 255] })]])));
+    ed().setTool("picker");
+    drag([[-1, 0]]);
+    expect(ed().fg).toEqual(RED); // outside the image: nothing picked
+    ed().setOptions({ tiled: true });
+    drag([[-1, 0]]);
+    expect(ed().fg).toEqual([9, 8, 7, 255]);
+    drag([[4, -3]], { button: 2 });
+    expect(ed().bg).toEqual(GREEN);
+  });
+});
+
+describe("review fixes: drawing without doing the work twice", () => {
+  it("works out the preview once per screen refresh, not once per pointer event", () => {
+    const jobs: (() => void)[] = [];
+    // like requestAnimationFrame: the latest request is the one that runs
+    setPreviewScheduler((run) => { jobs[0] = run; });
+    open(["....."]);
+    pointerDown(at([0, 0]));
+    const before = tab();
+    pointerMove(at([1, 0]));
+    pointerMove(at([2, 0]));
+    pointerMove(at([3, 0]));
+    expect(tab()).toBe(before);
+    expect(jobs.length).toBe(1);
+    jobs[0]();
+    expect(art(activeCel(shownDoc(tab())))).toEqual(["####."]);
+    // released before the next refresh: the last positions are in the stroke all the same
+    pointerMove(at([4, 0]));
+    pointerUp(at([4, 0]));
+    expect(art(cel())).toEqual(["#####"]);
+    // a refresh that comes after the stroke ended changes nothing
+    jobs[0]();
+    expect([tab().preview, tab().history.undo.length]).toEqual([null, 1]);
+  });
+
+  it("paints a wide stroke piece by piece into the same image as the whole stroke at once", () => {
+    open(new Array(8).fill("#......."));
+    ed().setOptions({ size: 3, pixelPerfect: false, symmetry: "x", ink: "alpha", opacity: 50 });
+    ed().setColor("fg", GREEN);
+    const snapshot = cel();
+    const points: Pt[] = [[1, 1], [4, 2], [2, 6]];
+    pointerDown(at(points[0]));
+    pointerMove(at(points[1]));
+    pointerMove(at(points[2]));
+    const want = applyStroke({ tool: "pencil", snapshot, points, button: 0, fg: GREEN, bg: BLUE, options: ed().options, mask: null, seed: 1 });
+    expect([...activeCel(shownDoc(tab())).data]).toEqual([...want.data]);
+    expect(cel()).toBe(snapshot);
+    pointerUp(at(points[2]));
+    expect([...cel().data]).toEqual([...want.data]);
+    // the image that was committed is not touched by the next stroke
+    pointerDown(at([6, 6]));
+    pointerMove(at([7, 7]));
+    expect([...cel().data]).toEqual([...want.data]);
+    cancelPending();
+    ed().undo();
+    expect(art(cel())).toEqual(new Array(8).fill("#......."));
+    ed().redo();
+    expect([...cel().data]).toEqual([...want.data]);
+  });
+
+  it("keeps spraying dot by dot and ends with the same image as the whole spray at once", () => {
+    open(new Array(12).fill("............"));
+    ed().setTool("spray");
+    ed().setOptions({ size: 2 });
+    pointerDown(at([6, 6]));
+    for (let i = 0; i < 8; i++) sprayTick();
+    pointerMove(at([3, 3]));
+    const shown = [...activeCel(shownDoc(tab())).data];
+    pointerUp(at([3, 3]));
+    expect([...cel().data]).toEqual(shown);
+    expect(art(cel()).join("").includes("#")).toBe(true);
+  });
+});
+
+describe("review fixes: the pack icon in the editor", () => {
+  it("opens pack.png on a tab and saves it as the icon, not as a texture", async () => {
+    rust.editorOpen.mockResolvedValue(opened([[bufFrom(["..", ".."])]], { path: PACK_ICON, origin: "blank" }));
+    await ed().openTexture(PACK_ICON);
+    expect(rust.editorOpen.mock.calls[0]).toEqual([PACK_ICON, "/pack"]);
+    expect(useApp.getState().status).toBe("pack.png: a new empty image. Nothing is written until you save.");
+    expect(useApp.getState().screen).toBe("editor");
+    drag([[0, 0]]);
+    const closing = ed().closeTab(tab().id);
+    expect(useApp.getState().modal?.title).toBe("Save changes to pack.png?");
+    answer("Save");
+    expect(await closing).toBe(true);
+    expect(rust.editorSave.mock.calls[0][0]).toBe(PACK_ICON);
+    expect(useApp.getState().status).toBe("Saved pack.png to the pack");
   });
 });

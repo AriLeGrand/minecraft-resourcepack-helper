@@ -1,19 +1,23 @@
 // Right column of the editor: preview, palette with the colour picker, layers.
-import { useEffect, useMemo, useRef, useState } from "react";
+import { memo, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { Icon } from "../components/Icon";
 import { ColorPicker } from "./ColorPicker";
 import { flatten, REFERENCE_OPACITY, type EditorDoc } from "./doc";
-import { shownDoc, useEditor, type Tab } from "./editorStore";
+import { useEditor, withPreview, type Preview, type Tab } from "./editorStore";
+import { releaseAfterMouse } from "./focus";
 import { hexToRgba, rgbaToHex, rgbToHsv, type Buf } from "./pixels";
 import { bufToCanvas } from "./render";
 
 /** A pixel buffer shown with hard pixels, `repeat` × `repeat` times, fitted into a box. */
 function PixelView({ buf, box, repeat = 1, label }: { buf: Buf; box: number; repeat?: number; label: string }) {
   const ref = useRef<HTMLCanvasElement>(null);
+  // one scratch canvas for the life of the view, not a new one per redraw
+  const tileRef = useRef<HTMLCanvasElement | null>(null);
   useEffect(() => {
     const c = ref.current;
     if (!c) return;
-    const tile = bufToCanvas(buf);
+    const tile = bufToCanvas(buf, tileRef.current ?? undefined);
+    tileRef.current = tile;
     c.width = buf.w * repeat;
     c.height = buf.h * repeat;
     const ctx = c.getContext("2d");
@@ -30,10 +34,14 @@ function PixelView({ buf, box, repeat = 1, label }: { buf: Buf; box: number; rep
 
 const LATER = "arrives in a later stage";
 
-export function PreviewPanel({ tab }: { tab: Tab }) {
+export const PreviewPanel = memo(function PreviewPanel({ doc: saved, preview }: { doc: EditorDoc; preview: Preview | null }) {
   const mode = useEditor((s) => s.previewTab);
   const setMode = useEditor((s) => s.setPreviewTab);
-  const doc = useMemo(() => shownDoc(tab), [tab]);
+  // The side preview follows the canvas with low priority: while a tool is
+  // dragged, the canvas is drawn first and this catches up when there is time.
+  const latest = useMemo(() => ({ saved, preview }), [saved, preview]);
+  const shown = useDeferredValue(latest);
+  const doc = useMemo(() => withPreview(shown.saved, shown.preview), [shown]);
   const flat = useMemo(() => flatten(doc), [doc]);
   return (
     <section className="ed-panel">
@@ -66,9 +74,12 @@ export function PreviewPanel({ tab }: { tab: Tab }) {
       </div>
     </section>
   );
-}
+});
 
-export function PalettePanel({ tab }: { tab: Tab }) {
+/** A refresh arrow in the app's icon style (24 grid, stroke only). */
+const REFRESH = "M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7";
+
+export const PalettePanel = memo(function PalettePanel({ palette, hasVanilla, source }: { palette: string[]; hasVanilla: boolean; source: Tab["paletteSource"] }) {
   const fg = useEditor((s) => s.fg);
   const bg = useEditor((s) => s.bg);
   const target = useEditor((s) => s.colorTarget);
@@ -79,30 +90,40 @@ export function PalettePanel({ tab }: { tab: Tab }) {
   const [h, s, v] = rgbToHsv(current[0], current[1], current[2]);
   const fgHex = rgbaToHex(fg);
   const bgHex = rgbaToHex(bg);
-  const source = tab.paletteSource;
+  // what the refresh button reads the colours from again
+  const again: "vanilla" | "image" = source === "vanilla" && hasVanilla ? "vanilla" : "image";
   return (
     <section className="ed-panel">
       <div className="head">
         <h2 className="caps">Palette</h2>
-        <select
-          className="ed-select"
-          aria-label="Palette colours"
-          value={source}
-          onChange={(e) => {
-            loadPalette(e.target.value as "vanilla" | "image");
-            e.currentTarget.blur();
-          }}
-        >
-          {source === "saved" && <option value="saved">Saved with texture</option>}
-          <option value="vanilla" disabled={!tab.doc.vanilla}>From vanilla</option>
-          <option value="image">From image</option>
-        </select>
+        <div className="ed-palsrc">
+          <select
+            className="ed-select"
+            aria-label="Palette colours"
+            value={source}
+            onChange={(e) => {
+              loadPalette(e.target.value as "vanilla" | "image");
+              releaseAfterMouse(e);
+            }}
+          >
+            {source === "saved" && <option value="saved">Saved with texture</option>}
+            <option value="vanilla" disabled={!hasVanilla}>From vanilla</option>
+            <option value="image">From image</option>
+          </select>
+          <button
+            aria-label={again === "vanilla" ? "Take the colours from the game's texture again" : "Take the colours from your drawing again"}
+            title={again === "vanilla" ? "Take the colours from the game's texture again" : "Take the colours from your drawing as it is now"}
+            onClick={() => loadPalette(again)}
+          >
+            <Icon d={REFRESH} size={13} width={2} />
+          </button>
+        </div>
       </div>
-      {tab.doc.palette.length === 0 ? (
-        <div className="dim" style={{ fontSize: 11 }}>No colours yet. Draw something, then choose “From image”.</div>
+      {palette.length === 0 ? (
+        <div className="dim" style={{ fontSize: 11 }}>No colours yet. Draw something, then press the refresh button above to take the colours from your drawing.</div>
       ) : (
         <div className="ed-swatches">
-          {tab.doc.palette.map((hex) => (
+          {palette.map((hex) => (
             <button
               key={hex}
               title={`${hex.toUpperCase()} · click: foreground, right-click: background`}
@@ -126,7 +147,7 @@ export function PalettePanel({ tab }: { tab: Tab }) {
       <ColorPicker color={current} onChange={(c) => setColor(target, c)} />
     </section>
   );
-}
+});
 
 function LayerName({ doc, index }: { doc: EditorDoc; index: number }) {
   const patchLayer = useEditor((s) => s.patchLayer);
@@ -165,8 +186,7 @@ function LayerName({ doc, index }: { doc: EditorDoc; index: number }) {
   );
 }
 
-export function LayersPanel({ tab }: { tab: Tab }) {
-  const doc = tab.doc;
+export const LayersPanel = memo(function LayersPanel({ doc }: { doc: EditorDoc }) {
   const ed = useEditor.getState;
   const active = doc.layers[doc.activeLayer];
   // top layer first, like every layer list
@@ -226,4 +246,4 @@ export function LayersPanel({ tab }: { tab: Tab }) {
       )}
     </section>
   );
-}
+});

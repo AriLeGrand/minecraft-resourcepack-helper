@@ -2,9 +2,9 @@
 // (positions + options) goes in, a new image comes out. Nothing here knows
 // about the mouse, the canvas or React.
 import {
-  blurPoints, brushOffsets, clearArea, cloneBuf, combineMasks, copyClip, curvePoints, dedupe, ellipsePoints, fit,
+  applyInk, blurPoints, brushOffsets, clearArea, cloneBuf, combineMasks, copyClip, curvePoints, dedupe, ellipsePoints, fit,
   floodMask, getPx, gradient, jumblePoints, linePoints, maskPoints, mirror, newBuf, paint, pasteClip, pathPoints,
-  pixelPerfect, pointsMask, polygonPoints, rectPoints, rng, sprayPoints, stamp,
+  pixelPerfect, pointsMask, polygonPoints, rectPoints, rng, setPx, sprayPoints, stamp,
   type Buf, type Clip, type Ink, type Mask, type Pt, type Rgba, type SelectMode, type Symmetry,
 } from "./pixels";
 
@@ -80,7 +80,7 @@ export interface ToolOptions {
   symmetry: Symmetry;
   /** Drawing wraps around the edges and the canvas shows the image 3×3. */
   tiled: boolean;
-  /** Stored only; used by the animation stage. */
+  /** Animated textures: the frames before and after are shown faintly under the drawing. */
   onionSkin: boolean;
   /** Rectangle, ellipse and polygon are filled. */
   filled: boolean;
@@ -230,8 +230,8 @@ export function applyStroke(s: Stroke): Buf {
     }
     case "blur": {
       const pts = placed(stamp(pathPoints(s.points), o.size), buf, o);
-      if (o.blurMode === "blur") blurPoints(buf, s.snapshot, pts, s.mask);
-      else jumblePoints(buf, pts, s.mask, rng(s.seed));
+      if (o.blurMode === "blur") blurPoints(buf, s.snapshot, pts, s.mask, o.tiled);
+      else jumblePoints(buf, pts, s.mask, rng(s.seed), o.tiled);
       break;
     }
     case "line":
@@ -253,7 +253,7 @@ export function applyStroke(s: Stroke): Buf {
         x = wrap(x, buf.w);
         y = wrap(y, buf.h);
       }
-      const area = floodMask(s.snapshot, x, y, o.tolerance, o.contiguous);
+      const area = floodMask(s.snapshot, x, y, o.tolerance, o.contiguous, o.tiled);
       paint(buf, maskPoints(area, buf.w), { color, ink, opacity: o.opacity, mask: s.mask });
       break;
     }
@@ -264,6 +264,93 @@ export function applyStroke(s: Stroke): Buf {
       break;
   }
   return buf;
+}
+
+// ------------------------------------------------- strokes drawn bit by bit
+
+/**
+ * A freehand stroke in progress that is drawn piece by piece: each pointer
+ * move only paints the new part, instead of drawing the whole stroke again
+ * from the start. The result is the same image `applyStroke` gives for the
+ * same points (every pixel still gets its ink exactly once).
+ */
+export interface StrokeRun {
+  /** The snapshot with the stroke so far. */
+  buf: Buf;
+  /** 1 = this pixel already got its ink. */
+  covered: Uint8Array;
+  /** How many of the stroke's points are drawn. */
+  done: number;
+  random: (() => number) | null;
+  /** What the run was started with; anything else starts it again. */
+  stroke: Stroke;
+}
+
+/**
+ * Strokes that can grow in place. A 1-pixel pixel-perfect line cannot (it
+ * takes back corner pixels it drew earlier), and neither can jumble (its
+ * random swaps depend on the order of all points); those are cheap enough to
+ * draw again from the start.
+ */
+export function growsInPlace(tool: ToolId, o: ToolOptions): boolean {
+  if (tool === "pencil" || tool === "eraser" || tool === "shade") return !(o.pixelPerfect && o.size <= 1);
+  if (tool === "spray") return true;
+  return tool === "blur" && o.blurMode === "blur";
+}
+
+/** Draws the points of `s` that `run` has not drawn yet. Pass `null` to start. */
+export function growStroke(s: Stroke, run: StrokeRun | null): StrokeRun {
+  const o = s.options;
+  const p = run?.stroke;
+  const same = run && p && p.snapshot === s.snapshot && p.tool === s.tool && p.options === o && p.mask === s.mask
+    && p.fg === s.fg && p.bg === s.bg && p.button === s.button && p.seed === s.seed && run.done <= s.points.length;
+  const r: StrokeRun = same && run ? run : {
+    buf: cloneBuf(s.snapshot), covered: new Uint8Array(s.snapshot.w * s.snapshot.h), done: 0,
+    random: s.tool === "spray" ? rng(s.seed) : null, stroke: s,
+  };
+  const buf = r.buf;
+  const { w, h } = buf;
+  const color = s.button === 2 ? s.bg : s.fg;
+  const ink = inkFor(s.tool, o.ink, s.button);
+  const blurred: Pt[] = [];
+  const mx = o.symmetry === "x" || o.symmetry === "both";
+  const my = o.symmetry === "y" || o.symmetry === "both";
+
+  const one = (x: number, y: number) => {
+    if (o.tiled) {
+      x = wrap(x, w);
+      y = wrap(y, h);
+    } else if (x < 0 || y < 0 || x >= w || y >= h) return;
+    const i = y * w + x;
+    if (r.covered[i]) return;
+    r.covered[i] = 1;
+    if (s.mask && !s.mask[i]) return;
+    if (s.tool === "blur") blurred.push([x, y]);
+    else setPx(buf, x, y, applyInk(getPx(buf, x, y), color, ink, o.opacity));
+  };
+  /** A pixel and its mirror images (symmetry). */
+  const visit = (x: number, y: number) => {
+    one(x, y);
+    if (mx) one(w - 1 - x, y);
+    if (my) one(x, h - 1 - y);
+    if (mx && my) one(w - 1 - x, h - 1 - y);
+  };
+
+  if (s.tool === "spray") {
+    const radius = sprayRadius(o.size);
+    for (let i = r.done; i < s.points.length; i++) {
+      for (const [x, y] of sprayPoints(s.points[i][0], s.points[i][1], radius, 2 + o.size, r.random!)) visit(x, y);
+    }
+  } else if (s.points.length > r.done) {
+    // the piece of the path from the last drawn point on
+    const path = pathPoints(s.points.slice(Math.max(0, r.done - 1)));
+    const offsets: Pt[] = o.size <= 1 ? [[0, 0]] : brushOffsets(o.size);
+    for (const [x, y] of path) for (const [dx, dy] of offsets) visit(x + dx, y + dy);
+  }
+  if (blurred.length > 0) blurPoints(buf, s.snapshot, blurred, null, o.tiled);
+  r.done = s.points.length;
+  r.stroke = s;
+  return r;
 }
 
 // --------------------------------------------------------------- selection
@@ -287,7 +374,7 @@ export function selectArea(tool: ToolId, points: Pt[], cel: Buf, o: ToolOptions)
     x = wrap(x, cel.w);
     y = wrap(y, cel.h);
   }
-  return floodMask(cel, x, y, o.tolerance, o.contiguous);
+  return floodMask(cel, x, y, o.tolerance, o.contiguous, o.tiled);
 }
 
 export function select(current: Mask | null, tool: ToolId, points: Pt[], cel: Buf, o: ToolOptions, mode: SelectMode): Mask | null {
@@ -308,15 +395,54 @@ export interface Floating {
   /** Where the clip currently sits. */
   x: number;
   y: number;
+  /**
+   * The selection that travels with the clip, at the clip's size (1 = selected);
+   * `null` when nothing was selected. It is kept whole even while part of the
+   * clip hangs over the edge of the image, so it comes back with the pixels.
+   */
+  mask: Bitmap | null;
 }
 
 /** Lifts the selected pixels (or the whole layer when nothing is selected). */
 export function lift(cel: Buf, mask: Mask | null): Floating {
   const clip = copyClip(cel, mask);
-  if (!clip) return { base: cloneBuf(cel), clip: newBuf(1, 1), x: 0, y: 0 };
+  if (!clip) return { base: cloneBuf(cel), clip: newBuf(1, 1), x: 0, y: 0, mask: null };
   const base = mask ? cloneBuf(cel) : newBuf(cel.w, cel.h);
   if (mask) clearArea(base, mask);
-  return { base, clip: clip.buf, x: clip.x, y: clip.y };
+  let sel: Bitmap | null = null;
+  if (mask) {
+    sel = { w: clip.buf.w, h: clip.buf.h, data: new Uint8Array(clip.buf.w * clip.buf.h) };
+    for (let y = 0; y < sel.h; y++) {
+      for (let x = 0; x < sel.w; x++) sel.data[y * sel.w + x] = mask[(clip.y + y) * cel.w + clip.x + x] ? 1 : 0;
+    }
+  }
+  return { base, clip: clip.buf, x: clip.x, y: clip.y, mask: sel };
+}
+
+/**
+ * The selection of lifted pixels put down `dx`, `dy` away from where they sit.
+ * Parts outside the image are left out (they wrap in tiled mode), but the
+ * lifted selection itself stays whole.
+ */
+export function floatSelection(f: Floating, w: number, h: number, dx: number, dy: number, tiled: boolean): Mask | null {
+  const m = f.mask;
+  if (!m) return null;
+  const out = new Uint8Array(w * h);
+  let any = false;
+  for (let my = 0; my < m.h; my++) {
+    for (let mx = 0; mx < m.w; mx++) {
+      if (!m.data[my * m.w + mx]) continue;
+      let x = f.x + dx + mx;
+      let y = f.y + dy + my;
+      if (tiled) {
+        x = wrap(x, w);
+        y = wrap(y, h);
+      } else if (x < 0 || y < 0 || x >= w || y >= h) continue;
+      out[y * w + x] = 1;
+      any = true;
+    }
+  }
+  return any ? out : null;
 }
 
 /** The layer with the lifted pixels put down `dx`, `dy` away from where they sit. */
@@ -349,20 +475,16 @@ export function shiftSelection(mask: Mask | null, w: number, h: number, dx: numb
 export function pasteFloating(cel: Buf, clip: Clip): { floating: Floating; cel: Buf; selection: Mask | null } {
   const x = Math.max(0, Math.min(clip.x, cel.w - clip.buf.w));
   const y = Math.max(0, Math.min(clip.y, cel.h - clip.buf.h));
-  const floating: Floating = { base: cel, clip: clip.buf, x, y };
-  const sel = new Uint8Array(cel.w * cel.h);
+  // the pasted pixels themselves are the selection
+  const mask: Bitmap = { w: clip.buf.w, h: clip.buf.h, data: new Uint8Array(clip.buf.w * clip.buf.h) };
   let any = false;
-  for (let cy = 0; cy < clip.buf.h; cy++) {
-    for (let cx = 0; cx < clip.buf.w; cx++) {
-      const px = x + cx;
-      const py = y + cy;
-      if (px < 0 || py < 0 || px >= cel.w || py >= cel.h) continue;
-      if (getPx(clip.buf, cx, cy)[3] === 0) continue;
-      sel[py * cel.w + px] = 1;
-      any = true;
-    }
+  for (let i = 0; i < mask.data.length; i++) {
+    if (clip.buf.data[i * 4 + 3] === 0) continue;
+    mask.data[i] = 1;
+    any = true;
   }
-  return { floating, cel: place(floating, 0, 0, false), selection: any ? sel : null };
+  const floating: Floating = { base: cel, clip: clip.buf, x, y, mask: any ? mask : null };
+  return { floating, cel: place(floating, 0, 0, false), selection: floatSelection(floating, cel.w, cel.h, 0, 0, false) };
 }
 
 // ----------------------------------------------------------------- helpers

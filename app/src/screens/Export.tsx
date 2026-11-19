@@ -2,6 +2,8 @@
 import { open } from "@tauri-apps/plugin-dialog";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { NavBar, StatusBar, TopBar } from "../components/Shell";
+import { PACK_ICON } from "../editor/doc";
+import { useEditor } from "../editor/editorStore";
 import { api, images, type Check, type VersionView } from "../lib/api";
 import { bytesLabel, formatLabel, joinPath, parseSectionCodes, safeFileName, timeLabel } from "../lib/logic";
 import { useApp } from "../store";
@@ -91,7 +93,10 @@ export function Export() {
     }
   };
 
-  const drawIcon = async () => {
+  // "Draw" opens the icon in the built-in editor, on its own tab; saving writes pack.png
+  const drawIcon = () => void useEditor.getState().openTexture(PACK_ICON);
+
+  const openIconExternally = async () => {
     try {
       await api.editPackIcon();
       toast("Opened pack.png in your image editor. It refreshes here when you save.");
@@ -165,9 +170,10 @@ export function Export() {
                   </div>
                   <div className="dim" style={{ fontSize: 11 }}>pack.png{iconCheck ? ` · ${iconCheck.detail.split(" · ")[0]}` : ""}</div>
                   <div className="row" style={{ gap: 6 }}>
-                    <button className="btn" onClick={drawIcon}>Draw</button>
-                    <button className="btn" onClick={importIcon}>Import</button>
+                    <button className="btn" title="Draw the icon in the built-in editor" onClick={drawIcon}>Draw</button>
+                    <button className="btn" title="Use a PNG file as the icon" onClick={importIcon}>Import</button>
                   </div>
+                  <button className="btn ghost" title="Open pack.png in your own image editor" onClick={openIconExternally}>Open externally</button>
                 </div>
                 <div className="col grow" style={{ flex: "1 1 260px", gap: 16 }}>
                   <div className="field">

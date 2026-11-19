@@ -223,7 +223,7 @@ export interface RawImage {
   rgba: string;
 }
 
-export type Origin = "work_file" | "pack_png" | "vanilla";
+export type Origin = "work_file" | "pack_png" | "vanilla" | "blank";
 
 export interface OpenedRaw {
   path: string;
@@ -264,9 +264,15 @@ export const api = {
   importTexture: (path: string, source: string, frametime: number | null) =>
     invoke<ImportResult>("import_texture", { path, source, frametime }),
   openExternal: (path: string) => invoke<string>("open_external", { path }),
-  editorOpen: (path: string) => invoke<OpenedRaw>("editor_open", { path }),
+  /**
+   * `packDir` is the pack the editor tab belongs to. Rust refuses when a
+   * different pack is open, so a texture can never be read from or written
+   * into the wrong pack while packs are being switched.
+   */
+  editorOpen: (path: string, packDir: string) => invoke<OpenedRaw>("editor_open", { path, packDir }),
   /** `flat` is every frame flattened and stacked vertically, base64 RGBA. */
-  editorSave: (path: string, doc: RawDoc, flat: string) => invoke<void>("editor_save", { path, doc, flat }),
+  editorSave: (path: string, doc: RawDoc, flat: string, packDir: string) =>
+    invoke<void>("editor_save", { path, doc, flat, packDir }),
   reveal: (path: string) => invoke<void>("reveal", { path }),
   revertTexture: (path: string) => invoke<boolean>("revert_texture", { path }),
   setPackIcon: (source: string) => invoke<void>("set_pack_icon", { source }),

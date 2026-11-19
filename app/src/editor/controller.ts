@@ -3,10 +3,10 @@
 // No DOM here, so the whole interaction can be tested.
 import { activeCel, pickColor } from "./doc";
 import { activeTab, setPendingFlush, useEditor, type Tab } from "./editorStore";
-import type { Buf, Mask, Pt, SelectMode } from "./pixels";
+import type { Buf, Pt, SelectMode } from "./pixels";
 import {
-  applyStroke, constrainEnd, DRAG_SHAPES, FREEHAND, lift, place, select, selectMode, SELECT_TOOLS, shiftSelection,
-  toolDef, type Bitmap, type Floating, type Stroke, type ToolId,
+  applyStroke, constrainEnd, DRAG_SHAPES, floatSelection, FREEHAND, growsInPlace, growStroke, lift, place, select, selectMode,
+  SELECT_TOOLS, toolDef, type Bitmap, type Floating, type Stroke, type StrokeRun, type ToolId,
 } from "./tools";
 
 export interface PointerInfo {
@@ -19,12 +19,12 @@ export interface PointerInfo {
 }
 
 type Session =
-  | { kind: "stroke"; tool: ToolId; snapshot: Buf; points: Pt[]; button: 0 | 2; seed: number }
+  | { kind: "stroke"; tool: ToolId; snapshot: Buf; points: Pt[]; button: 0 | 2; seed: number; run: StrokeRun | null }
   | { kind: "shape"; tool: ToolId; snapshot: Buf; a: Pt; b: Pt; button: 0 | 2 }
   | { kind: "curve"; snapshot: Buf; a: Pt; b: Pt; c: Pt | null; phase: 1 | 2; button: 0 | 2 }
   | { kind: "poly"; snapshot: Buf; points: Pt[]; cursor: Pt; button: 0 | 2; down: boolean; dragged: boolean }
   | { kind: "select"; tool: ToolId; points: Pt[]; mode: SelectMode; moved: boolean }
-  | { kind: "move"; floating: Floating; start: Pt; dx: number; dy: number; selection: Mask | null }
+  | { kind: "move"; floating: Floating; start: Pt; dx: number; dy: number }
   | { kind: "text"; snapshot: Buf; at: Pt; button: 0 | 2; bitmap: Bitmap | null }
   | { kind: "pick"; button: 0 | 2 };
 
@@ -33,6 +33,17 @@ let seeds = 1;
 
 const same = (a: Pt, b: Pt) => a[0] === b[0] && a[1] === b[1];
 const store = () => useEditor.getState();
+
+// While the pointer moves, the preview is not drawn for every single event:
+// the canvas asks for it once per screen refresh. Tests (and anything without
+// a screen) draw it at once.
+type Scheduler = (run: () => void) => void;
+const atOnce: Scheduler = (run) => run();
+let schedule: Scheduler = atOnce;
+/** `null` = draw previews at once. */
+export const setPreviewScheduler = (fn: Scheduler | null) => {
+  schedule = fn ?? atOnce;
+};
 
 /** A tool is in the middle of its work. */
 export const isBusy = () => session !== null;
@@ -49,8 +60,14 @@ function strokeOf(tab: Tab, s: { tool: ToolId; snapshot: Buf; points: Pt[]; butt
 /** The image the session would produce right now, or `null` when it draws nothing. */
 function render(tab: Tab, s: Session): Buf | null {
   switch (s.kind) {
-    case "stroke":
-      return applyStroke(strokeOf(tab, s));
+    case "stroke": {
+      const stroke = strokeOf(tab, s);
+      if (!growsInPlace(s.tool, stroke.options)) return applyStroke(stroke);
+      // only the new piece of the stroke is painted, not the whole stroke again
+      s.run = growStroke(stroke, s.run);
+      // a new object each time (same pixels underneath), so whatever shows it sees a change
+      return { w: s.run.buf.w, h: s.run.buf.h, data: s.run.buf.data };
+    }
     case "shape":
       return applyStroke(strokeOf(tab, { tool: s.tool, snapshot: s.snapshot, points: [s.a, s.b], button: s.button }));
     case "curve":
@@ -83,14 +100,28 @@ function preview(tab: Tab) {
   }
   if (s.kind === "move") {
     const o = store().options;
-    store().setPreview({ cel, selection: shiftSelection(s.selection, cel.w, cel.h, s.dx, s.dy, o.tiled) });
+    store().setPreview({ cel, selection: floatSelection(s.floating, cel.w, cel.h, s.dx, s.dy, o.tiled) });
   } else {
     store().setPreview({ cel });
   }
 }
 
+/** Asks for the preview of the session as it is by then (see `setPreviewScheduler`). */
+function requestPreview() {
+  schedule(() => {
+    const tab = activeTab(store());
+    if (session && tab) preview(tab);
+  });
+}
+
 function pick(tab: Tab, p: Pt, button: 0 | 2) {
-  const c = pickColor(tab.doc, p[0], p[1]);
+  let [x, y] = p;
+  if (store().options.tiled) {
+    // the copies around the image are the image: picking works on them too
+    x = ((x % tab.doc.width) + tab.doc.width) % tab.doc.width;
+    y = ((y % tab.doc.height) + tab.doc.height) % tab.doc.height;
+  }
+  const c = pickColor(tab.doc, x, y);
   if (c) store().setColor(button === 2 ? "bg" : "fg", c);
 }
 
@@ -123,9 +154,11 @@ function finish() {
         break;
       }
       const o = store().options;
+      // the selection comes from the lifted pixels, not from the selection on
+      // screen: a part that hung over the edge comes back together with its pixels
       store().applyEdit(toolDef("move").name, {
         cel,
-        selection: shiftSelection(s.selection, cel.w, cel.h, s.dx, s.dy, o.tiled),
+        selection: floatSelection(s.floating, cel.w, cel.h, s.dx, s.dy, o.tiled),
         float: { ...s.floating, x: s.floating.x + s.dx, y: s.floating.y + s.dy },
       });
       break;
@@ -221,7 +254,7 @@ export function pointerDown(i: PointerInfo) {
   if (tool === "move") {
     const f = tab.float;
     const valid = f && f.result === snapshot && f.selection === doc.selection;
-    session = { kind: "move", floating: valid ? f.floating : lift(snapshot, doc.selection), start: i.p, dx: 0, dy: 0, selection: doc.selection };
+    session = { kind: "move", floating: valid ? f.floating : lift(snapshot, doc.selection), start: i.p, dx: 0, dy: 0 };
     return;
   }
   if (tool === "bucket") {
@@ -234,7 +267,7 @@ export function pointerDown(i: PointerInfo) {
     return;
   }
   if (FREEHAND.includes(tool)) {
-    session = { kind: "stroke", tool, snapshot, points: [i.p], button, seed: (seeds++ * 2654435761) >>> 0 };
+    session = { kind: "stroke", tool, snapshot, points: [i.p], button, seed: (seeds++ * 2654435761) >>> 0, run: null };
   } else if (DRAG_SHAPES.includes(tool)) {
     session = { kind: "shape", tool, snapshot, a: i.p, b: i.p, button };
   } else if (tool === "curve") {
@@ -296,7 +329,7 @@ export function pointerMove(i: PointerInfo) {
     case "text":
       return;
   }
-  preview(tab);
+  requestPreview();
 }
 
 export function pointerUp(_i?: PointerInfo) {
@@ -337,7 +370,7 @@ export function sprayTick() {
   const tab = activeTab(store());
   if (!s || !tab || s.kind !== "stroke" || s.tool !== "spray") return;
   s.points.push(s.points[s.points.length - 1]);
-  preview(tab);
+  requestPreview();
 }
 
 /** Text typed so far, with its rendered pixels (`null` = nothing to draw). */

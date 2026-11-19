@@ -118,10 +118,12 @@ for (let i = 0; i < args.length; i += 2) {
     const mods = (parts.includes("alt") ? 1 : 0) | (parts.includes("ctrl") ? 2 : 0) | (parts.includes("shift") ? 8 : 0);
     const text = key.length === 1 && !parts.includes("ctrl") ? (parts.includes("shift") ? key.toUpperCase() : key) : undefined;
     const code = key.length === 1 ? (/[a-z]/i.test(key) ? `Key${key.toUpperCase()}` : undefined) : key;
-    const vk = key.length === 1 ? key.toUpperCase().charCodeAt(0) : { Enter: 13, Escape: 27, Delete: 46, Backspace: 8, ArrowLeft: 37, ArrowRight: 39 }[key];
+    const vk = key.length === 1 ? key.toUpperCase().charCodeAt(0) : { Enter: 13, Escape: 27, Delete: 46, Backspace: 8, ArrowLeft: 37, ArrowRight: 39, ArrowUp: 38, ArrowDown: 40, Tab: 9 }[key];
     const base = { key: text ?? key, code, modifiers: mods, windowsVirtualKeyCode: vk };
     await send("Input.dispatchKeyEvent", { type: "rawKeyDown", ...base });
     if (text) await send("Input.dispatchKeyEvent", { type: "char", ...base, text });
+    // a real Enter also sends a character: that is what presses a focused button
+    else if (key === "Enter") await send("Input.dispatchKeyEvent", { type: "char", ...base, text: String.fromCharCode(13) });
     await send("Input.dispatchKeyEvent", { type: "keyUp", ...base });
   } else if (cmd === "--shot") {
     const r = await send("Page.captureScreenshot", { format: "png" });

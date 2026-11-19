@@ -21,6 +21,27 @@ function useDrag(onMove: (x: number, y: number) => void) {
   };
 }
 
+const clamp = (n: number, min: number, max: number) => Math.max(min, Math.min(max, n));
+
+/**
+ * Arrow keys for a slider: `step(dx, dy)` gets -1 / 0 / 1 per axis (times 10
+ * with Shift); Home and End go to the ends of the horizontal axis.
+ */
+function sliderKeys(step: (dx: number, dy: number) => void) {
+  return (e: React.KeyboardEvent) => {
+    const n = e.shiftKey ? 10 : 1;
+    const moves: Record<string, [number, number]> = {
+      ArrowLeft: [-n, 0], ArrowRight: [n, 0], ArrowUp: [0, n], ArrowDown: [0, -n], Home: [-1000, 0], End: [1000, 0],
+    };
+    const m = moves[e.key];
+    if (!m) return;
+    // the key is used here: it must not also switch frames or scroll
+    e.preventDefault();
+    e.stopPropagation();
+    step(m[0], m[1]);
+  };
+}
+
 export function ColorPicker({ color, onChange }: { color: Rgba; onChange: (c: Rgba) => void }) {
   // hue and saturation are kept here: black and greys have none of their own
   const [hsv, setHsv] = useState<[number, number, number]>(() => rgbToHsv(color[0], color[1], color[2]));
@@ -59,14 +80,47 @@ export function ColorPicker({ color, onChange }: { color: Rgba; onChange: (c: Rg
         className="sv"
         {...sv}
         style={{ background: `linear-gradient(to top, #000, transparent), linear-gradient(to right, #fff, rgb(${pr}, ${pg}, ${pb}))` }}
+        role="slider"
+        tabIndex={0}
         aria-label="Saturation and brightness"
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={hsv[1]}
+        aria-valuetext={`Saturation ${hsv[1]}%, brightness ${hsv[2]}%`}
+        title="Saturation (left / right) and brightness (up / down). Arrow keys work too; Shift moves faster."
+        onKeyDown={sliderKeys((dx, dy) => set(hsv[0], clamp(hsv[1] + dx, 0, 100), clamp(hsv[2] + dy, 0, 100)))}
       >
         <span className="knob" style={{ left: `${hsv[1]}%`, top: `${100 - hsv[2]}%`, background: solid }} />
       </div>
-      <div className="slider hue" {...hue} aria-label="Hue">
+      <div
+        className="slider hue"
+        {...hue}
+        role="slider"
+        tabIndex={0}
+        aria-label="Hue"
+        aria-valuemin={0}
+        aria-valuemax={359}
+        aria-valuenow={hsv[0]}
+        aria-valuetext={`${hsv[0]} degrees`}
+        onKeyDown={sliderKeys((dx, dy) => set(clamp(hsv[0] + dx + dy, 0, 359), hsv[1], hsv[2]))}
+      >
         <span className="knob" style={{ left: `${(hsv[0] / 360) * 100}%` }} />
       </div>
-      <div className="slider alpha checker" {...alpha} aria-label="Opacity of the colour">
+      <div
+        className="slider alpha checker"
+        {...alpha}
+        role="slider"
+        tabIndex={0}
+        aria-label="Opacity of the colour"
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={Math.round((color[3] / 255) * 100)}
+        aria-valuetext={`${Math.round((color[3] / 255) * 100)}%`}
+        onKeyDown={sliderKeys((dx, dy) => {
+          const percent = clamp(Math.round((color[3] / 255) * 100) + dx + dy, 0, 100);
+          onChange([color[0], color[1], color[2], Math.round((percent / 100) * 255)]);
+        })}
+      >
         <div className="fill" style={{ background: `linear-gradient(to right, transparent, ${solid})` }} />
         <span className="knob" style={{ left: `${(color[3] / 255) * 100}%` }} />
       </div>

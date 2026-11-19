@@ -2,10 +2,10 @@ import { describe, expect, it } from "vitest";
 import { cloneBuf, getPx, newBuf, setPx, type Buf, type Pt, type Rgba } from "./pixels";
 import { art, BLUE, bufFrom, CLEAR, GREEN, maskArt, RED, solid } from "./testutil";
 import {
-  applyStroke, changesPixels, clampSize, constrainEnd, cursorPoints, defaultOptions, inkFor, lift, pasteFloating, place,
-  select, selectAllMask, selectArea, selectMode, shiftSelection, textPoints, toolDef, toolForKey, TOOLS, usesFilled,
-  usesTolerance,
-  type Stroke, type ToolId, type ToolOptions,
+  applyStroke, changesPixels, clampSize, constrainEnd, cursorPoints, defaultOptions, floatSelection, growsInPlace, growStroke,
+  inkFor, lift, pasteFloating, place, select, selectAllMask, selectArea, selectMode, shiftSelection, textPoints, toolDef,
+  toolForKey, TOOLS, usesFilled, usesTolerance,
+  type Stroke, type StrokeRun, type ToolId, type ToolOptions,
 } from "./tools";
 
 function stroke(tool: ToolId, snapshot: Buf, points: Pt[], extra: Partial<Stroke> & { o?: Partial<ToolOptions> } = {}): Buf {
@@ -367,5 +367,104 @@ describe("helpers", () => {
     setPx(copy, 0, 0, RED);
     for (const t of TOOLS) stroke(t.id, snap, [[0, 0], [2, 2], [1, 2]], { bitmap: { w: 1, h: 1, data: new Uint8Array([1]) } });
     expect([...snap.data]).toEqual([...copy.data]);
+  });
+});
+
+describe("review fixes: tiled tools, lifted selections, strokes drawn bit by bit", () => {
+  it("tiled: the bucket and the wand follow an area across the edges", () => {
+    const cel = bufFrom(["#..#", "...."]);
+    const filled = stroke("bucket", cel, [[0, 0]], { fg: GREEN, o: { tiled: true } });
+    expect([getPx(filled, 0, 0), getPx(filled, 3, 0)]).toEqual([GREEN, GREEN]);
+    const plain = stroke("bucket", cel, [[0, 0]], { fg: GREEN });
+    expect([getPx(plain, 0, 0), getPx(plain, 3, 0)]).toEqual([GREEN, RED]);
+    expect(maskArt(selectArea("wand", [[3, 0]], cel, { ...defaultOptions, tiled: true }), 4)).toEqual(["#..#", "...."]);
+    expect(maskArt(selectArea("wand", [[3, 0]], cel, defaultOptions), 4)).toEqual(["...#", "...."]);
+  });
+  it("tiled: blur along an edge reads the pixels across it", () => {
+    const cel = bufFrom(["...#"]);
+    const out = stroke("blur", cel, [[0, 0]], { o: { tiled: true } });
+    expect(getPx(out, 0, 0)[3]).toBeGreaterThan(0);
+    expect(getPx(stroke("blur", cel, [[0, 0]]), 0, 0)[3]).toBe(0);
+  });
+
+  it("a lifted selection stays whole while part of it hangs over the edge", () => {
+    const cel = bufFrom(["##..", "##..", "...."]);
+    const mask = new Uint8Array([1, 1, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0]);
+    const f = lift(cel, mask);
+    expect([f.mask?.w, f.mask?.h, Array.from(f.mask!.data)]).toEqual([2, 2, [1, 1, 1, 1]]);
+    // one to the left: half of it is outside
+    expect(maskArt(floatSelection(f, 4, 3, -1, 0, false), 4)).toEqual(["#...", "#...", "...."]);
+    // put down there, then moved back: the pixels and the whole selection return
+    const moved = { ...f, x: f.x - 1 };
+    expect(art(place(moved, 1, 0, false))).toEqual(["##..", "##..", "...."]);
+    expect(maskArt(floatSelection(moved, 4, 3, 1, 0, false), 4)).toEqual(["##..", "##..", "...."]);
+    // tiled: the part that left comes in on the other side
+    expect(maskArt(floatSelection(f, 4, 3, -1, 0, true), 4)).toEqual(["#..#", "#..#", "...."]);
+    expect(floatSelection(f, 4, 3, 9, 9, false)).toBeNull();
+    // nothing selected: the whole layer moves and nothing becomes selected
+    expect(lift(cel, null).mask).toBeNull();
+    expect(floatSelection(lift(cel, null), 4, 3, 1, 0, false)).toBeNull();
+  });
+  it("a selection keeps its empty pixels and its shape when lifted", () => {
+    const cel = bufFrom(["#..", "...", "..."]);
+    // an L-shaped selection, mostly over empty pixels
+    const mask = new Uint8Array([1, 0, 0, 1, 1, 0, 0, 0, 0]);
+    const f = lift(cel, mask);
+    expect(maskArt(floatSelection(f, 3, 3, 1, 1, false), 3)).toEqual(["...", ".#.", ".##"]);
+    expect(maskArt(floatSelection(f, 3, 3, 1, 1, false), 3)).toEqual(maskArt(shiftSelection(mask, 3, 3, 1, 1, false), 3));
+  });
+
+  it("a stroke drawn bit by bit gives exactly the image of the stroke drawn at once", () => {
+    // a snapshot with different colours and transparency everywhere, so any pixel inked twice would show
+    const snap = newBuf(12, 9);
+    for (let y = 0; y < 9; y++) for (let x = 0; x < 12; x++) setPx(snap, x, y, [x * 20, y * 25, (x * y * 7) % 256, (x + y) % 4 === 0 ? 0 : 60 + ((x * 31 + y * 17) % 190)]);
+    const mask = new Uint8Array(12 * 9).fill(1);
+    for (let i = 0; i < mask.length; i += 5) mask[i] = 0;
+    const points: Pt[] = [[1, 1], [6, 2], [6, 2], [11, 7], [-3, 4], [4, 12], [5, 5], [5, 5], [9, 0], [2, 8]];
+    const cases: { tool: ToolId; o: Partial<ToolOptions>; button?: 0 | 2; mask?: Uint8Array }[] = [
+      { tool: "pencil", o: { size: 3, pixelPerfect: false } },
+      { tool: "pencil", o: { size: 1, pixelPerfect: false, ink: "alpha", opacity: 40 } },
+      { tool: "pencil", o: { size: 4, ink: "alpha", opacity: 55, symmetry: "both" } },
+      { tool: "pencil", o: { size: 2, ink: "lock", symmetry: "x", tiled: true } },
+      { tool: "pencil", o: { size: 5, ink: "shading", symmetry: "y" }, button: 2 },
+      { tool: "eraser", o: { size: 3, opacity: 50, tiled: true }, mask },
+      { tool: "shade", o: { size: 2, pixelPerfect: false }, mask },
+      { tool: "spray", o: { size: 2, ink: "alpha", opacity: 70, symmetry: "x" } },
+      { tool: "spray", o: { size: 1, tiled: true }, mask },
+      { tool: "blur", o: { size: 3, tiled: true } },
+      { tool: "blur", o: { size: 2, symmetry: "both" }, mask },
+    ];
+    for (const c of cases) {
+      const options = { ...defaultOptions, ...c.o };
+      expect(growsInPlace(c.tool, options), `${c.tool} ${JSON.stringify(c.o)}`).toBe(true);
+      const at = (n: number): Stroke => ({
+        tool: c.tool, snapshot: snap, points: points.slice(0, n), button: c.button ?? 0, fg: [250, 10, 30, 200], bg: [5, 90, 240, 255],
+        options, mask: c.mask ?? null, seed: 99,
+      });
+      let run: StrokeRun | null = null;
+      // the way the pointer delivers it: one point, then a few more, then the rest
+      for (const n of [1, 2, 3, 6, 7, points.length]) {
+        run = growStroke(at(n), run);
+        expect(Array.from(run.buf.data), `${c.tool} ${JSON.stringify(c.o)} after ${n} points`).toEqual(Array.from(applyStroke(at(n)).data));
+      }
+      // the snapshot itself is never written to
+      expect(run!.buf).not.toBe(snap);
+    }
+  });
+  it("starts a bit-by-bit stroke again when what it is drawn with changes", () => {
+    const snap = solid(6, 1, [10, 20, 30, 255]);
+    const base = { tool: "pencil" as ToolId, snapshot: snap, button: 0 as const, fg: RED, bg: BLUE, mask: null, seed: 1 };
+    const thin = { ...defaultOptions, pixelPerfect: false };
+    const run = growStroke({ ...base, points: [[0, 0], [2, 0]], options: thin }, null);
+    expect(getPx(run.buf, 2, 0)).toEqual(RED);
+    // the colour changed in the middle of the stroke: the whole stroke takes it, as when drawn at once
+    const green = { ...base, fg: GREEN, points: [[0, 0], [2, 0], [4, 0]] as Pt[], options: thin };
+    const next = growStroke(green, run);
+    expect(next).not.toBe(run);
+    expect(Array.from(next.buf.data)).toEqual(Array.from(applyStroke(green).data));
+    // what cannot grow in place is drawn again from the start by the caller
+    expect(growsInPlace("pencil", defaultOptions)).toBe(false);
+    expect(growsInPlace("blur", { ...defaultOptions, blurMode: "jumble" })).toBe(false);
+    expect(growsInPlace("line", defaultOptions)).toBe(false);
   });
 });

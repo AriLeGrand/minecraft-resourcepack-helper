@@ -9,6 +9,13 @@ import {
 
 /** The vanilla reference is always shown at this opacity. */
 export const REFERENCE_OPACITY = 30;
+/** Onion skin: the neighbouring frames are shown at this opacity. */
+export const ONION_OPACITY = 25;
+/**
+ * "Texture path" of the pack icon (`pack.png` in the pack folder). Not a valid
+ * texture name, so it cannot collide with one. The Rust side knows the same value.
+ */
+export const PACK_ICON = ":pack-icon";
 
 export interface Layer {
   /** Stable for the life of the open document (undo uses it). */
@@ -145,10 +152,26 @@ export function flatStrip(doc: EditorDoc): Buf {
   return stackFrames(doc.frames.map((_, i) => flatten(doc, i)));
 }
 
-/** Layers for the canvas: the reference (when shown) under the drawing. */
-export function viewLayers(doc: EditorDoc, frameIndex = doc.frameIndex): LayerView[] {
+/**
+ * The frames an onion skin shows around a frame: the one before and the one
+ * after (an animation loops, so the first and the last frame are neighbours).
+ */
+export function onionFrames(doc: EditorDoc, frameIndex = doc.frameIndex): number[] {
+  const n = doc.frames.length;
+  if (n < 2) return [];
+  const prev = (frameIndex - 1 + n) % n;
+  const next = (frameIndex + 1) % n;
+  return prev === next ? [prev] : [prev, next];
+}
+
+/**
+ * Layers for the canvas: the reference (when shown) and the onion skin
+ * (flattened neighbour frames, display only) under the drawing.
+ */
+export function viewLayers(doc: EditorDoc, frameIndex = doc.frameIndex, onion: Buf[] = []): LayerView[] {
   const out: LayerView[] = [];
   if (doc.reference && doc.referenceVisible) out.push({ buf: doc.reference, visible: true, opacity: REFERENCE_OPACITY });
+  for (const buf of onion) out.push({ buf, visible: true, opacity: ONION_OPACITY });
   const cels = doc.frames[frameIndex].cels;
   doc.layers.forEach((l, i) => out.push({ buf: cels[i], visible: l.visible, opacity: l.opacity }));
   return out;
@@ -268,10 +291,23 @@ export function structureOf(doc: EditorDoc): Structure {
   return { layers: doc.layers, cels: doc.frames.map((f) => f.cels), activeLayer: doc.activeLayer };
 }
 
+/**
+ * The document with a stored layer list put back. A lock is editor state and
+ * not an undo step, so layers that still exist keep the lock they have now.
+ */
 export function withStructure(doc: EditorDoc, s: Structure): EditorDoc {
+  const now = new Map(doc.layers.map((l) => [l.id, l]));
+  let relocked = false;
+  const merged = s.layers.map((l) => {
+    const cur = now.get(l.id);
+    if (!cur || cur.locked === l.locked) return l;
+    relocked = true;
+    return { ...l, locked: cur.locked };
+  });
+  const layers = relocked ? merged : s.layers;
   return {
     ...doc,
-    layers: s.layers,
+    layers,
     frames: doc.frames.map((f, i) => ({ ...f, cels: s.cels[i] ?? f.cels })),
     activeLayer: Math.max(0, Math.min(s.layers.length - 1, s.activeLayer)),
   };
@@ -289,8 +325,14 @@ export function pickColor(doc: EditorDoc, x: number, y: number): Rgba | null {
   return [0, 0, 0, 0];
 }
 
-/** Where saving writes, relative to the pack's `assets/minecraft` folder. */
+/** "stone.png" for `block/stone`. */
+export function fileLabel(path: string): string {
+  return path === PACK_ICON ? "pack.png" : `${path.slice(path.lastIndexOf("/") + 1)}.png`;
+}
+
+/** Where saving writes, relative to the pack's `assets/minecraft` folder (the icon: to the pack folder). */
 export function targetLabel(doc: EditorDoc): string {
+  if (doc.path === PACK_ICON) return "pack.png";
   const name = doc.path.slice(doc.path.lastIndexOf("/") + 1);
   return `textures/${doc.path}.png${isAnimated(doc) ? ` + ${name}.png.mcmeta` : ""}`;
 }

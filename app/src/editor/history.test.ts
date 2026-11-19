@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { activeCel, addLayer, deleteLayer, duplicateLayer, fromRaw, moveLayer, setCel, type EditorDoc } from "./doc";
+import { activeCel, addLayer, deleteLayer, duplicateLayer, fromRaw, moveLayer, patchLayer, setCel, type EditorDoc } from "./doc";
 import {
-  applyCommand, applyPatch, diffPatch, editCommand, emptyHistory, HISTORY_CAP, push, stepRedo, stepUndo, structureCommand,
+  applyCommand, applyPatch, diffPatch, editCommand, emptyHistory, HISTORY_CAP, push, pushMerged, stepRedo, stepUndo, structureCommand,
   type Command, type History,
 } from "./history";
 import { cloneBuf, getPx, setPx } from "./pixels";
@@ -183,5 +183,55 @@ describe("undo and redo", () => {
     expect(getPx(s.doc.frames[0].cels[0], 1, 0)).toEqual(BLUE);
     expect(getPx(s.doc.frames[0].cels[1], 1, 0)).toEqual(BLUE);
     expect(s.doc.layers.length).toBe(s.doc.frames[0].cels.length);
+  });
+});
+
+describe("review fixes: layer properties as undo steps", () => {
+  it("folds steps with the same key into one, from the first start to the last end", () => {
+    const d0 = docFrom(["#."]);
+    const d1 = patchLayer(d0, 0, { opacity: 80 });
+    const d2 = patchLayer(d1, 0, { opacity: 55 });
+    const d3 = patchLayer(d2, 0, { opacity: 20 });
+    const step = (a: EditorDoc, b: EditorDoc, key?: string): Command => ({ ...structureCommand("Layer opacity", a, b), mergeKey: key });
+    let h = push(emptyHistory(), step(d0, d1, "opacity:1"));
+    h = pushMerged(h, step(d1, d2, "opacity:1"));
+    h = pushMerged(h, step(d2, d3, "opacity:1"));
+    expect(h.undo.length).toBe(1);
+    expect(applyCommand(d3, h.undo[0], "undo").layers[0].opacity).toBe(100);
+    expect(applyCommand(d0, h.undo[0], "redo").layers[0].opacity).toBe(20);
+    // another key, no key, or something that can be redone: a step of its own
+    expect(pushMerged(h, step(d3, d0, "opacity:2")).undo.length).toBe(2);
+    expect(pushMerged(h, step(d3, d0)).undo.length).toBe(2);
+    const undone = stepUndo(push(h, step(d3, d0, "opacity:1")))!.history;
+    expect(pushMerged(undone, step(d3, d2, "opacity:1")).undo.length).toBe(2);
+    expect(pushMerged(emptyHistory(), step(d0, d1, "opacity:1")).undo.length).toBe(1);
+  });
+
+  it("undoes a layer change in order with the layer steps around it, without losing it", () => {
+    // the case from the review: add a layer, set Base to 40%, delete the layer, set Base to 80% and rename it
+    let doc = docFrom(["#."]);
+    let h = emptyHistory();
+    const run = (label: string, fn: (d: EditorDoc) => EditorDoc) => {
+      const next = fn(doc);
+      h = push(h, structureCommand(label, doc, next));
+      doc = next;
+    };
+    run("Add layer", (d) => addLayer(d));
+    run("Layer opacity", (d) => patchLayer(d, 0, { opacity: 40 }));
+    run("Delete layer", (d) => deleteLayer(d, 1));
+    run("Layer opacity", (d) => patchLayer(d, 0, { opacity: 80 }));
+    run("Rename layer", (d) => patchLayer(d, 0, { name: "Stone" }));
+    const seen: [string, number, number][] = [];
+    for (let s = stepUndo(h); s; s = stepUndo(h)) {
+      doc = applyCommand(doc, s.command, "undo");
+      h = s.history;
+      seen.push([doc.layers[0].name, doc.layers[0].opacity, doc.layers.length]);
+    }
+    expect(seen).toEqual([["Base", 80, 1], ["Base", 40, 1], ["Base", 40, 2], ["Base", 100, 2], ["Base", 100, 1]]);
+    for (let s = stepRedo(h); s; s = stepRedo(h)) {
+      doc = applyCommand(doc, s.command, "redo");
+      h = s.history;
+    }
+    expect([doc.layers[0].name, doc.layers[0].opacity, doc.layers.length]).toEqual(["Stone", 80, 1]);
   });
 });

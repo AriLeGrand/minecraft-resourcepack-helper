@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isTypingTarget, shortcutFor, type KeyPress } from "./shortcuts";
+import { focusInfo, isTypingTarget, keyBelongsToControl, shortcutFor, type KeyPress } from "./shortcuts";
 
 const press = (key: string, mods: Partial<KeyPress> = {}): KeyPress => ({ key, ctrl: false, shift: false, alt: false, ...mods });
 
@@ -54,5 +54,58 @@ describe("shortcuts", () => {
     expect(isTypingTarget({ tagName: "BUTTON" })).toBe(false);
     expect(isTypingTarget({ tagName: "CANVAS" })).toBe(false);
     expect(isTypingTarget(null)).toBe(false);
+  });
+});
+
+describe("review fixes: keys that belong to the focused control", () => {
+  const byKeyboard = (tagName: string, extra: { type?: string; role?: string } = {}) => ({ tagName, keyboardFocus: true, ...extra });
+  const byMouse = (tagName: string, extra: { type?: string; role?: string } = {}) => ({ tagName, keyboardFocus: false, ...extra });
+
+  it("leaves Enter and Space to a button, link, checkbox or tab reached with the keyboard", () => {
+    for (const key of ["Enter", " "]) {
+      expect(keyBelongsToControl(byKeyboard("BUTTON"), key)).toBe(true);
+      expect(keyBelongsToControl(byKeyboard("A"), key)).toBe(true);
+      expect(keyBelongsToControl(byKeyboard("INPUT", { type: "checkbox" }), key)).toBe(true);
+      expect(keyBelongsToControl(byKeyboard("DIV", { role: "tab" }), key)).toBe(true);
+    }
+    // other keys stay shortcuts, also on a focused button
+    expect(keyBelongsToControl(byKeyboard("BUTTON"), "b")).toBe(false);
+    expect(keyBelongsToControl(byKeyboard("BUTTON"), "ArrowLeft")).toBe(false);
+    expect(keyBelongsToControl(byKeyboard("BUTTON"), "Escape")).toBe(false);
+  });
+  it("keeps Enter and Space for the editor after a mouse click on a button (Space pans, Enter finishes a shape)", () => {
+    expect(keyBelongsToControl(byMouse("BUTTON"), " ")).toBe(false);
+    expect(keyBelongsToControl(byMouse("BUTTON"), "Enter")).toBe(false);
+    expect(keyBelongsToControl(byMouse("INPUT", { type: "checkbox" }), " ")).toBe(false);
+    expect(keyBelongsToControl(null, " ")).toBe(false);
+    expect(keyBelongsToControl({}, "Enter")).toBe(false);
+    expect(keyBelongsToControl(byKeyboard("DIV"), "Enter")).toBe(false);
+    expect(keyBelongsToControl(byKeyboard("CANVAS"), " ")).toBe(false);
+  });
+  it("leaves the arrow keys to a slider, however it got the focus", () => {
+    for (const key of ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End"]) {
+      expect(keyBelongsToControl(byMouse("INPUT", { type: "range" }), key)).toBe(true);
+      expect(keyBelongsToControl(byMouse("DIV", { role: "slider" }), key)).toBe(true);
+    }
+    // a slider takes no letters: tool shortcuts keep working
+    expect(keyBelongsToControl(byMouse("INPUT", { type: "range" }), "b")).toBe(false);
+    expect(keyBelongsToControl(byMouse("INPUT", { type: "range" }), " ")).toBe(false);
+    // a tab moves with the arrows only for someone using the keyboard
+    expect(keyBelongsToControl(byKeyboard("BUTTON", { role: "tab" }), "ArrowRight")).toBe(true);
+    expect(keyBelongsToControl(byMouse("BUTTON", { role: "tab" }), "ArrowRight")).toBe(false);
+  });
+  it("reads the focus facts from an element", () => {
+    const el = (keyboard: boolean | "throws") => ({
+      tagName: "BUTTON", type: "submit",
+      getAttribute: (name: string) => (name === "role" ? "tab" : null),
+      matches: (sel: string) => {
+        if (keyboard === "throws") throw new Error("unknown selector");
+        return sel === ":focus-visible" && keyboard;
+      },
+    });
+    expect(focusInfo(el(true))).toEqual({ tagName: "BUTTON", type: "submit", role: "tab", keyboardFocus: true });
+    expect(focusInfo(el(false))?.keyboardFocus).toBe(false);
+    expect(focusInfo(el("throws"))?.keyboardFocus).toBe(false);
+    expect(focusInfo(null)).toBeNull();
   });
 });

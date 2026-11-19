@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
-  activeCel, addLayer, deleteLayer, duplicateLayer, editBlock, flatStrip, flatten, frameTicks, fromRaw, isAnimated,
-  layerHasPixels, moveLayer, patchLayer, pickColor, sameMask, setCel, structureOf, targetLabel, toRaw, uniqueLayerName,
-  viewLayers, withStructure,
+  activeCel, addLayer, deleteLayer, duplicateLayer, editBlock, fileLabel, flatStrip, flatten, frameTicks, fromRaw, isAnimated,
+  layerHasPixels, moveLayer, ONION_OPACITY, onionFrames, PACK_ICON, patchLayer, pickColor, sameMask, setCel, structureOf,
+  targetLabel, toRaw, uniqueLayerName, viewLayers, withStructure,
 } from "./doc";
 import { base64ToBytes, bytesToBase64, composite, getPx, newBuf, setPx } from "./pixels";
 import { art, BLUE, bufFrom, CLEAR, docFrom, GREEN, opened, RED, solid } from "./testutil";
@@ -192,5 +192,51 @@ describe("small helpers", () => {
     expect(sameMask(new Uint8Array([1, 0]), new Uint8Array([1, 0]))).toBe(true);
     expect(sameMask(new Uint8Array([1, 0]), new Uint8Array([0, 1]))).toBe(false);
     expect(sameMask(new Uint8Array([1, 0]), null)).toBe(false);
+  });
+});
+
+describe("review fixes: locks, onion skin, the pack icon", () => {
+  it("putting a layer list back keeps the lock each layer has now", () => {
+    const before = fromRaw(opened([[bufFrom(["#."]), bufFrom([".#"])]]));
+    const added = addLayer(before);
+    // locked after the layer was added: not an undo step, so undoing the add must not unlock it
+    const locked = patchLayer(added, 0, { locked: true });
+    const back = withStructure(locked, structureOf(before));
+    expect(back.layers.map((l) => [l.name, l.locked])).toEqual([["Base", true], ["Layer 2", false]]);
+    // and forward again: the new layer comes back, the lock stays
+    const again = withStructure(back, structureOf(added));
+    expect(again.layers.map((l) => l.locked)).toEqual([true, false, false]);
+    // name, visibility and opacity do come from the stored list
+    const renamed = patchLayer(patchLayer(locked, 0, { name: "Stone", opacity: 40 }), 1, { visible: false });
+    expect(withStructure(renamed, structureOf(before)).layers.map((l) => [l.name, l.opacity, l.visible])).toEqual([["Base", 100, true], ["Layer 2", 100, true]]);
+  });
+
+  it("onion skin: the frames before and after, faint, under the drawing and never in the saved image", () => {
+    const frame = (c: [number, number, number, number]) => [solid(1, 1, c)];
+    const doc = fromRaw(opened([frame(RED), frame(GREEN), frame(BLUE)]));
+    expect(onionFrames(doc, 0)).toEqual([2, 1]);
+    expect(onionFrames(doc, 1)).toEqual([0, 2]);
+    expect(onionFrames(fromRaw(opened([frame(RED), frame(GREEN)])), 0)).toEqual([1]);
+    expect(onionFrames(docFrom(["#"]))).toEqual([]);
+    const at1 = { ...doc, frameIndex: 1 };
+    const skin = onionFrames(at1).map((i) => flatten(at1, i));
+    const view = viewLayers(at1, 1, skin);
+    expect(view.map((l) => l.opacity)).toEqual([ONION_OPACITY, ONION_OPACITY, 100]);
+    expect(view[2].buf).toBe(at1.frames[1].cels[0]);
+    // where the frame is empty the neighbours show through faintly
+    const empty = setCel(at1, 1, 0, newBuf(1, 1));
+    const shown = composite(1, 1, viewLayers(empty, 1, skin));
+    expect(shown.data[3]).toBeGreaterThan(0);
+    expect(shown.data[3]).toBeLessThan(160);
+    expect(getPx(flatten(empty, 1), 0, 0)).toEqual(CLEAR);
+    expect(getPx(flatStrip(empty), 0, 1)).toEqual(CLEAR);
+  });
+
+  it("names the pack icon as pack.png, not as a texture", () => {
+    expect(fileLabel("block/stone")).toBe("stone.png");
+    expect(fileLabel(PACK_ICON)).toBe("pack.png");
+    const icon = fromRaw(opened([[solid(2, 2, RED)]], { path: PACK_ICON, origin: "blank" }));
+    expect(targetLabel(icon)).toBe("pack.png");
+    expect(targetLabel(docFrom(["#"]))).toBe("textures/block/test.png");
   });
 });

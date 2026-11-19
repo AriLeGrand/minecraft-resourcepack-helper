@@ -128,7 +128,8 @@ document and replaces the layer image that changed. A tool in use only shows a
 step. Undo keeps the smallest changed rectangle per frame and layer (before
 and after), found by comparing with the image from the start of the stroke.
 Layer add / delete / duplicate / reorder keep the layer list before and after.
-The stack holds 200 steps. Not undoable: layer name, visibility, lock, opacity.
+The stack holds 200 steps. Not undoable: a layer's lock (see D-034 for name,
+visibility and opacity, which became undo steps after the review).
 
 **D-024 · "Unsaved" and the three ways out.** A tab is unsaved after any
 change of pixels, layers, layer name, visibility or opacity (a lock alone does
@@ -193,13 +194,90 @@ unsaved edits; a tab with unsaved edits keeps them and a warning says that
 saving will replace the file. The editor's own save is not mistaken for an
 outside change.
 
-**D-032 · Not in stage 2.** "Draw" for the pack icon still opens the external
-editor (the icon is not a texture path; the editor commands only open
-textures). Onion skin is a stored option without effect until the animation
-stage. The 3D and Animated preview tabs are shown disabled. Frames can be
-edited one by one (previous / next) but not added, removed or retimed until
-stage 3.
+**D-032 · Not in stage 2.** The 3D and Animated preview tabs are shown
+disabled. Frames can be edited one by one (previous / next) but not added,
+removed or retimed until stage 3. ("Draw" for the pack icon and the onion skin
+were first left out too; both were added after the review, see D-039 and
+D-040.)
 
 **D-033 · Window close permission.** Asking before quitting needs the web view
 to close the window itself afterwards, so the capability
 `core:window:allow-destroy` was added. Nothing else was opened up.
+
+## Stage 2 review fixes (2026-11-19)
+
+**D-034 · Layer name, visibility and opacity are undo steps.** They change
+what is saved, so each change is one step ("Rename layer", "Hide layer",
+"Layer opacity"). Opacity changes on the same layer less than a second apart
+are one step (one drag of the slider). A lock stays editor state: it is not a
+step, and undo / redo of other steps keep the lock a layer has now.
+
+**D-035 · A tool in the middle of its work counts as unsaved.** Before the
+editor decides whether a tab "has no unsaved edits" (a file changed on disk,
+cut, save, close), the stroke, shape or text in progress is finished first. A
+refresh that does not concern the tab's file leaves the tool alone. When
+something is drawn while the answer "Save" is still being written, the
+question is asked again instead of closing over it.
+
+**D-036 · Saving is all-or-nothing.** The PNG, the `.mcmeta` and the working
+file are all written to temporary files first; only then are they renamed
+over the old ones (a rename replaces the old file, nothing is deleted first).
+The old working file is set aside until the PNG is in place and is put back
+when that fails. A rename that is refused is tried again for a moment (virus
+scanners). Temporary files are removed on every failure.
+
+**D-037 · Layers belong to a PNG by its content.** The working file records a
+fingerprint (FNV-1a, 64 bit) of the flattened PNG next to its size and time.
+Same size and time: accepted at once. Same size, other time (the pack was
+copied, restored, synced, checked out): accepted when the fingerprint matches.
+Layers that do not belong to the PNG on disk are moved to
+`.packcreator/trash/<time>/` by the next save instead of being overwritten.
+
+**D-038 · The editor commands name their pack.** `editor_open` and
+`editor_save` get the pack folder the tab belongs to and refuse, under the
+state lock, when another pack is open. A tab is labelled with the folder that
+was noted before the file was read.
+
+**D-039 · The pack icon in the editor.** "Draw" on the export screen opens
+`pack.png` on an editor tab under the reserved name `:pack-icon` (not a valid
+texture name, so it cannot collide). Its layers are kept in
+`.packcreator/icon.work.json`. A pack without an icon gets an empty 64×64
+image; nothing is written until it is saved. "Open externally" is still there.
+The icon is not in the texture list, so a change of `pack.png` by another
+program while it is open in the editor is not noticed.
+
+**D-040 · Onion skin.** With the option on, an animated texture shows the
+frame before and the frame after (the first and last frame are neighbours:
+animations loop) at 25% under the drawing. Display only: never saved, never
+picked by the eyedropper.
+
+**D-041 · An animation whose height is not a whole number of frames is not
+opened.** Saving writes whole frames only, so the leftover rows would be cut
+off without a word. The error says the size and what to correct.
+
+**D-042 · Tiled mode wraps every tool.** Blur, jumble, the bucket, the wand
+and the eyedropper treat the edges as joined, like the brush already did.
+
+**D-043 · Moved pixels carry their selection.** The lifted pixels keep the
+selection they were lifted with (at their own size). What is shown and
+committed is cut to the image, but the lifted selection stays whole, so moving
+a selection over the edge and back brings all of it back.
+
+**D-044 · Shading keeps greys grey.** Lighten / darken work on unrounded
+hue / saturation / brightness, leave the saturation of a grey at zero and
+change nothing at all when the step is zero.
+
+**D-045 · Drawing cost.** The layers are put together again only when
+something that shows has changed (pointer moves, panning and zooming reuse the
+last result). While a tool is dragged the preview is worked out once per
+screen refresh; brush, eraser, shading, spray and blur strokes only paint the
+new piece (1-pixel pixel-perfect lines and jumble are drawn again from the
+start, which is cheap). The side preview follows with low priority.
+
+**D-046 · Keys and focus.** A slider owns the arrow keys. A button, checkbox
+or tab that was reached with the keyboard owns Enter and Space; after a mouse
+click they stay with the editor (Space pans, Enter finishes a shape). Ctrl+S
+works from any field (the field is left first, which applies its value).
+Number fields apply on Enter or when left, Escape puts the old value back.
+Copy, cut, paste and the selection commands are also in Ctrl+K and, with the
+selection and Move tools, in the options bar.

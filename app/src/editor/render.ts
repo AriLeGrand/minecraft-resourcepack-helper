@@ -1,7 +1,7 @@
 // Drawing of the editor canvas. This is the only editor module that needs a
 // browser. Canvases are used for display only: pixels that get saved never
 // pass through one (a canvas premultiplies alpha and would damage them).
-import { viewLayers, type EditorDoc } from "./doc";
+import { flatten, onionFrames, viewLayers, type EditorDoc, type Layer } from "./doc";
 import { composite, type Buf, type Mask, type Pt, type Symmetry } from "./pixels";
 import type { Bitmap } from "./tools";
 import { GRID_ZOOM, maskEdges, pointEdges, type View } from "./view";
@@ -66,11 +66,42 @@ export interface Scene {
   dpr: number;
   tiled: boolean;
   symmetry: Symmetry;
+  /** Onion skin: the frames before and after are shown faintly under the drawing. */
+  onion: boolean;
   /** Pixels the brush would touch at the pointer, or `null` when the pointer is elsewhere. */
   cursor: Pt[] | null;
 }
 
+// A neighbour frame flattened for the onion skin, kept while that frame and
+// the layer list stay the same (drawing on the current frame does not touch it).
+const flatCache = new WeakMap<Buf[], { layers: Layer[]; buf: Buf }>();
+function flatFrame(doc: EditorDoc, index: number): Buf {
+  const cels = doc.frames[index].cels;
+  const hit = flatCache.get(cels);
+  if (hit && hit.layers === doc.layers) return hit.buf;
+  const buf = flatten(doc, index);
+  flatCache.set(cels, { layers: doc.layers, buf });
+  return buf;
+}
+
 let scratch: HTMLCanvasElement | null = null;
+let scratchKey: unknown[] = [];
+
+/**
+ * The layers put together, as a canvas of the texture's size. Putting them
+ * together is the expensive part, so it is only done again when something
+ * that shows has changed: moving the pointer, panning and zooming reuse it.
+ */
+function sceneImage(doc: EditorDoc, onion: boolean): HTMLCanvasElement {
+  const skin = onion ? onionFrames(doc).map((i) => flatFrame(doc, i)) : [];
+  const layers = viewLayers(doc, doc.frameIndex, skin);
+  const key: unknown[] = [doc.width, doc.height];
+  for (const l of layers) key.push(l.buf, l.visible, l.opacity);
+  if (scratch && key.length === scratchKey.length && key.every((k, i) => k === scratchKey[i])) return scratch;
+  scratch = bufToCanvas(composite(doc.width, doc.height, layers), scratch ?? undefined);
+  scratchKey = key;
+  return scratch;
+}
 
 export function drawScene(canvas: HTMLCanvasElement, s: Scene) {
   const ctx = canvas.getContext("2d");
@@ -82,8 +113,7 @@ export function drawScene(canvas: HTMLCanvasElement, s: Scene) {
 
   const W = doc.width * v.zoom;
   const H = doc.height * v.zoom;
-  const image = composite(doc.width, doc.height, viewLayers(doc));
-  scratch = bufToCanvas(image, scratch ?? undefined);
+  const image = sceneImage(doc, s.onion);
   ctx.imageSmoothingEnabled = false;
 
   const pattern = ctx.createPattern(checkerTile(), "repeat");
@@ -99,7 +129,7 @@ export function drawScene(canvas: HTMLCanvasElement, s: Scene) {
         ctx.fillStyle = pattern;
         ctx.fillRect(0, 0, W, H);
       }
-      ctx.drawImage(scratch, 0, 0, W, H);
+      ctx.drawImage(image, 0, 0, W, H);
       if (tx !== 0 || ty !== 0) {
         // the copies around the image are dimmed so the real one stands out
         ctx.fillStyle = "rgba(13, 14, 16, 0.5)";

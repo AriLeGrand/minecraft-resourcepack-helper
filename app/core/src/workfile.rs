@@ -6,7 +6,7 @@
 
 use crate::error::{CoreError, IoCtx, Result};
 use crate::mcmeta::{self, Animation};
-use crate::pack::{modified_ms, PROJECT_DIR};
+use crate::pack::{modified_ms, now_ms, PROJECT_DIR};
 use crate::textures::{is_safe_texture_path, mcmeta_file, png_dimensions, texture_file};
 use base64::Engine;
 use serde::{Deserialize, Serialize};
@@ -14,6 +14,12 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 pub const WORK_SCHEMA: u32 = 1;
+
+/// Reserved "texture path" of the pack icon (`pack.png` in the pack folder).
+/// It is not a valid texture name, so it can never collide with a texture.
+pub const ICON_PATH: &str = ":pack-icon";
+/// Size of a new pack icon when the pack has none.
+const NEW_ICON_SIZE: u32 = 64;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct LayerMeta {
@@ -51,6 +57,11 @@ pub struct WorkDoc {
     pub png_len: u64,
     #[serde(default)]
     pub png_modified_ms: u64,
+    /// Fingerprint of the flattened PNG's bytes (0 = not recorded). The time
+    /// of a file changes when a pack is copied, restored or synced; its
+    /// content does not, and the layers must survive that.
+    #[serde(default)]
+    pub png_hash: u64,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -62,6 +73,8 @@ pub enum Origin {
     PackPng,
     /// Not in the pack yet: the game's texture, enlarged to the pack resolution.
     Vanilla,
+    /// Not in the pack and not in the game: a new empty image (the pack icon).
+    Blank,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -106,6 +119,65 @@ pub fn work_file(pack_dir: &Path, tex_path: &str) -> Result<PathBuf> {
     Ok(p)
 }
 
+/// The files one document lives in.
+struct Target {
+    /// The flattened image inside the pack.
+    png: PathBuf,
+    /// Layers and editor state (never exported).
+    work: PathBuf,
+    /// The game's file of the same name, when there can be one.
+    vanilla: Option<PathBuf>,
+}
+
+fn target(pack_dir: &Path, vanilla_root: Option<&Path>, tex_path: &str) -> Result<Target> {
+    if tex_path == ICON_PATH {
+        return Ok(Target {
+            png: pack_dir.join("pack.png"),
+            // outside `work/`, where a texture called "pack" keeps its own file
+            work: pack_dir.join(PROJECT_DIR).join("icon.work.json"),
+            vanilla: None,
+        });
+    }
+    Ok(Target {
+        png: texture_file(pack_dir, tex_path)?,
+        work: work_file(pack_dir, tex_path)?,
+        vanilla: match vanilla_root {
+            Some(root) => Some(texture_file(root, tex_path)?),
+            None => None,
+        },
+    })
+}
+
+/// FNV-1a, 64 bit: a fingerprint of a file's bytes (never 0).
+pub fn content_hash(bytes: &[u8]) -> u64 {
+    let mut h: u64 = 0xcbf2_9ce4_8422_2325;
+    for b in bytes {
+        h ^= u64::from(*b);
+        h = h.wrapping_mul(0x0000_0100_0000_01b3);
+    }
+    h.max(1)
+}
+
+/// True when the working file was saved together with exactly this PNG.
+fn belongs_to(d: &WorkDoc, png: &Path) -> bool {
+    let len = fs::metadata(png).map(|m| m.len()).unwrap_or(0);
+    if d.png_len != len {
+        return false;
+    }
+    if d.png_modified_ms == modified_ms(png) {
+        return true;
+    }
+    // same size, another time: copied, restored or synced. The content decides.
+    d.png_hash != 0 && fs::read(png).is_ok_and(|b| content_hash(&b) == d.png_hash)
+}
+
+fn read_work(path: &Path) -> Option<WorkDoc> {
+    fs::read_to_string(path)
+        .ok()
+        .and_then(|t| serde_json::from_str::<WorkDoc>(&t).ok())
+        .filter(|d| d.schema == WORK_SCHEMA && !d.frames.is_empty())
+}
+
 fn encode_png(img: &image::RgbaImage) -> Result<Vec<u8>> {
     let mut out = Vec::new();
     img.write_to(&mut std::io::Cursor::new(&mut out), image::ImageFormat::Png)
@@ -123,7 +195,20 @@ fn doc_from_png(png: &[u8], animation: Option<Animation>, scale: u32) -> Result<
         Some(a) => mcmeta::frame_height(w, h, Some(a)),
         None => h,
     };
-    let count = (h / frame_h.max(1)).max(1);
+    let frame_h = frame_h.max(1);
+    if h % frame_h != 0 {
+        // saving writes whole frames only: the leftover rows would be cut off
+        return Err(CoreError::new(
+            "bad_frames",
+            format!(
+                "This animation is {w}×{h}: its height is not a whole number of {frame_h}-pixel frames."
+            ),
+        )
+        .hint(format!(
+            "Make the image height a multiple of {frame_h}, or correct the frame size in its .mcmeta file, then open it again. Nothing was changed."
+        )));
+    }
+    let count = (h / frame_h).max(1);
     let scale = scale.max(1);
     let mut frames = Vec::new();
     for i in 0..count {
@@ -162,6 +247,32 @@ fn doc_from_png(png: &[u8], animation: Option<Animation>, scale: u32) -> Result<
         palette: Vec::new(),
         png_len: 0,
         png_modified_ms: 0,
+        png_hash: 0,
+    })
+}
+
+/// A new empty one-layer document (the pack icon of a pack that has none).
+fn blank_doc(size: u32) -> Result<WorkDoc> {
+    let empty = image::RgbaImage::new(size, size);
+    Ok(WorkDoc {
+        schema: WORK_SCHEMA,
+        width: size,
+        height: size,
+        layers: vec![LayerMeta {
+            name: "Base".into(),
+            visible: true,
+            locked: false,
+            opacity: 100,
+        }],
+        frames: vec![Frame {
+            cels: vec![b64(&encode_png(&empty)?)],
+            time: None,
+        }],
+        animation: None,
+        palette: Vec::new(),
+        png_len: 0,
+        png_modified_ms: 0,
+        png_hash: 0,
     })
 }
 
@@ -171,17 +282,21 @@ fn read_animation(png: &Path) -> Option<Animation> {
         .and_then(|t| mcmeta::parse_animation(&t).ok().flatten())
 }
 
-/// Opens a texture for editing. Nothing is written to disk.
+/// Opens a texture (or the pack icon, [`ICON_PATH`]) for editing. Nothing is
+/// written to disk.
 ///
 /// `scale` enlarges the game's texture when the pack has no file yet
 /// (pack resolution / 16 for blocks and items, 1 otherwise).
 pub fn open(pack_dir: &Path, vanilla_root: &Path, tex_path: &str, scale: u32) -> Result<OpenedDoc> {
-    let pack_png = texture_file(pack_dir, tex_path)?;
-    let vanilla_file = texture_file(vanilla_root, tex_path)?;
-    let vanilla_bytes = fs::read(&vanilla_file).ok();
-    let vanilla_frames = match &vanilla_bytes {
-        Some(b) => {
-            let anim = read_animation(&vanilla_file);
+    let t = target(pack_dir, Some(vanilla_root), tex_path)?;
+    let pack_png = &t.png;
+    let vanilla = t
+        .vanilla
+        .as_ref()
+        .and_then(|file| fs::read(file).ok().map(|bytes| (file, bytes)));
+    let vanilla_frames = match &vanilla {
+        Some((file, b)) => {
+            let anim = read_animation(file);
             match (png_dimensions(b), &anim) {
                 (Some((w, h)), Some(a)) => mcmeta::frame_count(w, h, Some(a)),
                 _ => 1,
@@ -189,41 +304,34 @@ pub fn open(pack_dir: &Path, vanilla_root: &Path, tex_path: &str, scale: u32) ->
         }
         None => 0,
     };
-    let vanilla_png = vanilla_bytes.as_deref().map(b64);
+    let vanilla_png = vanilla.as_ref().map(|(_, b)| b64(b));
 
     let (doc, origin) = if pack_png.is_file() {
-        let len = fs::metadata(&pack_png).map(|m| m.len()).unwrap_or(0);
-        let mtime = modified_ms(&pack_png);
-        let work = fs::read_to_string(work_file(pack_dir, tex_path)?)
-            .ok()
-            .and_then(|t| serde_json::from_str::<WorkDoc>(&t).ok())
-            .filter(|d| {
-                d.schema == WORK_SCHEMA
-                    && d.png_len == len
-                    && d.png_modified_ms == mtime
-                    && !d.frames.is_empty()
-            });
-        match work {
+        // the layers are only used when they belong to exactly this PNG;
+        // a PNG changed by another program wins and opens as one layer
+        match read_work(&t.work).filter(|d| belongs_to(d, pack_png)) {
             Some(mut d) => {
                 // the .mcmeta may have been edited on its own: it is the truth
-                if let Some(a) = read_animation(&pack_png) {
+                if let Some(a) = read_animation(pack_png) {
                     d.animation = Some(a);
                 }
                 (d, Origin::WorkFile)
             }
             None => {
-                let bytes = fs::read(&pack_png).ctx(&pack_png)?;
+                let bytes = fs::read(pack_png).ctx(pack_png)?;
                 (
-                    doc_from_png(&bytes, read_animation(&pack_png), 1)?,
+                    doc_from_png(&bytes, read_animation(pack_png), 1)?,
                     Origin::PackPng,
                 )
             }
         }
-    } else if let Some(bytes) = &vanilla_bytes {
+    } else if let Some((file, bytes)) = &vanilla {
         (
-            doc_from_png(bytes, read_animation(&vanilla_file), scale)?,
+            doc_from_png(bytes, read_animation(file), scale)?,
             Origin::Vanilla,
         )
+    } else if tex_path == ICON_PATH {
+        (blank_doc(NEW_ICON_SIZE)?, Origin::Blank)
     } else {
         return Err(CoreError::new(
             "not_found",
@@ -239,9 +347,48 @@ pub fn open(pack_dir: &Path, vanilla_root: &Path, tex_path: &str, scale: u32) ->
     })
 }
 
+/// `name.ext` -> `name.ext.<suffix>`, next to the file.
+fn sibling(path: &Path, suffix: &str) -> PathBuf {
+    let mut name = path
+        .file_name()
+        .map(|n| n.to_os_string())
+        .unwrap_or_default();
+    name.push(".");
+    name.push(suffix);
+    path.with_file_name(name)
+}
+
+/// Renames over the target (a rename replaces an existing file on Windows
+/// too). Another program (virus scanner, thumbnailer) may hold a freshly
+/// written file for a moment, so a refusal is tried again a few times.
+fn replace_file(from: &Path, to: &Path) -> std::io::Result<()> {
+    let mut tries = 0;
+    loop {
+        match fs::rename(from, to) {
+            Ok(()) => return Ok(()),
+            Err(e) if tries >= 4 => return Err(e),
+            Err(_) => {
+                tries += 1;
+                std::thread::sleep(std::time::Duration::from_millis(40));
+            }
+        }
+    }
+}
+
+fn discard(files: &[&PathBuf]) {
+    for f in files {
+        let _ = fs::remove_file(f);
+    }
+}
+
 /// Saves a document: the flattened PNG (frames stacked vertically) goes into
 /// the pack, the `.mcmeta` is written when the texture is animated, and the
 /// layers go into the working file. Returns the document as stored.
+///
+/// Everything is first written to temporary files next to the targets; only
+/// then are they renamed over the old files. When a step fails, the old PNG
+/// and the old working file are both still there and no temporary file is
+/// left behind.
 pub fn save(pack_dir: &Path, tex_path: &str, doc: &WorkDoc, flat_png: &[u8]) -> Result<WorkDoc> {
     let Some((w, h)) = png_dimensions(flat_png) else {
         return Err(CoreError::new(
@@ -265,21 +412,13 @@ pub fn save(pack_dir: &Path, tex_path: &str, doc: &WorkDoc, flat_png: &[u8]) -> 
             "Every frame must have one image per layer.",
         ));
     }
-    let png = texture_file(pack_dir, tex_path)?;
-    if let Some(parent) = png.parent() {
-        fs::create_dir_all(parent).ctx(parent)?;
-    }
-    // write next to the target, then rename: a crash never leaves half a file
-    let tmp = png.with_extension("png.tmp");
-    fs::write(&tmp, flat_png).ctx(&tmp)?;
-    if png.exists() {
-        fs::remove_file(&png).ctx(&png)?;
-    }
-    fs::rename(&tmp, &png).ctx(&png)?;
+    let t = target(pack_dir, None, tex_path)?;
+    let (png, wf) = (&t.png, &t.work);
+    let meta = mcmeta_file(png);
 
-    let meta = mcmeta_file(&png);
+    // 1. everything that can fail without touching a file
     let animated = doc.animation.is_some() || doc.frames.len() > 1;
-    if animated {
+    let meta_text = if animated {
         let mut anim = doc.animation.clone().unwrap_or_default();
         // per-frame durations from the timeline become the frame list
         if doc.frames.iter().any(|f| f.time.is_some()) && anim.frames.is_none() {
@@ -295,29 +434,95 @@ pub fn save(pack_dir: &Path, tex_path: &str, doc: &WorkDoc, flat_png: &[u8]) -> 
             );
         }
         let existing = fs::read_to_string(&meta).ok();
-        let text = mcmeta::write_animation(existing.as_deref(), &anim)
-            .or_else(|_| mcmeta::write_animation(None, &anim))?;
-        fs::write(&meta, text).ctx(&meta)?;
+        Some(
+            mcmeta::write_animation(existing.as_deref(), &anim)
+                .or_else(|_| mcmeta::write_animation(None, &anim))?,
+        )
+    } else {
+        None
+    };
+    // Layers that do not belong to the PNG on disk (it was changed outside
+    // the editor, so they were not used when it was opened) are not thrown
+    // away by this save: they go to the trash folder.
+    let had_work = wf.is_file();
+    let old_work_is_stale = had_work && !read_work(wf).is_some_and(|d| belongs_to(&d, png));
+
+    // 2. write the new files next to the old ones
+    let tmp = sibling(png, "tmp");
+    let wtmp = sibling(wf, "tmp");
+    let mtmp = sibling(&meta, "tmp");
+    let backup = sibling(wf, "bak");
+    let mut stored = doc.clone();
+    let staged = (|| -> Result<()> {
+        for file in [png, wf] {
+            if let Some(parent) = file.parent() {
+                fs::create_dir_all(parent).ctx(parent)?;
+            }
+        }
+        fs::write(&tmp, flat_png).ctx(&tmp)?;
+        stored.schema = WORK_SCHEMA;
+        stored.png_len = flat_png.len() as u64;
+        // a rename keeps the time of the file
+        stored.png_modified_ms = modified_ms(&tmp);
+        stored.png_hash = content_hash(flat_png);
+        fs::write(
+            &wtmp,
+            serde_json::to_vec(&stored).expect("work doc serialises"),
+        )
+        .ctx(&wtmp)?;
+        if let Some(text) = &meta_text {
+            fs::write(&mtmp, text).ctx(&mtmp)?;
+        }
+        Ok(())
+    })();
+    if let Err(e) = staged {
+        discard(&[&tmp, &wtmp, &mtmp]);
+        return Err(e);
     }
 
-    let mut stored = doc.clone();
-    stored.schema = WORK_SCHEMA;
-    stored.png_len = flat_png.len() as u64;
-    stored.png_modified_ms = modified_ms(&png);
-    let wf = work_file(pack_dir, tex_path)?;
-    if let Some(parent) = wf.parent() {
-        fs::create_dir_all(parent).ctx(parent)?;
+    // 3. swap them in; the old working file is kept until the PNG is in place
+    let committed = (|| -> Result<()> {
+        if had_work {
+            replace_file(wf, &backup).map_err(|e| CoreError::io(wf, &e))?;
+        }
+        if let Err(e) = replace_file(&wtmp, wf) {
+            if had_work {
+                let _ = replace_file(&backup, wf);
+            }
+            return Err(CoreError::io(wf, &e));
+        }
+        if let Err(e) = replace_file(&tmp, png) {
+            let _ = fs::remove_file(wf);
+            if had_work {
+                let _ = replace_file(&backup, wf);
+            }
+            return Err(CoreError::io(png, &e));
+        }
+        Ok(())
+    })();
+    if let Err(e) = committed {
+        discard(&[&tmp, &wtmp, &mtmp]);
+        return Err(e);
     }
-    let wtmp = wf.with_extension("json.tmp");
-    fs::write(
-        &wtmp,
-        serde_json::to_vec(&stored).expect("work doc serialises"),
-    )
-    .ctx(&wtmp)?;
-    if wf.exists() {
-        fs::remove_file(&wf).ctx(&wf)?;
+    if had_work {
+        let kept = pack_dir
+            .join(PROJECT_DIR)
+            .join("trash")
+            .join(now_ms().to_string())
+            .join(wf.strip_prefix(pack_dir).unwrap_or(wf));
+        let moved = old_work_is_stale
+            && kept.parent().is_some_and(|p| fs::create_dir_all(p).is_ok())
+            && fs::rename(&backup, &kept).is_ok();
+        if !moved {
+            let _ = fs::remove_file(&backup);
+        }
     }
-    fs::rename(&wtmp, &wf).ctx(&wf)?;
+    if meta_text.is_some() {
+        if let Err(e) = replace_file(&mtmp, &meta) {
+            discard(&[&mtmp]);
+            return Err(CoreError::io(&meta, &e));
+        }
+    }
     Ok(stored)
 }
 
@@ -454,6 +659,7 @@ pub fn save_raw(pack_dir: &Path, tex_path: &str, doc: &RawDoc, flat_rgba: &str) 
         palette: doc.palette.clone(),
         png_len: 0,
         png_modified_ms: 0,
+        png_hash: 0,
     };
     save(pack_dir, tex_path, &work, &flat_png).map(|_| ())
 }
@@ -672,6 +878,170 @@ mod tests {
             open(&pack, &vanilla, "block/nope", 1).unwrap_err().kind,
             "not_found"
         );
+    }
+
+    fn set_time(file: &Path, secs_from_now: u64) {
+        let later = std::time::SystemTime::now() + std::time::Duration::from_secs(secs_from_now);
+        fs::File::options()
+            .write(true)
+            .open(file)
+            .unwrap()
+            .set_modified(later)
+            .unwrap();
+    }
+
+    fn files_named(dir: &Path, ending: &str) -> Vec<PathBuf> {
+        walkdir::WalkDir::new(dir)
+            .into_iter()
+            .filter_map(|e| e.ok())
+            .filter(|e| {
+                e.file_type().is_file() && e.file_name().to_string_lossy().ends_with(ending)
+            })
+            .map(|e| e.into_path())
+            .collect()
+    }
+
+    #[test]
+    fn layers_survive_a_changed_file_time_when_the_content_is_the_same() {
+        let (_t, vanilla, pack) = setup();
+        let mut o = open(&pack, &vanilla, "block/stone", 2).unwrap();
+        o.doc.layers[0].name = "Mine".into();
+        let stored = save(&pack, "block/stone", &o.doc, &flat(32, 32, 1)).unwrap();
+        assert_eq!(stored.png_hash, content_hash(&flat(32, 32, 1)));
+        // copied, restored from a backup, synced, checked out: new time, same bytes
+        let file = texture_file(&pack, "block/stone").unwrap();
+        set_time(&file, 3600);
+        let again = open(&pack, &vanilla, "block/stone", 2).unwrap();
+        assert_eq!(again.origin, Origin::WorkFile);
+        assert_eq!(again.doc.layers[0].name, "Mine");
+        // a working file from before the fingerprint existed still needs the time
+        let wf = work_file(&pack, "block/stone").unwrap();
+        let mut old: WorkDoc = serde_json::from_str(&fs::read_to_string(&wf).unwrap()).unwrap();
+        old.png_hash = 0;
+        fs::write(&wf, serde_json::to_vec(&old).unwrap()).unwrap();
+        assert_eq!(
+            open(&pack, &vanilla, "block/stone", 2).unwrap().origin,
+            Origin::PackPng
+        );
+    }
+
+    #[test]
+    fn a_save_that_cannot_write_its_files_changes_nothing() {
+        let (_t, vanilla, pack) = setup();
+        let o = open(&pack, &vanilla, "block/stone", 2).unwrap();
+        save(&pack, "block/stone", &o.doc, &flat(32, 32, 1)).unwrap();
+        let file = texture_file(&pack, "block/stone").unwrap();
+        let wf = work_file(&pack, "block/stone").unwrap();
+        let layers_before = fs::read(&wf).unwrap();
+        // the working file cannot be written: a folder is in the way of its temporary file
+        let blocker = sibling(&wf, "tmp");
+        fs::create_dir_all(blocker.join("x")).unwrap();
+        assert!(save(&pack, "block/stone", &o.doc, &flat(32, 32, 2)).is_err());
+        // the PNG in the pack was not replaced, the layers still belong to it
+        assert_eq!(fs::read(&file).unwrap(), flat(32, 32, 1));
+        assert_eq!(fs::read(&wf).unwrap(), layers_before);
+        assert!(files_named(&pack, ".png.tmp").is_empty());
+        assert_eq!(
+            open(&pack, &vanilla, "block/stone", 2).unwrap().origin,
+            Origin::WorkFile
+        );
+        // once the way is free the same save goes through and leaves nothing behind
+        fs::remove_dir_all(&blocker).unwrap();
+        save(&pack, "block/stone", &o.doc, &flat(32, 32, 2)).unwrap();
+        assert_eq!(fs::read(&file).unwrap(), flat(32, 32, 2));
+        assert!(files_named(&pack, ".tmp").is_empty());
+        assert!(files_named(&pack, ".bak").is_empty());
+    }
+
+    #[test]
+    fn a_save_whose_png_cannot_be_replaced_puts_the_old_layers_back() {
+        let (_t, vanilla, pack) = setup();
+        let o = open(&pack, &vanilla, "block/stone", 2).unwrap();
+        // something that cannot be renamed over sits where the PNG belongs
+        let file = texture_file(&pack, "block/stone").unwrap();
+        fs::create_dir_all(file.join("in the way")).unwrap();
+        let wf = work_file(&pack, "block/stone").unwrap();
+        fs::create_dir_all(wf.parent().unwrap()).unwrap();
+        fs::write(&wf, b"the layers from before").unwrap();
+        assert!(save(&pack, "block/stone", &o.doc, &flat(32, 32, 1)).is_err());
+        assert_eq!(fs::read(&wf).unwrap(), b"the layers from before");
+        assert!(file.is_dir());
+        assert!(files_named(&pack, ".tmp").is_empty());
+        assert!(files_named(&pack, ".bak").is_empty());
+    }
+
+    #[test]
+    fn layers_that_were_not_used_at_open_go_to_the_trash_when_saved_over() {
+        let (_t, vanilla, pack) = setup();
+        let o = open(&pack, &vanilla, "block/stone", 2).unwrap();
+        save(&pack, "block/stone", &o.doc, &flat(32, 32, 1)).unwrap();
+        let trash = pack.join(PROJECT_DIR).join("trash");
+        // a normal save over its own layers keeps nothing extra
+        save(&pack, "block/stone", &o.doc, &flat(32, 32, 2)).unwrap();
+        assert!(files_named(&trash, ".json").is_empty());
+        let wf = work_file(&pack, "block/stone").unwrap();
+        let old_layers = fs::read(&wf).unwrap();
+        // another program changes the PNG: the layers no longer belong to it
+        let file = texture_file(&pack, "block/stone").unwrap();
+        fs::write(&file, flat(32, 32, 200)).unwrap();
+        set_time(&file, 5);
+        let o2 = open(&pack, &vanilla, "block/stone", 2).unwrap();
+        assert_eq!(o2.origin, Origin::PackPng);
+        save(&pack, "block/stone", &o2.doc, &flat(32, 32, 3)).unwrap();
+        let kept = files_named(&trash, "stone.json");
+        assert_eq!(kept.len(), 1);
+        assert_eq!(fs::read(&kept[0]).unwrap(), old_layers);
+        assert!(files_named(&pack, ".bak").is_empty());
+    }
+
+    #[test]
+    fn an_animation_with_leftover_rows_is_not_opened_and_not_changed() {
+        let (_t, vanilla, pack) = setup();
+        let file = texture_file(&pack, "block/prismarine").unwrap();
+        fs::create_dir_all(file.parent().unwrap()).unwrap();
+        // 16×40 with 16-pixel frames: two frames and 8 rows that fit nowhere
+        fs::write(&file, flat(16, 40, 7)).unwrap();
+        fs::write(mcmeta_file(&file), r#"{"animation":{"frametime":2}}"#).unwrap();
+        let err = open(&pack, &vanilla, "block/prismarine", 1).unwrap_err();
+        assert_eq!(err.kind, "bad_frames");
+        assert!(err.message.contains("16×40"));
+        assert!(err.hint.unwrap().contains("multiple of 16"));
+        assert_eq!(fs::read(&file).unwrap(), flat(16, 40, 7));
+        // the same image without the animation file is a plain 16×40 texture
+        fs::remove_file(mcmeta_file(&file)).unwrap();
+        let o = open(&pack, &vanilla, "block/prismarine", 1).unwrap();
+        assert_eq!((o.doc.width, o.doc.height, o.doc.frames.len()), (16, 40, 1));
+        // and a whole number of frames opens as before
+        fs::write(&file, flat(16, 48, 7)).unwrap();
+        fs::write(mcmeta_file(&file), r#"{"animation":{"frametime":2}}"#).unwrap();
+        let o = open(&pack, &vanilla, "block/prismarine", 1).unwrap();
+        assert_eq!((o.doc.width, o.doc.height, o.doc.frames.len()), (16, 16, 3));
+    }
+
+    #[test]
+    fn the_pack_icon_opens_and_saves_as_pack_png_with_its_own_layers() {
+        let (_t, vanilla, pack) = setup();
+        // no icon yet: a new empty square, nothing written
+        let o = open(&pack, &vanilla, ICON_PATH, 4).unwrap();
+        assert_eq!(o.origin, Origin::Blank);
+        assert_eq!((o.doc.width, o.doc.height, o.doc.frames.len()), (64, 64, 1));
+        assert!(o.vanilla_png.is_none());
+        assert!(!pack.exists());
+        save(&pack, ICON_PATH, &o.doc, &flat(64, 64, 9)).unwrap();
+        assert_eq!(fs::read(pack.join("pack.png")).unwrap(), flat(64, 64, 9));
+        assert!(pack.join(PROJECT_DIR).join("icon.work.json").is_file());
+        assert!(!pack.join("pack.png.mcmeta").exists());
+        assert!(!pack.join("assets").exists());
+        assert_eq!(
+            open(&pack, &vanilla, ICON_PATH, 4).unwrap().origin,
+            Origin::WorkFile
+        );
+        // an icon made elsewhere opens at its own size, never rescaled
+        fs::write(pack.join("pack.png"), flat(48, 48, 2)).unwrap();
+        set_time(&pack.join("pack.png"), 5);
+        let o = open(&pack, &vanilla, ICON_PATH, 4).unwrap();
+        assert_eq!(o.origin, Origin::PackPng);
+        assert_eq!((o.doc.width, o.doc.height), (48, 48));
     }
 
     #[test]

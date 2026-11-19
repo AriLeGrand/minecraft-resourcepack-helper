@@ -107,9 +107,20 @@ export function CommandPalette() {
         for (const t of TOOLS) {
           commands.push({ label: t.label, kind: "Tool", run: () => { useEditor.getState().setTool(t.id); app.go("editor"); } });
         }
-        commands.push({ label: "Save to pack", kind: "Command", run: () => void useEditor.getState().save() });
-        commands.push({ label: "Undo", kind: "Command", run: () => useEditor.getState().undo() });
-        commands.push({ label: "Redo", kind: "Command", run: () => useEditor.getState().redo() });
+        const ed = useEditor.getState;
+        // these act on the open texture: show it, so the result is seen
+        const edit = (label: string, run: () => void): Item => ({ label, kind: "Command", run: () => { app.go("editor"); run(); } });
+        commands.push({ label: "Save to pack (Ctrl+S)", kind: "Command", run: () => void ed().save() });
+        commands.push(
+          edit("Undo (Ctrl+Z)", () => ed().undo()),
+          edit("Redo (Ctrl+Y)", () => ed().redo()),
+          edit("Copy (Ctrl+C)", () => ed().copy()),
+          edit("Cut (Ctrl+X)", () => ed().cut()),
+          edit("Paste (Ctrl+V)", () => ed().paste()),
+          edit("Select all (Ctrl+A)", () => ed().selectAll()),
+          edit("Deselect (Ctrl+D)", () => ed().deselect()),
+          edit("Delete selection (Del)", () => ed().deleteSelection()),
+        );
       }
       for (const c of CATEGORIES) {
         commands.push({

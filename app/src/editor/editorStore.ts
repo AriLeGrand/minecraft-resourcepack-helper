@@ -3,13 +3,14 @@
 // modules (doc, tools, history, pixels); this file only wires them to the app.
 import { create } from "zustand";
 import { api } from "../lib/api";
-import { baseName } from "../lib/logic";
 import { registerPackGuard, useApp } from "../store";
 import {
-  activeCel, addLayer, deleteLayer, duplicateLayer, editBlock, flatStrip, flatten, fromRaw, layerHasPixels, moveLayer,
+  activeCel, addLayer, deleteLayer, duplicateLayer, editBlock, fileLabel, flatStrip, flatten, fromRaw, layerHasPixels, moveLayer,
   patchLayer, setCel, toRaw, type EditorDoc, type LayerPatch,
 } from "./doc";
-import { applyCommand, editCommand, emptyHistory, push, stepRedo, stepUndo, structureCommand, type History } from "./history";
+import {
+  applyCommand, editCommand, emptyHistory, push, pushMerged, stepRedo, stepUndo, structureCommand, type History,
+} from "./history";
 import {
   bytesToBase64, clearArea, cloneBuf, copyClip, extractPalette, rgbaToHex,
   type Buf, type Clip, type Mask, type Pt, type Rgba,
@@ -131,15 +132,16 @@ export const flushPending = () => flush();
 export const activeTab = (s: { tabs: Tab[]; activeId: number | null }): Tab | null =>
   s.tabs.find((t) => t.id === s.activeId) ?? null;
 
-/** The document as it should be drawn: with the tool's preview on top. */
-export function shownDoc(tab: Tab): EditorDoc {
-  const p = tab.preview;
-  if (!p) return tab.doc;
-  let doc = tab.doc;
+/** A document with a tool's preview on top. */
+export function withPreview(doc: EditorDoc, p: Preview | null): EditorDoc {
+  if (!p) return doc;
   if (p.cel) doc = setCel(doc, doc.frameIndex, doc.activeLayer, p.cel);
   if (p.selection !== undefined) doc = { ...doc, selection: p.selection };
   return doc;
 }
+
+/** The document as it should be drawn: with the tool's preview on top. */
+export const shownDoc = (tab: Tab): EditorDoc => withPreview(tab.doc, tab.preview);
 
 /** The current view, or the fitted one when the user has not zoomed or panned yet. */
 export function viewOf(tab: Tab, viewport: { w: number; h: number }): View {
@@ -151,7 +153,7 @@ function diskStamp(path: string): string {
   return mine ? `${mine.modified_ms}:${mine.file_size}` : "";
 }
 
-export const fileName = (path: string) => `${baseName(path)}.png`;
+export const fileName = (path: string) => fileLabel(path);
 
 function paletteFrom(doc: EditorDoc, source: "vanilla" | "image"): string[] {
   const buf = source === "vanilla" && doc.vanilla ? doc.vanilla : flatten(doc);
@@ -178,6 +180,10 @@ function warn(text: string) {
   lastWarn = { text, at: now };
   useApp.getState().toast(text, "warn");
 }
+
+/** Opacity changes on one layer this close together are one undo step (a slider being dragged). */
+const SLIDE_MS = 1000;
+let lastSlide = { key: "", at: 0 };
 
 type Answer = "save" | "discard" | "cancel";
 
@@ -241,18 +247,20 @@ export const useEditor = create<EditorState>((set, get) => {
 
   /** Asks about the given tabs and saves them when asked to. `true` = they may be closed. */
   const resolveUnsaved = async (ids: number[]): Promise<boolean> => {
-    flushPending();
-    const dirty = get().tabs.filter((t) => ids.includes(t.id) && t.doc.dirty);
-    if (dirty.length === 0) return true;
-    const answer = await askUnsaved(dirty);
-    if (answer === "cancel") return false;
-    if (answer === "save") {
+    for (;;) {
+      flushPending();
+      const dirty = get().tabs.filter((t) => ids.includes(t.id) && t.doc.dirty);
+      if (dirty.length === 0) return true;
+      const answer = await askUnsaved(dirty);
+      if (answer === "cancel") return false;
+      if (answer === "discard") return true;
       for (const t of dirty) {
         // a failed save keeps everything open: the error says what to do
         if (!(await get().save(t.id))) return false;
       }
+      // The canvas stays usable while the files are being written. Whatever was
+      // drawn meanwhile is not in the pack: go round again and ask about it.
     }
-    return true;
   };
 
   return {
@@ -271,24 +279,28 @@ export const useEditor = create<EditorState>((set, get) => {
 
     openTexture: async (path) => {
       const app = useApp.getState();
-      const existing = get().tabs.find((t) => t.doc.path === path);
+      // the pack is noted before the file is read: Rust refuses when another pack
+      // is open by then, and the tab can only ever be saved into this one
+      const packDir = app.pack?.dir;
+      const existing = get().tabs.find((t) => t.doc.path === path && t.packDir === packDir);
       if (existing) {
         get().activate(existing.id);
         app.go("editor");
         return;
       }
-      if (!app.pack || opening.has(path)) return;
+      if (!packDir || opening.has(path)) return;
       opening.add(path);
       try {
-        const opened = await api.editorOpen(path);
-        const packDir = useApp.getState().pack?.dir;
-        if (!packDir) return;
+        const opened = await api.editorOpen(path, packDir);
+        // the pack was closed or switched while the file was being read
+        if (useApp.getState().pack?.dir !== packDir) return;
         const tab = newTab(fromRaw(opened), packDir);
         flushPending();
         set({ tabs: [...get().tabs, tab], activeId: tab.id, text: null });
         app.go("editor");
         app.setStatus(
           opened.origin === "vanilla" ? `${fileName(path)}: the game's texture as a starting point. Nothing is written until you save.`
+          : opened.origin === "blank" ? `${fileName(path)}: a new empty image. Nothing is written until you save.`
           : opened.origin === "work_file" ? `Opened ${fileName(path)} with its layers`
           : `Opened ${fileName(path)} from the pack`,
         );
@@ -329,7 +341,8 @@ export const useEditor = create<EditorState>((set, get) => {
       update(tab.id, (t) => ({ ...t, saving: true }));
       try {
         // always the document's own path: never the path of whatever is on screen
-        await api.editorSave(doc.path, toRaw(doc), bytesToBase64(flatStrip(doc).data));
+        // ... and only into its own pack: Rust checks the folder again before it writes
+        await api.editorSave(doc.path, toRaw(doc), bytesToBase64(flatStrip(doc).data), tab.packDir);
       } catch (e) {
         update(tab.id, (t) => ({ ...t, saving: false }));
         app.showError(e, `${name} could not be saved`);
@@ -353,24 +366,31 @@ export const useEditor = create<EditorState>((set, get) => {
 
     syncWithDisk: async () => {
       const app = useApp.getState();
-      for (const tab of get().tabs) {
-        if (tab.saving || tab.packDir !== app.pack?.dir) continue;
+      const find = (id: number) => get().tabs.find((t) => t.id === id);
+      for (const id of get().tabs.map((t) => t.id)) {
+        let tab = find(id);
+        if (!tab || tab.saving || tab.packDir !== app.pack?.dir) continue;
         const stamp = diskStamp(tab.doc.path);
         if (stamp === tab.disk) continue;
         const name = fileName(tab.doc.path);
+        // A tool in the middle of its work (a stroke, a polygon, typed text) is not
+        // in the document yet. Finish it first, so it counts as the unsaved edit it is.
+        if (id === get().activeId) flushPending();
+        tab = find(id);
+        if (!tab) continue;
         if (tab.doc.dirty) {
-          update(tab.id, (t) => ({ ...t, disk: stamp }));
+          update(id, (t) => ({ ...t, disk: stamp }));
           app.toast(`${name} was changed by another program. Your unsaved edits are kept; saving will replace that file.`, "warn");
           continue;
         }
         try {
-          const opened = await api.editorOpen(tab.doc.path);
+          const opened = await api.editorOpen(tab.doc.path, tab.packDir);
           const fresh = fromRaw(opened);
-          const still = get().tabs.find((t) => t.id === tab.id);
-          // edits made while the file was being read win
+          // edits made while the file was being read win (the next refresh tells about the file)
+          if (id === get().activeId) flushPending();
+          const still = find(id);
           if (!still || still.doc.dirty || still.saving) continue;
-          if (tab.id === get().activeId) flushPending();
-          update(tab.id, (t) => {
+          update(id, (t) => {
             const next = newTab(fresh, t.packDir);
             const sameSize = fresh.width === t.doc.width && fresh.height === t.doc.height;
             return {
@@ -381,7 +401,7 @@ export const useEditor = create<EditorState>((set, get) => {
           app.setStatus(`${name} changed on disk and was loaded again`);
         } catch {
           // the file may be half-written or gone: keep what is open
-          update(tab.id, (t) => ({ ...t, disk: stamp }));
+          update(id, (t) => ({ ...t, disk: stamp }));
         }
       }
     },
@@ -515,13 +535,33 @@ export const useEditor = create<EditorState>((set, get) => {
     moveLayer: (index, delta) => structural(delta > 0 ? "Move layer up" : "Move layer down", (d) => moveLayer(d, index, delta)),
     patchLayer: (index, patch) => {
       flushPending();
-      const lockOnly = Object.keys(patch).every((k) => k === "locked");
+      const keys = Object.keys(patch);
       const tab = current();
-      if (!tab) return;
+      const layer = tab?.doc.layers[index];
+      if (!tab || !layer) return;
       const doc = patchLayer(tab.doc, index, patch);
       if (doc === tab.doc) return;
-      // a lock is editor state, not part of the texture: it does not count as an unsaved change
-      update(tab.id, (t) => ({ ...t, doc: lockOnly ? { ...doc, dirty: tab.doc.dirty } : doc, edits: t.edits + 1 }));
+      if (keys.every((k) => k === "locked")) {
+        // a lock is editor state, not part of the texture: no unsaved change, no undo step
+        update(tab.id, (t) => ({ ...t, doc: { ...doc, dirty: tab.doc.dirty } }));
+        return;
+      }
+      // name, visibility and opacity change what is saved: each is an undo step
+      const label = patch.name !== undefined ? "Rename layer"
+        : patch.visible !== undefined ? (patch.visible ? "Show layer" : "Hide layer")
+        : "Layer opacity";
+      const cmd = structureCommand(label, tab.doc, doc);
+      // a slider being dragged sends many values: together they are one step
+      const sliding = keys.length === 1 && keys[0] === "opacity";
+      const key = sliding ? `opacity:${tab.id}:${layer.id}` : "";
+      const now = Date.now();
+      const merge = sliding && lastSlide.key === key && now - lastSlide.at < SLIDE_MS;
+      lastSlide = { key, at: now };
+      if (sliding) cmd.mergeKey = key;
+      update(tab.id, (t) => ({
+        ...t, doc, preview: null, edits: t.edits + 1,
+        history: merge ? pushMerged(t.history, cmd) : push(t.history, cmd),
+      }));
     },
     toggleReference: () => {
       const tab = current();
@@ -565,9 +605,13 @@ export const useEditor = create<EditorState>((set, get) => {
       return true;
     },
     cut: () => {
-      const tab = current();
-      if (!tab || get().blocked()) return;
+      // a tool still at work is finished first: the copy and the cleared area
+      // must both come from the document as it is after that
+      flushPending();
+      if (!current() || get().blocked()) return;
       if (!get().copy()) return;
+      const tab = current();
+      if (!tab) return;
       const cel = cloneBuf(activeCel(tab.doc));
       clearArea(cel, tab.doc.selection);
       get().applyEdit("Cut", { cel });

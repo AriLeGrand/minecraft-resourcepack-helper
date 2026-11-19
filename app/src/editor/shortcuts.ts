@@ -67,3 +67,52 @@ export function isTypingTarget(el: { tagName?: string; isContentEditable?: boole
   }
   return el.isContentEditable === true;
 }
+
+/** What the editor needs to know about the control that has the focus. */
+export interface FocusInfo {
+  tagName?: string;
+  type?: string;
+  role?: string | null;
+  /** The focus got there with the keyboard (`:focus-visible`), not with a mouse click. */
+  keyboardFocus?: boolean;
+}
+
+/** The focus facts of a DOM element (`null` stays `null`). */
+export function focusInfo(
+  el: { tagName: string; type?: string; getAttribute(name: string): string | null; matches(selector: string): boolean } | null,
+): FocusInfo | null {
+  if (!el || !el.tagName) return null;
+  let keyboardFocus = false;
+  try {
+    keyboardFocus = el.matches(":focus-visible");
+  } catch {
+    // an engine without :focus-visible: treat the focus as coming from the mouse
+  }
+  return { tagName: el.tagName, type: el.type, role: el.getAttribute("role"), keyboardFocus };
+}
+
+const PRESS_ROLES = ["button", "tab", "checkbox", "switch", "radio", "menuitem", "option", "link"];
+
+/**
+ * True when a key press belongs to the focused control and must not be taken
+ * as an editor shortcut:
+ * - a slider owns the arrow keys (they change its value);
+ * - a button, link, checkbox or tab that was reached with the keyboard owns
+ *   Enter and Space (they press it), and such a tab owns the arrow keys.
+ * After a mouse click on a button the keys stay with the editor, so Space
+ * still pans and Enter still finishes a shape.
+ */
+export function keyBelongsToControl(el: FocusInfo | null, key: string): boolean {
+  if (!el || !el.tagName) return false;
+  const tag = el.tagName.toUpperCase();
+  const type = (el.type ?? "").toLowerCase();
+  const role = (el.role ?? "").toLowerCase();
+  const moves = key.startsWith("Arrow") || key === "Home" || key === "End" || key === "PageUp" || key === "PageDown";
+  if ((tag === "INPUT" && type === "range") || role === "slider") return moves;
+  if (!el.keyboardFocus) return false;
+  if (role === "tab" && moves) return true;
+  if (key !== "Enter" && key !== " " && key !== "Spacebar") return false;
+  return tag === "BUTTON" || tag === "A" || tag === "SUMMARY"
+    || (tag === "INPUT" && (type === "checkbox" || type === "radio" || type === "button" || type === "submit"))
+    || PRESS_ROLES.includes(role);
+}

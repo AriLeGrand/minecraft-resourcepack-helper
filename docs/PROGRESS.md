@@ -11,7 +11,7 @@ Decisions: `docs/DECISIONS.md`. Facts: `docs/research/domain-facts.md`.
 Done so far in stage 2:
 - `app/core/src/workfile.rs` (working files with layers and frames, pixel-exact
   raw RGBA open/save) and the commands `editor_open` / `editor_save` in
-  `app/src-tauri/src/lib.rs` (plan steps 1-2, Rust part). 101 core tests pass.
+  `app/src-tauri/src/lib.rs` (plan steps 1-2, Rust part).
 - `app/src/editor/pixels.ts` + `pixels.test.ts`: all pure pixel logic (inks,
   line, pixel-perfect, brush, rectangle, ellipse, polygon, curve, spray,
   symmetry, tiled wrap, flood fill / wand, gradient, blur, jumble, selection
@@ -31,7 +31,6 @@ Done so far in stage 2:
     "Open externally" is unchanged. Ctrl+K lists the tools while a texture is
     open. Closing the pack, opening another pack and quitting ask about unsaved
     textures (`registerPackGuard` in `store.ts`, `onCloseRequested` in `App.tsx`).
-  - 167 front-end tests pass (`npm run check`).
   - Checked in the real app with real mouse and keyboard input
     (`tools/shot.mjs` has `--drag`, `--rdrag`, `--move`, `--wheel`, `--key`):
     open from the browser, draw, shapes, selection, move, copy / paste, layers,
@@ -40,10 +39,19 @@ Done so far in stage 2:
     `.mcmeta` kept), reopening with layers, the close-tab and quit questions,
     outside changes to open files, quitting with nothing unsaved.
 
+- Review fixes (2026-11-19, D-034 to D-046): layer name / visibility / opacity
+  as undo steps; a tool in progress is never loaded or closed over; all-or-nothing
+  save with layers matched by content; the editor commands check their pack;
+  tiled mode for every tool; onion skin; "Draw" for the pack icon in the
+  built-in editor; palette refresh button; copy / paste / selection commands
+  in Ctrl+K and the options bar; keyboard access (file tabs, colour picker,
+  Enter / Space, Ctrl+S from fields); drawing work cut down (composite cache,
+  one preview per screen refresh, strokes painted piece by piece).
+  107 core tests and 206 front-end tests pass.
+
 Left for the end of stage 2: compare more screenshots with
 `docs/mockups/AppEditor.dc.html`, push, stage summary. Not done in stage 2
-(see D-032): "Draw" for the pack icon in the built-in editor, onion skin
-display, adding / removing frames (stage 3), 3D and Animated preview tabs.
+(see D-032): adding / removing frames (stage 3), 3D and Animated preview tabs.
 
 Stage 1 is complete (2026-11-19): installer built at
 `app/target/release/bundle/nsis/Pack Creator_0.1.0_x64-setup.exe` (2.5 MB) and
