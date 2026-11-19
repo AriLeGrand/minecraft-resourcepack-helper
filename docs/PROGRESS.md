@@ -6,10 +6,24 @@ Decisions: `docs/DECISIONS.md`. Facts: `docs/research/domain-facts.md`.
 
 ## Current stage
 
-**Stage 2: pixel editor** — starting. Plan: `docs/superpowers/plans/stage-2.md`.
-`app/core/src/workfile.rs` (editor working files) is written but not yet
-registered in `lib.rs` nor compiled: add `pub mod workfile;` and the `base64`
-dependency first, then run its tests.
+**Stage 2: pixel editor** — in progress. Plan: `docs/superpowers/plans/stage-2.md`.
+
+Done so far in stage 2:
+- `app/core/src/workfile.rs` (working files with layers and frames, pixel-exact
+  raw RGBA open/save) and the commands `editor_open` / `editor_save` in
+  `app/src-tauri/src/lib.rs` (plan steps 1-2, Rust part). 101 core tests pass.
+- `app/src/editor/pixels.ts` + `pixels.test.ts`: all pure pixel logic (inks,
+  line, pixel-perfect, brush, rectangle, ellipse, polygon, curve, spray,
+  symmetry, tiled wrap, flood fill / wand, gradient, blur, jumble, selection
+  masks, copy/paste, layer compositing, palette, frames, base64). 38 tests pass.
+
+Next (nothing of this exists yet): `editor/history.ts` (undo patches),
+the editor store (tabs, document model built from `editor_open`), `Canvas.tsx`
+(zoom, pan, grid, tool interaction), tool column and options bar, layers /
+palette / colour picker / preview panels, save with Save / Discard / Cancel,
+shortcuts, then wire "Edit texture" in `screens/Browser.tsx` (currently opens
+the external editor) and the `editor` screen in `App.tsx` (currently a
+placeholder). Then screenshots vs `docs/mockups/AppEditor.dc.html`.
 
 Stage 1 is complete (2026-11-19): installer built at
 `app/target/release/bundle/nsis/Pack Creator_0.1.0_x64-setup.exe` (2.5 MB) and
