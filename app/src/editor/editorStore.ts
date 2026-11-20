@@ -53,7 +53,8 @@ export interface Tab {
   saving: boolean;
   /** Goes up with every change of the pixels (a save only clears "unsaved" when nothing changed meanwhile). */
   edits: number;
-  paletteSource: "vanilla" | "image" | "saved";
+  /** Where the palette panel takes its colours from; "pack" = the pack palette (shared by every texture). */
+  paletteSource: "vanilla" | "image" | "saved" | "pack";
   /** "Edit only these cells": pixels outside this region never change. `null` = the whole image. */
   region: Region | null;
 }
@@ -154,7 +155,7 @@ interface EditorState {
   cut: () => void;
   /** Pastes a newer image from the Windows clipboard, else the app's own clipboard. */
   paste: () => Promise<void>;
-  loadPalette: (source: "vanilla" | "image") => void;
+  loadPalette: (source: "vanilla" | "image" | "pack") => void;
   /** Tells the user why nothing happens when the layer cannot be edited. `true` = blocked. */
   blocked: () => boolean;
 }
@@ -890,7 +891,9 @@ export const useEditor = create<EditorState>((set, get) => {
     loadPalette: (source) => {
       const tab = current();
       if (!tab) return;
-      update(tab.id, (t) => ({ ...t, paletteSource: source, doc: { ...t.doc, palette: paletteFrom(t.doc, source) } }));
+      // the pack palette lives in the project: the texture's own palette is left as it is
+      if (source === "pack") update(tab.id, (t) => ({ ...t, paletteSource: source }));
+      else update(tab.id, (t) => ({ ...t, paletteSource: source, doc: { ...t.doc, palette: paletteFrom(t.doc, source) } }));
     },
     blocked: () => {
       const tab = current();

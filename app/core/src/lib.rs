@@ -36,6 +36,11 @@ pub mod workfile;
 pub mod compare;
 pub mod pngopt;
 pub mod showcase;
+// drawing helpers: pack palette, recolouring, variants, smooth start, seams
+pub mod palette;
+pub mod recolor;
+pub mod seams;
+pub mod upscale;
 
 pub use error::{CoreError, Result};
 pub use pack_format::PackFormat;

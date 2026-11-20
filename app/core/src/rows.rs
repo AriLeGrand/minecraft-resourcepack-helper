@@ -214,6 +214,7 @@ mod tests {
             created_ms: 0,
             last_export_ms: Some(1000),
             also_export: vec![],
+            pack_palette: vec![],
         };
         (index, project)
     }

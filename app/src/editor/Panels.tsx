@@ -12,6 +12,8 @@ import { useEditor, withPreview, type Preview, type Tab } from "./editorStore";
 import { releaseAfterMouse } from "./focus";
 import { hexToRgba, rgbaToHex, rgbToHsv, type Buf } from "./pixels";
 import { useAnimPlayer } from "./Player";
+import { PackPaletteEditor, PackPaletteStrip } from "./PackPaletteSwatches";
+import { SeamNote } from "./SeamNote";
 import { bufToCanvas } from "./render";
 
 /** A pixel buffer shown with hard pixels, `repeat` × `repeat` times, fitted into a box. */
@@ -79,7 +81,9 @@ export const PreviewPanel = memo(function PreviewPanel({ doc: saved, preview, pa
         ) : mode === "animated" ? (
           <AnimatedPreview doc={saved} />
         ) : mode === "tiled" ? (
-          <PixelView buf={flat} box={196} repeat={3} label="Texture repeated 3 by 3" />
+          block ? (
+            <SeamNote buf={flat} box={196} repeat={3}><PixelView buf={flat} box={196} repeat={3} label="Texture repeated 3 by 3" /></SeamNote>
+          ) : <PixelView buf={flat} box={196} repeat={3} label="Texture repeated 3 by 3" />
         ) : (
           <div className="pair">
             <div>
@@ -140,6 +144,7 @@ export const PalettePanel = memo(function PalettePanel({ palette, hasVanilla, so
   const bgHex = rgbaToHex(bg);
   // what the refresh button reads the colours from again
   const again: "vanilla" | "image" = source === "vanilla" && hasVanilla ? "vanilla" : "image";
+  const pack = source === "pack";
   return (
     <section className="ed-panel">
       <div className="head">
@@ -150,24 +155,25 @@ export const PalettePanel = memo(function PalettePanel({ palette, hasVanilla, so
             aria-label="Palette colours"
             value={source}
             onChange={(e) => {
-              loadPalette(e.target.value as "vanilla" | "image");
+              loadPalette(e.target.value as "vanilla" | "image" | "pack");
               releaseAfterMouse(e);
             }}
           >
             {source === "saved" && <option value="saved">Saved with texture</option>}
             <option value="vanilla" disabled={!hasVanilla}>From vanilla</option>
             <option value="image">From image</option>
+            <option value="pack">Pack palette</option>
           </select>
-          <button
+          {!pack && <button
             aria-label={again === "vanilla" ? "Take the colours from the game's texture again" : "Take the colours from your drawing again"}
             title={again === "vanilla" ? "Take the colours from the game's texture again" : "Take the colours from your drawing as it is now"}
             onClick={() => loadPalette(again)}
           >
             <Icon d={REFRESH} size={13} width={2} />
-          </button>
+          </button>}
         </div>
       </div>
-      {palette.length === 0 ? (
+      {pack ? <PackPaletteEditor /> : palette.length === 0 ? (
         <div className="dim" style={{ fontSize: 11 }}>No colours yet. Draw something, then press the refresh button above to take the colours from your drawing.</div>
       ) : (
         <div className="ed-swatches">
@@ -184,6 +190,7 @@ export const PalettePanel = memo(function PalettePanel({ palette, hasVanilla, so
           ))}
         </div>
       )}
+      {!pack && <PackPaletteStrip />}
       <div className="ed-readout mono">
         <span>{rgbaToHex(current).toUpperCase()}</span>
         <span className="dim">H{h} S{s} V{v}</span>

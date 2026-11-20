@@ -7,6 +7,7 @@ import {
   pixelPerfect, pointsMask, polygonPoints, rectPoints, rng, setPx, sprayPoints, stamp,
   type Buf, type Clip, type Ink, type Mask, type Pt, type Rgba, type SelectMode, type Symmetry,
 } from "./pixels";
+import { snapChanged, snapPixel, type SnapPalette } from "./packPalette";
 
 export type ToolId =
   | "marquee" | "lasso" | "wand" | "move" | "pencil" | "spray" | "eraser" | "picker" | "bucket" | "gradient"
@@ -91,11 +92,13 @@ export interface ToolOptions {
   blurMode: "blur" | "jumble";
   /** Text height in pixels. */
   textSize: number;
+  /** Every drawn colour snaps to the nearest colour of the pack palette (OKLab). */
+  snapPalette: boolean;
 }
 
 export const defaultOptions: ToolOptions = {
   size: 1, ink: "simple", opacity: 100, pixelPerfect: true, symmetry: "none", tiled: false, onionSkin: false,
-  filled: false, contiguous: true, tolerance: 0, blurMode: "blur", textSize: 8,
+  filled: false, contiguous: true, tolerance: 0, blurMode: "blur", textSize: 8, snapPalette: false,
 };
 
 export const MAX_BRUSH = 64;
@@ -145,7 +148,20 @@ export interface Stroke {
   /** For spray and jumble, so a stroke looks the same each time it is redrawn. */
   seed: number;
   bitmap?: Bitmap;
+  /** "Snap to pack palette": drawn pixels take the nearest pack colour. The eraser is never snapped. */
+  snap?: SnapPalette | null;
 }
+
+/** True when the pixel differs from the snapshot (exact bytes, as `snapChanged` compares). */
+function changedAt(buf: Buf, before: Buf, x: number, y: number): boolean {
+  const i = (y * buf.w + x) * 4;
+  const a = buf.data;
+  const b = before.data;
+  return a[i] !== b[i] || a[i + 1] !== b[i + 1] || a[i + 2] !== b[i + 2] || a[i + 3] !== b[i + 3];
+}
+
+/** The palette a stroke snaps to, if any. */
+const snapOf = (s: Stroke): SnapPalette | null => (s.snap && s.tool !== "eraser" ? s.snap : null);
 
 const wrap = (n: number, size: number) => ((n % size) + size) % size;
 
@@ -206,6 +222,13 @@ export function textPoints(bitmap: Bitmap, x: number, y: number): Pt[] {
  * pixel gets the ink exactly once however often the pointer crossed it.
  */
 export function applyStroke(s: Stroke): Buf {
+  const buf = strokePixels(s);
+  const pal = snapOf(s);
+  if (pal) snapChanged(buf, s.snapshot, pal);
+  return buf;
+}
+
+function strokePixels(s: Stroke): Buf {
   const buf = cloneBuf(s.snapshot);
   const o = s.options;
   const color = s.button === 2 ? s.bg : s.fg;
@@ -303,7 +326,8 @@ export function growStroke(s: Stroke, run: StrokeRun | null): StrokeRun {
   const o = s.options;
   const p = run?.stroke;
   const same = run && p && p.snapshot === s.snapshot && p.tool === s.tool && p.options === o && p.mask === s.mask
-    && p.fg === s.fg && p.bg === s.bg && p.button === s.button && p.seed === s.seed && run.done <= s.points.length;
+    && p.fg === s.fg && p.bg === s.bg && p.button === s.button && p.seed === s.seed && run.done <= s.points.length
+    && (p.snap ?? null) === (s.snap ?? null);
   const r: StrokeRun = same && run ? run : {
     buf: cloneBuf(s.snapshot), covered: new Uint8Array(s.snapshot.w * s.snapshot.h), done: 0,
     random: s.tool === "spray" ? rng(s.seed) : null, stroke: s,
@@ -312,6 +336,7 @@ export function growStroke(s: Stroke, run: StrokeRun | null): StrokeRun {
   const { w, h } = buf;
   const color = s.button === 2 ? s.bg : s.fg;
   const ink = inkFor(s.tool, o.ink, s.button);
+  const pal = snapOf(s);
   const blurred: Pt[] = [];
   const mx = o.symmetry === "x" || o.symmetry === "both";
   const my = o.symmetry === "y" || o.symmetry === "both";
@@ -326,7 +351,10 @@ export function growStroke(s: Stroke, run: StrokeRun | null): StrokeRun {
     r.covered[i] = 1;
     if (s.mask && !s.mask[i]) return;
     if (s.tool === "blur") blurred.push([x, y]);
-    else setPx(buf, x, y, applyInk(getPx(buf, x, y), color, ink, o.opacity));
+    else {
+      setPx(buf, x, y, applyInk(getPx(buf, x, y), color, ink, o.opacity));
+      if (pal && changedAt(buf, s.snapshot, x, y)) snapPixel(buf, x, y, pal);
+    }
   };
   /** A pixel and its mirror images (symmetry). */
   const visit = (x: number, y: number) => {
@@ -347,7 +375,11 @@ export function growStroke(s: Stroke, run: StrokeRun | null): StrokeRun {
     const offsets: Pt[] = o.size <= 1 ? [[0, 0]] : brushOffsets(o.size);
     for (const [x, y] of path) for (const [dx, dy] of offsets) visit(x + dx, y + dy);
   }
-  if (blurred.length > 0) blurPoints(buf, s.snapshot, blurred, null, o.tiled);
+  if (blurred.length > 0) {
+    blurPoints(buf, s.snapshot, blurred, null, o.tiled);
+    // like applyStroke: only pixels the blur really changed
+    if (pal) for (const [x, y] of blurred) if (changedAt(buf, s.snapshot, x, y)) snapPixel(buf, x, y, pal);
+  }
   r.done = s.points.length;
   r.stroke = s;
   return r;

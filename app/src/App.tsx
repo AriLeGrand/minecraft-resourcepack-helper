@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { CompareHost } from "./components/CompareDialog";
 import { CommandPalette, ModalHost, Toasts } from "./components/Overlays";
 import { NavBar, PackChips, sectionLabel, StatusBar, TopBar } from "./components/Shell";
+import { RecolorHost } from "./components/RecolorDialog";
 import { useEditor } from "./editor/editorStore";
 import { Animation } from "./screens/Animation";
 import { Browser } from "./screens/Browser";
@@ -93,6 +94,7 @@ export function App() {
       <Toasts />
       <ModalHost />
       <CommandPalette />
+      <RecolorHost />
     </div>
   );
 }
