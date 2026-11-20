@@ -264,7 +264,7 @@ export function Browser() {
                     </span>
                     <span style={{ color: r.wrong_size ? "var(--warn)" : "var(--text-soft)" }}>{sizeText(r)}</span>
                     <span className="dim">{r.animated ? `${r.frames} frames` : "—"}</span>
-                    <span className={`status st-${r.status}`}><span className="dot" />{r.extra ? "Not in this version" : STATUS_TEXT[r.status]}</span>
+                    <span className={`status st-${r.status}`} title={r.extra ? "Not in this version" : STATUS_TEXT[r.status]}><span className="dot" /><span className="ellipsis">{r.extra ? "Not in this version" : STATUS_TEXT[r.status]}</span></span>
                     <span className="dim">{r.mine ? dayLabel(r.mine.modified_ms, now) : "—"}</span>
                   </div>
                 ))}
