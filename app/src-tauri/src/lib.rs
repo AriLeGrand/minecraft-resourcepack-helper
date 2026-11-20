@@ -23,6 +23,9 @@ use packcreator_core::textures::{TextureEntry, VanillaIndex};
 use packcreator_core::whats_new::{self, VersionDiff};
 use packcreator_core::workfile;
 use packcreator_core::McVersion;
+// publishing and comparing
+use packcreator_core::compare::{self, Comparison};
+use packcreator_core::showcase;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -47,6 +50,16 @@ pub struct Inner {
     /// The last batch-import scan: the only files the batch commands and the
     /// `pcimg://localhost/batch/<id>` route may read.
     pub batch: Option<BatchSession>,
+    /// The last "Compare with another pack": the only files of the other pack
+    /// that `compare_copy` and `pcimg://localhost/compare/<id>` may read.
+    pub compare: Option<CompareSession>,
+}
+
+pub struct CompareSession {
+    pub pack_dir: PathBuf,
+    /// Per row id: their PNG (when they have one) and the texture it is in
+    /// the open pack (when it matched one and is the file used for it).
+    pub rows: Vec<(Option<PathBuf>, Option<String>)>,
 }
 
 pub struct BatchSession {
@@ -288,6 +301,7 @@ struct SettingsPatch {
     export_kind_folder: Option<bool>,
     export_install: Option<bool>,
     export_only_changed: Option<bool>,
+    export_optimize: Option<bool>,
 }
 
 fn clean(v: Option<String>) -> Option<String> {
@@ -323,6 +337,9 @@ fn update_settings(
     }
     if let Some(v) = patch.export_only_changed {
         inner.settings.export_only_changed = v;
+    }
+    if let Some(v) = patch.export_optimize {
+        inner.settings.export_optimize = v;
     }
     save_settings_now(&inner)?;
     let err = if rescan {
@@ -1096,6 +1113,9 @@ struct ExportRequest {
     install: bool,
     only_changed: bool,
     also: Vec<String>,
+    /// "Make PNG files smaller (same pixels)".
+    #[serde(default)]
+    optimize_png: bool,
 }
 
 #[derive(Serialize)]
@@ -1160,7 +1180,9 @@ fn export_pack(state: State<AppState>, request: ExportRequest) -> Result<ExportR
             install_dir,
             only_changed: request.only_changed,
             vanilla_root: Some(extract::vanilla_dir(&inner.cache_dir, &project.version_dir)),
+            optimize_png: request.optimize_png,
         };
+        inner.settings.export_optimize = request.optimize_png;
         inner.settings.export_kind_folder = request.folder;
         inner.settings.export_install = request.install;
         inner.settings.export_only_changed = request.only_changed;
@@ -1179,6 +1201,107 @@ fn export_pack(state: State<AppState>, request: ExportRequest) -> Result<ExportR
         outputs,
         pack: pack_state(&inner)?,
     })
+}
+
+// --------------------------------------------- publishing and comparing
+
+/// Saves the showcase image drawn by the UI (raw RGBA, base64) as a PNG file
+/// the user chose. Only `.png` files are written.
+#[tauri::command(async)]
+fn save_showcase(path: String, width: u32, height: u32, rgba: String) -> Result<u64> {
+    showcase::save(Path::new(&path), width, height, &rgba)
+}
+
+/// "Compare with another pack": reads a `.zip` (unpacked into the cache,
+/// safe paths and size caps) or a folder, and compares its textures with the
+/// open pack's. The rows are remembered for `compare_copy` and the image route.
+#[tauri::command(async)]
+fn compare_packs(state: State<AppState>, source: String, pack_dir: String) -> Result<Comparison> {
+    let (dir, version_dir, cache) = {
+        let inner = state.lock();
+        let p = own_pack(&inner, &pack_dir)?;
+        (
+            p.dir.clone(),
+            p.project.version_dir.clone(),
+            inner.cache_dir.clone(),
+        )
+    };
+    let (index, mc) = {
+        let mut inner = state.lock();
+        let (_, mc) = inner.pack_version()?;
+        let index = inner.index(&version_dir).ok_or_else(|| {
+            CoreError::new(
+                "not_extracted",
+                "The game textures for this version are not extracted yet.",
+            )
+        })?;
+        // the earlier comparison's files are about to go
+        inner.compare = None;
+        (index, mc)
+    };
+    let work_parent = cache.join("compare");
+    compare::clear_work(&work_parent);
+    let work = work_parent.join(pack::now_ms().to_string());
+    let source_path = PathBuf::from(&source);
+    let their = compare::open_their_pack(&source_path, &dir, &work)?;
+    let result = compare::compare(&source_path, &their, &dir, &index, mc.as_ref())?;
+    let mut inner = state.lock();
+    own_pack(&inner, &pack_dir)?;
+    inner.compare = Some(CompareSession {
+        pack_dir: dir,
+        rows: result
+            .rows
+            .iter()
+            .map(|r| {
+                let file = compare::their_file(&their.root, r);
+                let target = r.path.clone().filter(|_| r.shadowed_by.is_none());
+                (file, target)
+            })
+            .collect(),
+    });
+    Ok(result)
+}
+
+/// "Copy theirs into my pack" for rows of the last comparison: each PNG (and
+/// its `.mcmeta`) byte for byte, replaced files to the trash.
+#[tauri::command(async)]
+fn compare_copy(
+    state: State<AppState>,
+    ids: Vec<usize>,
+    pack_dir: String,
+) -> Result<Vec<ItemResult>> {
+    let (dir, work, mut refused) = {
+        let inner = state.lock();
+        let p = own_pack(&inner, &pack_dir)?;
+        let session = inner
+            .compare
+            .as_ref()
+            .filter(|c| c.pack_dir == p.dir)
+            .ok_or_else(|| CoreError::new("no_compare", "Compare the packs again, then copy."))?;
+        let mut work = Vec::new();
+        let mut refused = Vec::new();
+        for id in ids {
+            match session.rows.get(id) {
+                Some((Some(src), Some(target))) => work.push((id, src.clone(), target.clone(), false)),
+                _ => refused.push(ItemResult {
+                    id,
+                    target: String::new(),
+                    ok: false,
+                    replaced: false,
+                    wrote_mcmeta: false,
+                    unchanged: false,
+                    error: Some(CoreError::new(
+                        "bad_item",
+                        "This row has no file of the other pack that matches a texture of this pack.",
+                    )),
+                }),
+            }
+        }
+        (p.dir.clone(), work, refused)
+    };
+    let mut out = batch::import_all(&dir, &work);
+    out.append(&mut refused);
+    Ok(out)
 }
 
 // ----------------------------------------------------------------- setup
@@ -1251,6 +1374,9 @@ pub fn run() {
             batch_scan,
             batch_import,
             whats_new,
+            save_showcase,
+            compare_packs,
+            compare_copy,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Pack Creator");

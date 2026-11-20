@@ -9,6 +9,8 @@
 //! * `pcimg://localhost/packicon?dir=<pack folder>` (recent packs: `pack.png` only)
 //! * `pcimg://localhost/batch/<row id>` (the files of the last batch-import
 //!   scan only, as a small thumbnail)
+//! * `pcimg://localhost/compare/<row id>` (the other pack's PNG of a row of
+//!   the last "Compare with another pack", full size)
 
 use crate::AppState;
 use packcreator_core::extract::vanilla_dir;
@@ -90,6 +92,15 @@ fn resolve(app: &AppHandle, path: &str, query: Option<&str>) -> Option<PathBuf> 
                 return None;
             }
             session.rows.get(id).map(|(src, _)| src.clone())
+        }
+        "compare" => {
+            // only their file of a row of the last comparison, for the open pack
+            let id: usize = parts.next()?.parse().ok()?;
+            let session = inner.compare.as_ref()?;
+            if inner.pack.as_ref()?.dir != session.pack_dir {
+                return None;
+            }
+            session.rows.get(id)?.0.clone()
         }
         _ => None,
     }

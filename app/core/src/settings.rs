@@ -34,6 +34,8 @@ pub struct Settings {
     pub export_kind_folder: bool,
     pub export_install: bool,
     pub export_only_changed: bool,
+    /// "Make PNG files smaller (same pixels)" on the export screen.
+    pub export_optimize: bool,
 }
 
 pub fn settings_file(config_dir: &Path) -> PathBuf {

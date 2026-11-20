@@ -131,10 +131,11 @@ fn base_of(path: &str) -> &str {
     path.rsplit('/').next().unwrap_or(path)
 }
 
+/// What a file name or path matched (also used by `compare`).
 #[derive(Debug, Clone, PartialEq)]
-struct Found {
-    targets: Vec<String>,
-    renamed_from: Option<String>,
+pub struct Found {
+    pub targets: Vec<String>,
+    pub renamed_from: Option<String>,
 }
 
 impl<'a> Matcher<'a> {
@@ -213,7 +214,7 @@ impl<'a> Matcher<'a> {
 
     /// Target of a file at `rel` (relative to the chosen folder, `/`, with
     /// `.png`). Returns the rule used and what was found.
-    fn match_rel(&self, rel: &str) -> (Rule, Option<Found>) {
+    pub fn match_rel(&self, rel: &str) -> (Rule, Option<Found>) {
         let lower = rel.to_lowercase();
         let stem = lower.strip_suffix(".png").unwrap_or(&lower);
         let segs: Vec<&str> = stem.split('/').collect();
