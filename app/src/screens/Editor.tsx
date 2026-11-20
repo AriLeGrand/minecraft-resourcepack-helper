@@ -177,6 +177,7 @@ const OptionsBar = memo(function OptionsBar() {
   const o = useEditor((s) => s.options);
   const set = useEditor((s) => s.setOptions);
   const animated = useEditor((s) => (activeTab(s)?.doc.frames.length ?? 0) > 1);
+  const packColours = useApp((s) => s.pack?.project.pack_palette?.length ?? 0);
   const selecting = SELECT_TOOLS.includes(tool) || tool === "move";
   return (
     <div className="ed-options">
@@ -206,6 +207,14 @@ const OptionsBar = memo(function OptionsBar() {
           : "Shows the neighbouring frames faintly. This texture has only one frame, so there is nothing to show."}
       >
         <input type="checkbox" checked={o.onionSkin} onChange={(e) => set({ onionSkin: e.target.checked })} /> Onion skin
+      </label>
+      <label
+        className="tick"
+        title={packColours > 0
+          ? `Every colour you draw becomes the nearest of the ${packColours} pack palette colours (the eraser is not affected)`
+          : "The pack palette is empty: choose “Pack palette” in the palette panel to build it first"}
+      >
+        <input type="checkbox" checked={o.snapPalette && packColours > 0} disabled={packColours === 0} onChange={(e) => set({ snapPalette: e.target.checked })} /> Snap to pack palette
       </label>
       {(usesFilled(tool) || usesTolerance(tool) || tool === "blur" || tool === "text") && <span className="rule" />}
       {usesFilled(tool) && (

@@ -12,9 +12,12 @@ import {
 } from "../lib/logic";
 import { BatchImportDialog } from "../components/BatchImportDialog";
 import { ShareDialog } from "../components/ShareDialog";
+import { useRecolor } from "../components/RecolorDialog";
 import { useApp } from "../store";
 
 const ROW_H = 41;
+/** A drop of colour with a turn arrow, in the app's icon style. */
+const RECOLOUR_ICON = "M12 3c3 4 6 7 6 10a6 6 0 0 1-12 0c0-3 3-6 6-10zM9 14a3 3 0 0 0 3 3";
 const STATUS_TEXT = { todo: "To do", done: "Done", changed: "Changed since export" } as const;
 
 function thumbSrc(r: TextureRow, dirName: string, stamp: number): string {
@@ -210,6 +213,9 @@ export function Browser() {
             </label>
             <button className="btn" onClick={() => void pickFolder()} disabled={rows.length === 0 || !!busy} title="Import a folder of PNG files: each one is matched to its texture (you can also drop files or a folder on the window)">
               <span className="row" style={{ gap: 6 }}><Icon name="folder" size={14} width={2} />Batch import…</span>
+            </button>
+            <button className="btn" onClick={() => useRecolor.getState().openRecolor()} disabled={rows.length === 0 || !!busy} title="Recolour a set of textures at once (hue, saturation, brightness, contrast or a colour map), with a preview and Undo">
+              <span className="row" style={{ gap: 6 }}><Icon d={RECOLOUR_ICON} size={14} width={2} />Recolour…</span>
             </button>
             <button className="btn" onClick={() => setSharing(true)} disabled={rows.length === 0} title="Share the to-do list (copy or save as a file)">
               <span className="row" style={{ gap: 6 }}><Icon name="share" size={14} width={2} />Share list</span>
@@ -663,6 +669,13 @@ function Inspector({ row, now }: { row: TextureRow | null; now: number }) {
           <button className="btn" onClick={() => void openExternally(row.path)}>Open externally</button>
           <button className="btn ghost" onClick={() => revertTexture(row)} disabled={!mine}>Revert</button>
         </div>
+        <button
+          className="btn block" disabled={row.extra && !mine}
+          title="Recolour this texture to look like other textures of its family (for example every kind of planks), with a preview"
+          onClick={() => useRecolor.getState().openVariants(row.path)}
+        >
+          Make variants…
+        </button>
       </div>
     </aside>
   );

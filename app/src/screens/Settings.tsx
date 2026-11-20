@@ -2,7 +2,7 @@
 import { open } from "@tauri-apps/plugin-dialog";
 import { useState } from "react";
 import { NavBar, PackChips, StatusBar, TopBar } from "../components/Shell";
-import { api, type SettingsPatch } from "../lib/api";
+import { api, type SettingsPatch, type Upscale } from "../lib/api";
 import { formatLabel } from "../lib/logic";
 import { useApp } from "../store";
 
@@ -85,6 +85,21 @@ export function Settings() {
                   {s.external_editor && <button className="btn ghost" style={{ height: 36 }} onClick={() => void save({ external_editor: null }, "Using the default program for PNG files.")}>Use default</button>}
                 </div>
                 <div className="hint">Used by “Open externally”. Pick Aseprite.exe, Paint.NET, GIMP… The app refreshes when you save there.</div>
+              </div>
+              <div className="field">
+                <span className="label">Starting from the game’s texture at 32× and more</span>
+                <select
+                  className="input" style={{ maxWidth: 420 }} aria-label="How the game's texture is enlarged"
+                  value={s.upscale ?? "nearest"}
+                  onChange={(e) => void save({ upscale: e.target.value as Upscale }, e.target.value === "smooth" ? "New textures start smoothed with Scale2x / Scale3x." : "New textures start with hard pixels.")}
+                >
+                  <option value="nearest">Hard pixels (default)</option>
+                  <option value="smooth">Smooth pixel-art (Scale2x / Scale3x / Scale4x family)</option>
+                </select>
+                <div className="hint">
+                  Used when a texture is opened in the editor or opened externally before your pack has it. Smooth rounds diagonal steps
+                  without blurring: only the texture’s own colours are used. Textures already in your pack are never rescaled.
+                </div>
               </div>
             </div>
 

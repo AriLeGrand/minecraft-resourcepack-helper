@@ -5,6 +5,8 @@ import { activeCel, pickColor } from "./doc";
 import { activeTab, setPendingFlush, useEditor, type Tab } from "./editorStore";
 import type { Buf, Pt, SelectMode } from "./pixels";
 import { editMask } from "./region";
+import { snapPalette, type SnapPalette } from "./packPalette";
+import { useApp } from "../store";
 import {
   applyStroke, constrainEnd, DRAG_SHAPES, floatSelection, FREEHAND, growsInPlace, growStroke, lift, place, select, selectMode,
   SELECT_TOOLS, toolDef, type Bitmap, type Floating, type Stroke, type StrokeRun, type ToolId,
@@ -50,11 +52,23 @@ export const setPreviewScheduler = (fn: Scheduler | null) => {
 export const isBusy = () => session !== null;
 export const sessionKind = () => session?.kind ?? null;
 
+// "Snap to pack palette": one prepared palette per palette content, so a
+// stroke in progress keeps seeing the same object (and its colour cache).
+let snapCache: { key: string; pal: SnapPalette | null } = { key: "", pal: null };
+function currentSnap(on: boolean): SnapPalette | null {
+  if (!on) return null;
+  const colours = useApp.getState().pack?.project.pack_palette ?? [];
+  const key = colours.join(",");
+  if (snapCache.key !== key) snapCache = { key, pal: snapPalette(colours) };
+  return snapCache.pal;
+}
+
 function strokeOf(tab: Tab, s: { tool: ToolId; snapshot: Buf; points: Pt[]; button: 0 | 2; seed?: number; bitmap?: Bitmap }): Stroke {
   const st = store();
   return {
     tool: s.tool, snapshot: s.snapshot, points: s.points, button: s.button, fg: st.fg, bg: st.bg,
     options: st.options, mask: editMask(tab.doc.selection, tab.region), seed: s.seed ?? 1, bitmap: s.bitmap,
+    snap: currentSnap(st.options.snapPalette),
   };
 }
 

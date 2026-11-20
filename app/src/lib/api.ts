@@ -22,6 +22,8 @@ export interface Settings {
   export_kind_folder: boolean;
   export_install: boolean;
   export_only_changed: boolean;
+  /** How a game texture is enlarged when a texture is started from it (32× and more). */
+  upscale: Upscale;
 }
 
 export interface RecentPack {
@@ -65,6 +67,8 @@ export interface Project {
   created_ms: number;
   last_export_ms: number | null;
   also_export: string[];
+  /** The pack palette: `#rrggbb`, at most 64. */
+  pack_palette: string[];
 }
 
 export interface PackState {
@@ -463,6 +467,7 @@ export interface SettingsPatch {
   export_kind_folder?: boolean;
   export_install?: boolean;
   export_only_changed?: boolean;
+  upscale?: Upscale;
 }
 
 export interface RenamedTexture {
@@ -523,7 +528,7 @@ export const api = {
   importZip: (zip: string, dest: string) => invoke<PackState>("import_zip", { zip, dest }),
   closePack: () => invoke<void>("close_pack"),
   getPack: () => invoke<PackState>("get_pack"),
-  updateProject: (patch: { name?: string; description?: string; also_export?: string[]; resolution?: number }) =>
+  updateProject: (patch: { name?: string; description?: string; also_export?: string[]; resolution?: number; pack_palette?: string[] }) =>
     invoke<PackState>("update_project", { patch }),
   loadTextures: () => invoke<{ rows: TextureRow[]; summary: PackSummary }>("load_textures"),
   textureDetail: (path: string) => invoke<TextureDetail>("texture_detail", { path }),
@@ -581,7 +586,69 @@ export const api = {
   applyFix: (id: string) => invoke<string>("apply_fix", { id }),
   exportPack: (request: { folder: boolean; install: boolean; only_changed: boolean; also: string[] }) =>
     invoke<{ outputs: ExportOutput[]; pack: PackState }>("export_pack", { request }),
+  // drawing helpers: recolour a set, make variants, seams
+  /** Before / after thumbnails of a recolour (the first 240 textures). Writes nothing. */
+  recolorPreview: (paths: string[], op: Recolor, packDir: string) =>
+    invoke<RecolorPreview[]>("recolor_preview", { paths, op, packDir }),
+  /** Recolours and writes into the pack; replaced files go to the trash. */
+  recolorApply: (paths: string[], op: Recolor, packDir: string) => invoke<WriteReport>("recolor_apply", { paths, op, packDir }),
+  /** Takes a recolour (or variants) back; returns how many textures were put back. */
+  recolorUndo: (report: WriteReport, packDir: string) => invoke<number>("recolor_undo", { report, packDir }),
+  variantsPreview: (source: string, targets: string[], packDir: string) =>
+    invoke<RecolorPreview[]>("variants_preview", { source, targets, packDir }),
+  variantsApply: (source: string, targets: string[], packDir: string) =>
+    invoke<WriteReport>("variants_apply", { source, targets, packDir }),
+  /** Seams of one frame when it tiles (raw RGBA, base64). */
+  seamMeasure: (width: number, height: number, rgba: string) => invoke<SeamReport>("seam_measure", { width, height, rgba }),
 };
+
+// ------------------------------------------------------ drawing helpers
+
+export type Upscale = "nearest" | "smooth";
+
+export interface Adjust {
+  hue: number;
+  saturation: number;
+  brightness: number;
+  contrast: number;
+}
+
+export interface MapPair {
+  from: string;
+  to: string;
+}
+
+export type Recolor = ({ kind: "adjust" } & Adjust) | { kind: "map"; pairs: MapPair[]; tolerance: number };
+
+export interface RecolorPreview {
+  path: string;
+  /** PNG data URLs of the first frame. */
+  before: string | null;
+  after: string | null;
+  in_pack: boolean;
+  error: string | null;
+}
+
+export interface WriteReport {
+  stamp: number;
+  replaced: string[];
+  created: string[];
+  created_mcmeta: string[];
+  failed: { path: string; message: string }[];
+}
+
+export interface SeamEdge {
+  edge: number;
+  inside: number;
+  seam: boolean;
+}
+
+export interface SeamReport {
+  /** Last column against the first (left / right edge). */
+  columns: SeamEdge;
+  /** Last row against the first (top / bottom edge). */
+  rows: SeamEdge;
+}
 
 /** Turns anything thrown by a command into a `CoreError`. */
 export function toError(e: unknown): CoreError {
