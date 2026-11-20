@@ -1,5 +1,5 @@
 blank_issues_enabled: true
 contact_links:
   - name: How to contribute
-    url: https://github.com/AriLeGrand/minecraft-resourcepack-helper/blob/main/CONTRIBUTING.md
+    url: https://github.com/AriLeGrand/Blockwright/blob/main/CONTRIBUTING.md
     about: Ground rules, setup and the checks to run before a pull request.

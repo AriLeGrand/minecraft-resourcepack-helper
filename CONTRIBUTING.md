@@ -10,7 +10,7 @@ By contributing, you agree that your work is published under the
 ## Ways to help
 
 - **Report a bug** or **suggest an idea** with the
-  [issue forms](https://github.com/AriLeGrand/minecraft-resourcepack-helper/issues/new/choose).
+  [issue forms](https://github.com/AriLeGrand/Blockwright/issues/new/choose).
   Please search the existing issues first.
 - **Check something in the game.** Several features are verified against the
   game's files but not yet in the game itself (see
@@ -45,8 +45,8 @@ You need **Rust** (stable, MSVC toolchain), **Node.js** 20+ and the
 **Microsoft C++ Build Tools**. Then:
 
 ```powershell
-git clone https://github.com/AriLeGrand/minecraft-resourcepack-helper.git
-cd minecraft-resourcepack-helper/app
+git clone https://github.com/AriLeGrand/Blockwright.git
+cd Blockwright/app
 npm install
 npm run tauri dev
 ```

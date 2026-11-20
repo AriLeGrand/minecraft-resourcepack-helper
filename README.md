@@ -11,7 +11,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/AriLeGrand/minecraft-resourcepack-helper/actions/workflows/build.yml"><img src="https://github.com/AriLeGrand/minecraft-resourcepack-helper/actions/workflows/build.yml/badge.svg" alt="Build status"></a>
+  <a href="https://github.com/AriLeGrand/Blockwright/actions/workflows/build.yml"><img src="https://github.com/AriLeGrand/Blockwright/actions/workflows/build.yml/badge.svg" alt="Build status"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-3b82f6" alt="License: MIT"></a>
 </p>
 
@@ -41,8 +41,8 @@
 ## Install
 
 1. Get the installer **`Blockwright_0.1.0_x64-setup.exe`**: from the
-   [Releases](https://github.com/AriLeGrand/minecraft-resourcepack-helper/releases) page,
-   from the **Artifacts** of the latest [Build run](https://github.com/AriLeGrand/minecraft-resourcepack-helper/actions/workflows/build.yml),
+   [Releases](https://github.com/AriLeGrand/Blockwright/releases) page,
+   from the **Artifacts** of the latest [Build run](https://github.com/AriLeGrand/Blockwright/actions/workflows/build.yml),
    or by [building it yourself](#building-from-source).
 2. Run it. It installs for your account only, without admin rights. Until signing is approved (see the
    [code signing policy](#code-signing-policy)), Windows may say the publisher is unknown: click
@@ -208,7 +208,7 @@ Bug reports, ideas and pull requests are welcome. Please read
 [CONTRIBUTING.md](CONTRIBUTING.md) first: it has the ground rules (above all,
 never commit Minecraft's own files), the setup and the checks to run. Report
 bugs and suggest ideas with the
-[issue forms](https://github.com/AriLeGrand/minecraft-resourcepack-helper/issues/new/choose).
+[issue forms](https://github.com/AriLeGrand/Blockwright/issues/new/choose).
 
 ## License
 
