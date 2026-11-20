@@ -34,6 +34,9 @@ pub struct Settings {
     pub export_kind_folder: bool,
     pub export_install: bool,
     pub export_only_changed: bool,
+    /// How a game texture is enlarged when a texture is started from it at
+    /// 32× or more: hard pixels (default) or Scale2x / Scale3x.
+    pub upscale: crate::upscale::Upscale,
 }
 
 pub fn settings_file(config_dir: &Path) -> PathBuf {

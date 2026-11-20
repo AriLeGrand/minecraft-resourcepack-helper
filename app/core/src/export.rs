@@ -210,6 +210,10 @@ pub fn run_checks(
         });
     }
 
+    // drawing helpers: pack palette and seams (warnings with "Show")
+    checks.extend(crate::palette::check(pack_dir, &project.pack_palette, pack));
+    checks.extend(crate::seams::check(pack_dir, pack));
+
     let icon = fs::read(pack_dir.join("pack.png"))
         .ok()
         .and_then(|d| png_dimensions(&d));
@@ -897,7 +901,11 @@ mod tests {
         assert!(!scan.iter().any(|t| t.path == "blocks/tallgrass"));
         let checks = run_checks(&f.pack, &f.project, &scan, Some(&f.index), Some(&ver));
         let ids: Vec<&str> = checks.iter().map(|c| c.id.as_str()).collect();
-        assert_eq!(ids, ["ready", "wrong_size", "unknown", "pack_files"]);
+        // the test images are gradients, so their edges show when tiled
+        assert_eq!(
+            ids,
+            ["ready", "wrong_size", "unknown", "seams", "pack_files"]
+        );
         assert!(checks.last().unwrap().ok);
     }
 

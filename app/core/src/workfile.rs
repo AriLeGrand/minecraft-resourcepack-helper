@@ -7,7 +7,10 @@
 use crate::error::{CoreError, IoCtx, Result};
 use crate::mcmeta::{self, Animation};
 use crate::pack::{modified_ms, now_ms, PROJECT_DIR};
-use crate::textures::{is_safe_texture_path, mcmeta_file, png_dimensions, texture_file};
+use crate::textures::{
+    category_of, is_safe_texture_path, mcmeta_file, png_dimensions, texture_file, Category,
+};
+use crate::upscale::{self, Upscale};
 use base64::Engine;
 use serde::{Deserialize, Serialize};
 use std::fs;
@@ -186,7 +189,13 @@ fn encode_png(img: &image::RgbaImage) -> Result<Vec<u8>> {
 }
 
 /// Builds a one-layer document from a flattened PNG, splitting animation frames.
-fn doc_from_png(png: &[u8], animation: Option<Animation>, scale: u32) -> Result<WorkDoc> {
+fn doc_from_png(
+    png: &[u8],
+    animation: Option<Animation>,
+    scale: u32,
+    method: Upscale,
+    wrap: bool,
+) -> Result<WorkDoc> {
     let img = image::load_from_memory_with_format(png, image::ImageFormat::Png)
         .map_err(|e| CoreError::new("bad_image", format!("The texture could not be read: {e}")))?
         .to_rgba8();
@@ -214,12 +223,7 @@ fn doc_from_png(png: &[u8], animation: Option<Animation>, scale: u32) -> Result<
     for i in 0..count {
         let mut frame = image::imageops::crop_imm(&img, 0, i * frame_h, w, frame_h).to_image();
         if scale > 1 {
-            frame = image::imageops::resize(
-                &frame,
-                w * scale,
-                frame_h * scale,
-                image::imageops::FilterType::Nearest,
-            );
+            frame = upscale::enlarge(&frame, scale, method, wrap);
         }
         frames.push(Frame {
             cels: vec![b64(&encode_png(&frame)?)],
@@ -288,6 +292,20 @@ fn read_animation(png: &Path) -> Option<Animation> {
 /// `scale` enlarges the game's texture when the pack has no file yet
 /// (pack resolution / 16 for blocks and items, 1 otherwise).
 pub fn open(pack_dir: &Path, vanilla_root: &Path, tex_path: &str, scale: u32) -> Result<OpenedDoc> {
+    open_with(pack_dir, vanilla_root, tex_path, scale, Upscale::Nearest)
+}
+
+/// [`open`] with a choice of how the game's texture is enlarged (hard pixels
+/// or Scale2x / Scale3x, see [`crate::upscale`]). Block textures count as
+/// tiling for the smooth method.
+pub fn open_with(
+    pack_dir: &Path,
+    vanilla_root: &Path,
+    tex_path: &str,
+    scale: u32,
+    method: Upscale,
+) -> Result<OpenedDoc> {
+    let wrap = category_of(tex_path) == Category::Blocks;
     let t = target(pack_dir, Some(vanilla_root), tex_path)?;
     let pack_png = &t.png;
     let vanilla = t
@@ -320,14 +338,14 @@ pub fn open(pack_dir: &Path, vanilla_root: &Path, tex_path: &str, scale: u32) ->
             None => {
                 let bytes = fs::read(pack_png).ctx(pack_png)?;
                 (
-                    doc_from_png(&bytes, read_animation(pack_png), 1)?,
+                    doc_from_png(&bytes, read_animation(pack_png), 1, Upscale::Nearest, false)?,
                     Origin::PackPng,
                 )
             }
         }
     } else if let Some((file, bytes)) = &vanilla {
         (
-            doc_from_png(bytes, read_animation(file), scale)?,
+            doc_from_png(bytes, read_animation(file), scale, method, wrap)?,
             Origin::Vanilla,
         )
     } else if tex_path == ICON_PATH {
@@ -664,7 +682,18 @@ pub fn open_raw(
     tex_path: &str,
     scale: u32,
 ) -> Result<OpenedRaw> {
-    let o = open(pack_dir, vanilla_root, tex_path, scale)?;
+    open_raw_with(pack_dir, vanilla_root, tex_path, scale, Upscale::Nearest)
+}
+
+/// [`open_raw`] with a choice of enlargement for a texture started from the game's.
+pub fn open_raw_with(
+    pack_dir: &Path,
+    vanilla_root: &Path,
+    tex_path: &str,
+    scale: u32,
+    method: Upscale,
+) -> Result<OpenedRaw> {
+    let o = open_with(pack_dir, vanilla_root, tex_path, scale, method)?;
     let mut frames = Vec::new();
     for f in &o.doc.frames {
         let mut cels = Vec::new();
@@ -782,6 +811,25 @@ mod tests {
             Some((16, 16))
         );
         assert!(!pack.exists(), "opening must not create files");
+    }
+
+    #[test]
+    fn smooth_start_enlarges_each_frame_with_scale2x() {
+        let (_t, vanilla, pack) = setup();
+        let o = open_with(&pack, &vanilla, "block/prismarine", 2, Upscale::Smooth).unwrap();
+        assert_eq!((o.doc.width, o.doc.height, o.doc.frames.len()), (32, 32, 4));
+        let strip = image::open(texture_file(&vanilla, "block/prismarine").unwrap())
+            .unwrap()
+            .to_rgba8();
+        for (i, f) in o.doc.frames.iter().enumerate() {
+            let small = image::imageops::crop_imm(&strip, 0, i as u32 * 16, 16, 16).to_image();
+            let got = png_to_rgba(&decode_b64(&f.cels[0]).unwrap()).unwrap();
+            assert_eq!(got, upscale::scale2x(&small, true), "frame {i}");
+        }
+        // a pack file is never rescaled, whatever the method
+        let raw = open_raw_with(&pack, &vanilla, "block/stone", 2, Upscale::Smooth).unwrap();
+        assert_eq!((raw.doc.width, raw.doc.height), (32, 32));
+        assert!(!pack.exists());
     }
 
     #[test]

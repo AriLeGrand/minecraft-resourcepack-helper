@@ -22,6 +22,10 @@ use packcreator_core::settings::{self, RecentPack, Settings};
 use packcreator_core::textures::{TextureEntry, VanillaIndex};
 use packcreator_core::whats_new::{self, VersionDiff};
 use packcreator_core::workfile;
+// drawing helpers (pack palette, recolour, variants, smooth start, seams)
+use packcreator_core::recolor::{self, Recolor, WriteReport};
+use packcreator_core::seams::{self, SeamReport};
+use packcreator_core::upscale::Upscale;
 use packcreator_core::McVersion;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -288,6 +292,7 @@ struct SettingsPatch {
     export_kind_folder: Option<bool>,
     export_install: Option<bool>,
     export_only_changed: Option<bool>,
+    upscale: Option<Upscale>,
 }
 
 fn clean(v: Option<String>) -> Option<String> {
@@ -323,6 +328,9 @@ fn update_settings(
     }
     if let Some(v) = patch.export_only_changed {
         inner.settings.export_only_changed = v;
+    }
+    if let Some(v) = patch.upscale {
+        inner.settings.upscale = v;
     }
     save_settings_now(&inner)?;
     let err = if rescan {
@@ -462,6 +470,7 @@ struct ProjectPatch {
     description: Option<String>,
     also_export: Option<Vec<String>>,
     resolution: Option<u32>,
+    pack_palette: Option<Vec<String>>,
 }
 
 #[tauri::command(async)]
@@ -489,6 +498,9 @@ fn update_project(state: State<AppState>, patch: ProjectPatch) -> Result<PackSta
             ));
         }
         p.project.resolution = r;
+    }
+    if let Some(colours) = patch.pack_palette {
+        p.project.pack_palette = packcreator_core::palette::normalise(&colours)?;
     }
     pack::save_project(&p.dir, &p.project)?;
     pack::write_pack_mcmeta(&p.dir, &p.project)?;
@@ -579,7 +591,7 @@ fn working_file(inner: &Inner, path: &str) -> Result<PathBuf> {
     } else {
         1
     };
-    import::start_from_vanilla(&root, &p.dir, path, scale)
+    import::start_from_vanilla_with(&root, &p.dir, path, scale, inner.settings.upscale)
 }
 
 #[tauri::command(async)]
@@ -800,7 +812,7 @@ fn editor_open(
     } else {
         1
     };
-    workfile::open_raw(&p.dir, &root, &path, scale)
+    workfile::open_raw_with(&p.dir, &root, &path, scale, inner.settings.upscale)
 }
 
 /// Saves the document: flattened PNG into the pack, layers into the working file.
@@ -1183,6 +1195,181 @@ fn export_pack(state: State<AppState>, request: ExportRequest) -> Result<ExportR
 
 // ----------------------------------------------------------------- setup
 
+// ------------------------------------------------------ drawing helpers
+
+/// Most textures one recolour preview covers (the dialog says when there are more).
+const MAX_PREVIEW: usize = 240;
+
+struct RecolorCtx {
+    dir: PathBuf,
+    vanilla: PathBuf,
+    resolution: u32,
+    method: Upscale,
+}
+
+impl RecolorCtx {
+    fn new(inner: &Inner, pack_dir: &str) -> Result<Self> {
+        let p = own_pack(inner, pack_dir)?;
+        Ok(RecolorCtx {
+            dir: p.dir.clone(),
+            vanilla: extract::vanilla_dir(&inner.cache_dir, &p.project.version_dir),
+            resolution: p.project.resolution,
+            method: inner.settings.upscale,
+        })
+    }
+
+    /// How much the game's texture is enlarged to match the pack resolution.
+    fn scale(&self, path: &str) -> u32 {
+        if packcreator_core::textures::category_of(path).uses_pack_resolution() {
+            (self.resolution / 16).max(1)
+        } else {
+            1
+        }
+    }
+
+    fn load(&self, path: &str) -> Result<recolor::Source> {
+        recolor::load(
+            &self.dir,
+            &self.vanilla,
+            path,
+            self.scale(path),
+            self.method,
+        )
+    }
+}
+
+#[derive(Serialize)]
+struct PreviewItem {
+    path: String,
+    /// The texture as it is now (the pack's, or the game's at the pack resolution).
+    before: Option<String>,
+    after: Option<String>,
+    in_pack: bool,
+    error: Option<String>,
+}
+
+fn preview_of(
+    path: &str,
+    source: Result<recolor::Source>,
+    change: impl Fn(&recolor::Source) -> Result<recolor::Image>,
+) -> PreviewItem {
+    match source {
+        Err(e) => PreviewItem {
+            path: path.to_owned(),
+            before: None,
+            after: None,
+            in_pack: false,
+            error: Some(e.message),
+        },
+        Ok(s) => {
+            let after = change(&s);
+            PreviewItem {
+                path: path.to_owned(),
+                before: Some(recolor::preview_url(&s.img, s.frame_h)),
+                after: after
+                    .as_ref()
+                    .ok()
+                    .map(|img| recolor::preview_url(img, s.frame_h)),
+                in_pack: s.in_pack,
+                error: after.err().map(|e| e.message),
+            }
+        }
+    }
+}
+
+/// Before / after thumbnails of a recolour. Writes nothing.
+#[tauri::command(async)]
+fn recolor_preview(
+    state: State<AppState>,
+    paths: Vec<String>,
+    op: Recolor,
+    pack_dir: String,
+) -> Result<Vec<PreviewItem>> {
+    let ctx = RecolorCtx::new(&state.lock(), &pack_dir)?;
+    Ok(paths
+        .iter()
+        .take(MAX_PREVIEW)
+        .map(|p| preview_of(p, ctx.load(p), |s| recolor::apply(&s.img, &op)))
+        .collect())
+}
+
+/// Recolours the textures and writes them into the pack (replaced files go
+/// to the trash; the report is what `recolor_undo` needs).
+#[tauri::command(async)]
+fn recolor_apply(
+    state: State<AppState>,
+    paths: Vec<String>,
+    op: Recolor,
+    pack_dir: String,
+) -> Result<WriteReport> {
+    let ctx = RecolorCtx::new(&state.lock(), &pack_dir)?;
+    Ok(recolor::recolor_and_write(
+        &ctx.dir,
+        &ctx.vanilla,
+        &paths,
+        &op,
+        |p| ctx.scale(p),
+        ctx.method,
+    ))
+}
+
+/// Takes back a recolour or a set of variants: replaced files come back from
+/// the trash, new ones go to the trash.
+#[tauri::command(async)]
+fn recolor_undo(state: State<AppState>, report: WriteReport, pack_dir: String) -> Result<usize> {
+    let ctx = RecolorCtx::new(&state.lock(), &pack_dir)?;
+    recolor::undo(&ctx.dir, &report)
+}
+
+/// Before / after thumbnails of "Make variants". Writes nothing.
+#[tauri::command(async)]
+fn variants_preview(
+    state: State<AppState>,
+    source: String,
+    targets: Vec<String>,
+    pack_dir: String,
+) -> Result<Vec<PreviewItem>> {
+    let ctx = RecolorCtx::new(&state.lock(), &pack_dir)?;
+    let src = ctx.load(&source)?;
+    Ok(targets
+        .iter()
+        .take(MAX_PREVIEW)
+        .map(|t| preview_of(t, ctx.load(t), |_| recolor::variant(&src, &ctx.vanilla, t)))
+        .collect())
+}
+
+/// Writes the chosen variants into the pack (see `recolor_apply`).
+#[tauri::command(async)]
+fn variants_apply(
+    state: State<AppState>,
+    source: String,
+    targets: Vec<String>,
+    pack_dir: String,
+) -> Result<WriteReport> {
+    let ctx = RecolorCtx::new(&state.lock(), &pack_dir)?;
+    let src = ctx.load(&source)?;
+    let mut items = Vec::new();
+    let mut failed = Vec::new();
+    for t in targets.iter().filter(|t| **t != source) {
+        match recolor::variant(&src, &ctx.vanilla, t) {
+            Ok(img) => items.push((t.clone(), img)),
+            Err(e) => failed.push(recolor::Failure {
+                path: t.clone(),
+                message: e.message,
+            }),
+        }
+    }
+    let mut report = recolor::write_all(&ctx.dir, &ctx.vanilla, items);
+    report.failed.extend(failed);
+    Ok(report)
+}
+
+/// Seams of one frame drawn in the editor (raw RGBA, base64).
+#[tauri::command(async)]
+fn seam_measure(width: u32, height: u32, rgba: String) -> Result<SeamReport> {
+    seams::measure_raw(width, height, workfile::decode_b64(&rgba)?)
+}
+
 fn env_dir(key: &str) -> Option<PathBuf> {
     std::env::var_os(key)
         .map(PathBuf::from)
@@ -1251,6 +1438,12 @@ pub fn run() {
             batch_scan,
             batch_import,
             whats_new,
+            recolor_preview,
+            recolor_apply,
+            recolor_undo,
+            variants_preview,
+            variants_apply,
+            seam_measure,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Pack Creator");

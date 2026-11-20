@@ -55,6 +55,9 @@ pub struct Project {
     /// Other installed versions (folder names) to export a copy for.
     #[serde(default)]
     pub also_export: Vec<String>,
+    /// The pack palette (`#rrggbb`, at most 64), shared by every texture.
+    #[serde(default)]
+    pub pack_palette: Vec<String>,
 }
 
 fn project_file(dir: &Path) -> PathBuf {
@@ -223,6 +226,7 @@ pub fn create_pack(
         created_ms: now_ms(),
         last_export_ms: None,
         also_export: Vec::new(),
+        pack_palette: Vec::new(),
     };
     write_pack_mcmeta(dir, &project)?;
     let icon = dir.join("pack.png");
@@ -303,6 +307,7 @@ pub fn open_pack(dir: &Path, installed: &[InstalledVersion]) -> Result<Project> 
         created_ms: now_ms(),
         last_export_ms: None,
         also_export: Vec::new(),
+        pack_palette: Vec::new(),
     };
     save_project(dir, &project)?;
     Ok(project)
@@ -479,6 +484,26 @@ mod tests {
         );
         assert!(dir.join("assets/minecraft/textures").is_dir());
         assert_eq!(open_pack(&dir, &vs).unwrap(), p);
+    }
+
+    #[test]
+    fn older_project_files_without_a_pack_palette_still_open() {
+        let tmp = tempfile::tempdir().unwrap();
+        let vs = versions(tmp.path());
+        let dir = tmp.path().join("p");
+        let mut p = create_pack(&dir, "P", "", modern(&vs), 16).unwrap();
+        // a project file written before the pack palette existed
+        let file = project_file(&dir);
+        let mut json: serde_json::Value =
+            serde_json::from_str(&fs::read_to_string(&file).unwrap()).unwrap();
+        json.as_object_mut().unwrap().remove("pack_palette");
+        fs::write(&file, json.to_string()).unwrap();
+        let opened = open_pack(&dir, &vs).unwrap();
+        assert!(opened.pack_palette.is_empty());
+        // and the palette survives a save
+        p.pack_palette = vec!["#102030".into()];
+        save_project(&dir, &p).unwrap();
+        assert_eq!(open_pack(&dir, &vs).unwrap().pack_palette, vec!["#102030"]);
     }
 
     #[test]

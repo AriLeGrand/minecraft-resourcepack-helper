@@ -7,7 +7,8 @@
 use crate::error::{CoreError, IoCtx, Result};
 use crate::mcmeta::{self, Animation};
 use crate::pack::{now_ms, PROJECT_DIR};
-use crate::textures::{mcmeta_file, png_dimensions, texture_file};
+use crate::textures::{category_of, mcmeta_file, png_dimensions, texture_file, Category};
+use crate::upscale::{self, Upscale};
 use serde::Serialize;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -145,6 +146,47 @@ pub fn start_from_vanilla(
     tex_path: &str,
     scale: u32,
 ) -> Result<PathBuf> {
+    start_from_vanilla_with(vanilla_root, pack_dir, tex_path, scale, Upscale::Nearest)
+}
+
+/// The game's texture enlarged by `scale` with `method` (animation frames one
+/// by one; block textures are treated as tiling for the smooth method).
+pub fn vanilla_at_scale(
+    vanilla_root: &Path,
+    tex_path: &str,
+    scale: u32,
+    method: Upscale,
+) -> Result<image::RgbaImage> {
+    let src = texture_file(vanilla_root, tex_path)?;
+    if !src.is_file() {
+        return Err(CoreError::new(
+            "not_found",
+            format!("The game has no texture called {tex_path} in this version."),
+        ));
+    }
+    let img = image::open(&src)
+        .map_err(|e| CoreError::new("bad_image", format!("{}: {e}", src.display())))?
+        .to_rgba8();
+    let anim = fs::read_to_string(mcmeta_file(&src))
+        .ok()
+        .and_then(|t| mcmeta::parse_animation(&t).ok().flatten());
+    let frame_h = match &anim {
+        Some(a) => mcmeta::frame_height(img.width(), img.height(), Some(a)),
+        None => img.height(),
+    };
+    let wrap = category_of(tex_path) == Category::Blocks;
+    Ok(upscale::enlarge_strip(&img, frame_h, scale, method, wrap))
+}
+
+/// [`start_from_vanilla`] with a choice of enlargement: hard pixels or the
+/// smooth Scale2x / Scale3x family (see [`crate::upscale`]).
+pub fn start_from_vanilla_with(
+    vanilla_root: &Path,
+    pack_dir: &Path,
+    tex_path: &str,
+    scale: u32,
+    method: Upscale,
+) -> Result<PathBuf> {
     let dest = texture_file(pack_dir, tex_path)?;
     if dest.exists() {
         return Ok(dest);
@@ -162,13 +204,7 @@ pub fn start_from_vanilla(
     if scale <= 1 {
         fs::copy(&src, &dest).ctx(&dest)?;
     } else {
-        let img = image::open(&src)
-            .map_err(|e| CoreError::new("bad_image", format!("{}: {e}", src.display())))?;
-        let big = img.resize_exact(
-            img.width() * scale,
-            img.height() * scale,
-            image::imageops::FilterType::Nearest,
-        );
+        let big = vanilla_at_scale(vanilla_root, tex_path, scale, method)?;
         big.save_with_format(&dest, image::ImageFormat::Png)
             .map_err(|e| {
                 CoreError::new("io", format!("Could not write {}: {e}", dest.display()))
@@ -381,6 +417,37 @@ mod tests {
                 .kind,
             "not_found"
         );
+    }
+
+    #[test]
+    fn start_from_vanilla_smooth_uses_scale2x_per_frame() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (vanilla, pack) = (tmp.path().join("vanilla"), tmp.path().join("pack"));
+        let v = texture_file(&vanilla, "block/x").unwrap();
+        fs::create_dir_all(v.parent().unwrap()).unwrap();
+        // two 4x4 frames: a diagonal on white, then all white
+        let k = image::Rgba([0, 0, 0, 255]);
+        let w = image::Rgba([255, 255, 255, 255]);
+        let strip = image::RgbaImage::from_fn(4, 8, |x, y| if y < 4 && x == y { k } else { w });
+        strip.save(&v).unwrap();
+        fs::write(mcmeta_file(&v), r#"{"animation":{}}"#).unwrap();
+        let out = start_from_vanilla_with(&vanilla, &pack, "block/x", 2, Upscale::Smooth).unwrap();
+        let big = image::open(&out).unwrap().to_rgba8();
+        assert_eq!(big.dimensions(), (8, 16));
+        let f0 = image::imageops::crop_imm(&strip, 0, 0, 4, 4).to_image();
+        let expect = upscale::scale2x(&f0, true);
+        assert_eq!(
+            image::imageops::crop_imm(&big, 0, 0, 8, 8).to_image(),
+            expect
+        );
+        // the smooth result differs from hard pixels on a diagonal
+        assert_ne!(expect, upscale::enlarge(&f0, 2, Upscale::Nearest, true));
+        // the second frame stays white: it never borrows the first frame's pixels
+        assert!(image::imageops::crop_imm(&big, 0, 8, 8, 8)
+            .to_image()
+            .pixels()
+            .all(|p| *p == w));
+        assert!(mcmeta_file(&out).is_file());
     }
 
     #[test]

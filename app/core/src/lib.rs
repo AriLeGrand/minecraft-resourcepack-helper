@@ -27,6 +27,11 @@ pub mod textures;
 pub mod version;
 pub mod whats_new;
 pub mod workfile;
+// drawing helpers: pack palette, recolouring, variants, smooth start, seams
+pub mod palette;
+pub mod recolor;
+pub mod seams;
+pub mod upscale;
 
 pub use error::{CoreError, Result};
 pub use pack_format::PackFormat;
