@@ -1,14 +1,16 @@
 // Screen 2: texture browser, layout "list + compare".
+import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { open } from "@tauri-apps/plugin-dialog";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Icon } from "../components/Icon";
 import { NavBar, PackChips, StatusBar, TopBar } from "../components/Shell";
 import { useEditor } from "../editor/editorStore";
-import { api, images, type TextureDetail, type TextureRow } from "../lib/api";
+import { api, images, type BatchScan, type ChangedTexture, type TextureDetail, type TextureRow, type WhatsNewView } from "../lib/api";
 import {
-  baseName, CATEGORIES, categoryLabel, countRows, dayLabel, filterRows, folderOf, matchesElsewhere, timeLabel,
-  virtualWindow,
+  baseName, CATEGORIES, categoryLabel, compareChoices, countRows, dayLabel, defaultCompareVersion, filterRows, folderOf,
+  matchesElsewhere, realRenames, timeLabel, virtualWindow, whatsNewNotice, whatsNewOnly, whatsNewTitle, type WhatsNewMode,
 } from "../lib/logic";
+import { BatchImportDialog } from "../components/BatchImportDialog";
 import { ShareDialog } from "../components/ShareDialog";
 import { useApp } from "../store";
 
@@ -40,12 +42,20 @@ export function Browser() {
   const setView = useApp((s) => s.setView);
   const stamp = useApp((s) => s.stamp);
   const reload = useApp((s) => s.reload);
+  const whatsNew = useApp((s) => s.whatsNew);
 
   const dirName = pack.project.version_dir;
   const visible = useMemo(() => filterRows(rows, filters), [rows, filters]);
   const counts = useMemo(() => countRows(rows, filters.category), [rows, filters.category]);
   const elsewhere = useMemo(() => matchesElsewhere(rows, filters), [rows, filters]);
   const selectedRow = useMemo(() => rows.find((r) => r.path === selected) ?? null, [rows, selected]);
+  // textures Mojang redrew since the compared version, for the row tag
+  const redrawn = useMemo(() => new Set(whatsNew?.diff.changed.map((c) => c.path) ?? []), [whatsNew]);
+  // which "What's new" list is shown, if any
+  const whatsNewMode = (["new", "changed", "renamed"] as const).find(
+    (m) => whatsNew && filters.only && filters.onlyTitle === whatsNewTitle(whatsNew, m),
+  ) ?? null;
+  const redrawnInPack = useMemo(() => rows.filter((r) => r.mine && redrawn.has(r.path)).length, [rows, redrawn]);
   const now = Date.now();
 
   // virtual list
@@ -87,7 +97,59 @@ export function Browser() {
   };
 
   const [sharing, setSharing] = useState(false);
-  const title = filters.only ? "Selected textures" : filters.category === "all" ? "All textures" : categoryLabel(filters.category);
+  const [batch, setBatch] = useState<{ scan: BatchScan; stamp: number } | null>(null);
+  const [dragging, setDragging] = useState(false);
+  const scanPaths = async (paths: string[]) => {
+    const app = useApp.getState();
+    if (paths.length === 0 || app.busy) return;
+    app.setBusy({ text: "Matching the images to the textures…", done: 0, total: 0 });
+    try {
+      const scan = await api.batchScan(paths, pack.dir);
+      if (scan.rows.length === 0) {
+        app.toast("No PNG files there. Batch import takes PNG files (and their .mcmeta files).", "warn");
+      } else {
+        setBatch({ scan, stamp: Date.now() });
+      }
+    } catch (e) {
+      app.showError(e, "The images could not be read");
+    } finally {
+      app.setBusy(null);
+    }
+  };
+  const pickFolder = async () => {
+    const dir = await open({ directory: true, title: "Folder with the PNG files to import" });
+    if (typeof dir === "string") await scanPaths([dir]);
+  };
+  // dropping PNG files or a folder anywhere on the window
+  const scanRef = useRef(scanPaths);
+  scanRef.current = scanPaths;
+  const batchOpen = batch !== null || sharing;
+  useEffect(() => {
+    if (batchOpen) return;
+    let unlisten: (() => void) | null = null;
+    let gone = false;
+    getCurrentWebview()
+      .onDragDropEvent((e) => {
+        const p = e.payload;
+        if (p.type === "enter") setDragging(p.paths.length > 0);
+        else if (p.type === "leave") setDragging(false);
+        else if (p.type === "drop") {
+          setDragging(false);
+          void scanRef.current(p.paths);
+        }
+      })
+      .then((u) => {
+        if (gone) u();
+        else unlisten = u;
+      })
+      .catch(() => {});
+    return () => {
+      gone = true;
+      unlisten?.();
+      setDragging(false);
+    };
+  }, [batchOpen]);
+  const title = filters.only ? filters.onlyTitle ?? "Selected textures" : filters.category === "all" ? "All textures" : categoryLabel(filters.category);
   const total = filters.category === "all" ? rows.length : counts.byCategory[filters.category] ?? 0;
   const done = filters.category === "all"
     ? Object.values(counts.doneByCategory).reduce((a, b) => a + b, 0)
@@ -125,6 +187,7 @@ export function Browser() {
             <label><input type="checkbox" checked={filters.animated} onChange={(e) => setFilters({ animated: e.target.checked })} /> Animated</label>
             <label><input type="checkbox" checked={filters.renamed} onChange={(e) => setFilters({ renamed: e.target.checked })} /> Renamed in other versions</label>
             <label><input type="checkbox" checked={filters.wrongSize} onChange={(e) => setFilters({ wrongSize: e.target.checked })} /> Wrong size for {pack.project.resolution}×</label>
+            <WhatsNewPanel mode={whatsNewMode} />
           </div>
         </aside>
 
@@ -145,6 +208,9 @@ export function Browser() {
                 onChange={(e) => setFilters({ search: e.target.value, only: null })}
               />
             </label>
+            <button className="btn" onClick={() => void pickFolder()} disabled={rows.length === 0 || !!busy} title="Import a folder of PNG files: each one is matched to its texture (you can also drop files or a folder on the window)">
+              <span className="row" style={{ gap: 6 }}><Icon name="folder" size={14} width={2} />Batch import…</span>
+            </button>
             <button className="btn" onClick={() => setSharing(true)} disabled={rows.length === 0} title="Share the to-do list (copy or save as a file)">
               <span className="row" style={{ gap: 6 }}><Icon name="share" size={14} width={2} />Share list</span>
             </button>
@@ -154,9 +220,15 @@ export function Browser() {
             </div>
           </div>
 
-          {filters.only && (
+          {whatsNew && whatsNewMode && (
             <div className="notice">
-              Showing the {filters.only.length} texture{filters.only.length === 1 ? "" : "s"} from the check.
+              <span>{whatsNewNotice(whatsNew, redrawnInPack)}.</span>
+              <a onClick={() => setFilters({ only: null })}>Show everything</a>
+            </div>
+          )}
+          {filters.only && !whatsNewMode && (
+            <div className="notice">
+              Showing the {filters.only.length} texture{filters.only.length === 1 ? "" : "s"} {filters.onlyLabel ?? "from the check"}.
               <a onClick={() => setFilters({ only: null })}>Show everything</a>
             </div>
           )}
@@ -204,10 +276,13 @@ export function Browser() {
                         {baseName(r.path)}
                         {filters.category === "all" || filters.only ? <span className="dim"> · {folderOf(r.path)}</span> : folderOf(r.path).includes("/") ? <span className="dim"> · {folderOf(r.path).split("/").slice(1).join("/")}</span> : null}
                       </span>
+                      {r.mine && redrawn.has(r.path) && (
+                        <span className="tag redrawn" title={`Mojang redrew the game's texture in ${whatsNew!.diff.other_is_older ? whatsNew!.diff.this_version : whatsNew!.diff.other_version}: your drawing may need an update`}>redrawn by Mojang</span>
+                      )}
                     </span>
                     <span style={{ color: r.wrong_size ? "var(--warn)" : "var(--text-soft)" }}>{sizeText(r)}</span>
                     <span className="dim">{r.animated ? `${r.frames} frames` : "—"}</span>
-                    <span className={`status st-${r.status}`}><span className="dot" />{r.extra ? "Not in this version" : STATUS_TEXT[r.status]}</span>
+                    <span className={`status st-${r.status}`} title={r.extra ? "Not in this version" : STATUS_TEXT[r.status]}><span className="dot" /><span className="ellipsis">{r.extra ? "Not in this version" : STATUS_TEXT[r.status]}</span></span>
                     <span className="dim">{r.mine ? dayLabel(r.mine.modified_ms, now) : "—"}</span>
                   </div>
                 ))}
@@ -222,6 +297,13 @@ export function Browser() {
         <Inspector row={selectedRow} now={now} />
       </div>
       {sharing && <ShareDialog visible={visible} all={rows} viewTitle={title} onClose={() => setSharing(false)} />}
+      {batch && <BatchImportDialog scan={batch.scan} scanStamp={batch.stamp} onClose={() => setBatch(null)} />}
+      {dragging && (
+        <div className="droptarget">
+          <div>Drop to import into {pack.project.name}</div>
+          <div className="dim">PNG files or a folder: each image is matched to its texture, then you review the list.</div>
+        </div>
+      )}
       <StatusBar>
         {summary && <span>{summary.done} / {summary.total} textures done</span>}
       </StatusBar>
@@ -254,6 +336,157 @@ function GridView({ rows, dirName, stamp, selected, onSelect }: {
           <span className="mono ellipsis">{baseName(r.path)}</span>
         </button>
       ))}
+    </div>
+  );
+}
+
+
+// ------------------------------------------------------- what's new
+
+/** Side bar: "What's new since…" another installed version. */
+function WhatsNewPanel({ mode }: { mode: WhatsNewMode | null }) {
+  const pack = useApp((s) => s.pack)!;
+  const boot = useApp((s) => s.boot);
+  const busy = useApp((s) => s.busy);
+  const rows = useApp((s) => s.rows);
+  const whatsNew = useApp((s) => s.whatsNew);
+  const setFilters = useApp((s) => s.setFilters);
+  const packLabel = pack.version?.label ?? pack.project.version_id ?? pack.project.version_dir;
+  const choices = useMemo(
+    () => compareChoices(boot?.versions ?? [], pack.project.version_dir, packLabel),
+    [boot, pack.project.version_dir, packLabel],
+  );
+  const [other, setOther] = useState<string | null>(() => whatsNew?.diff.other_dir ?? defaultCompareVersion(choices, packLabel));
+  const inPack = useMemo(() => {
+    const set = new Set(whatsNew?.diff.changed.map((c) => c.path) ?? []);
+    return rows.filter((r) => r.mine && set.has(r.path)).length;
+  }, [rows, whatsNew]);
+
+  if (choices.length === 0) {
+    return <div className="dim" style={{ fontSize: 11, padding: "6px 8px" }}>Install another Minecraft version to see what changed between versions.</div>;
+  }
+  const chosen = choices.find((v) => v.dir_name === other) ?? null;
+  const current = whatsNew && whatsNew.diff.other_dir === other ? whatsNew : null;
+
+  const show = (w: WhatsNewView, m: WhatsNewMode) => {
+    useApp.getState().select(null);
+    setFilters({ only: whatsNewOnly(w, m), onlyTitle: whatsNewTitle(w, m), onlyLabel: "" });
+  };
+  const run = async () => {
+    const app = useApp.getState();
+    if (!chosen || app.busy) return;
+    try {
+      if (!chosen.extracted) {
+        app.setBusy({ text: `Extracting textures from Minecraft ${chosen.label}…`, done: 0, total: 0 });
+        await api.extractVersion(chosen.dir_name);
+        app.setBoot(await api.bootstrap());
+      }
+      app.setBusy({ text: `Comparing ${packLabel} with ${chosen.label}…`, done: 0, total: 0 });
+      const w = await api.whatsNew(chosen.dir_name, pack.dir);
+      app.setWhatsNew(w);
+      show(w, "new");
+      app.setStatus(`Compared ${packLabel} with ${chosen.label} in ${w.millis < 1000 ? `${w.millis} ms` : `${(w.millis / 1000).toFixed(1)} s`}`);
+    } catch (e) {
+      app.showError(e, `Minecraft ${chosen.label} could not be compared`);
+    } finally {
+      app.setBusy(null);
+    }
+  };
+
+  const older = current?.diff.other_is_older ?? true;
+  const modes: { key: WhatsNewMode; label: string; n: number }[] = current
+    ? [
+        { key: "new", label: older ? "New" : "Gone", n: current.diff.added.length },
+        { key: "changed", label: older ? "Changed" : "Redrawn", n: current.diff.changed.length },
+        { key: "renamed", label: "Renamed", n: realRenames(current).length },
+      ]
+    : [];
+  // the other version's textures that have no match in the pack's version
+  const otherOnly = current?.diff.removed ?? [];
+
+  return (
+    <div className="whatsnew">
+      <div className="wn-head">What’s new since…</div>
+      <div className="row" style={{ gap: 6 }}>
+        <select className="input sm" aria-label="Version to compare with" value={other ?? ""} onChange={(e) => setOther(e.target.value)} style={{ flex: 1, minWidth: 0 }}>
+          {choices.map((v) => <option key={v.dir_name} value={v.dir_name}>{v.label === v.dir_name ? v.label : `${v.label} (${v.dir_name})`}</option>)}
+        </select>
+        {!current && (
+          <button className="btn" style={{ height: 34 }} disabled={!chosen || !!busy} onClick={() => void run()} title={`Compare the game textures of ${packLabel} with another version`}>Compare</button>
+        )}
+      </div>
+      {current && (
+        <>
+          <div className="seg sm" role="group" aria-label="What is new">
+            {modes.map((m) => (
+              <button
+                key={m.key}
+                className={mode === m.key ? "on" : ""}
+                title={whatsNewTitle(current, m.key)}
+                onClick={() => (mode === m.key ? setFilters({ only: null }) : show(current, m.key))}
+              >
+                <span>{m.label}</span><span className="n">{m.n}</span>
+              </button>
+            ))}
+          </div>
+          <div className="dim" style={{ fontSize: 11, padding: "0 2px" }}>
+            {current.diff.changed.length} redrawn by Mojang, {inPack} of them in your pack.
+          </div>
+          {otherOnly.length > 0 && (
+            <details className="wn-removed">
+              <summary>{older ? `${otherOnly.length} removed since ${current.diff.other_version}` : `${otherOnly.length} added in ${current.diff.other_version}`}</summary>
+              <div className="mono">
+                {otherOnly.map((p) => <div key={p}>{p}</div>)}
+              </div>
+            </details>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+/** Inspector: what changed for this texture since the compared version. */
+function WhatsNewFacts({ row, w }: { row: TextureRow; w: WhatsNewView }) {
+  const d = w.diff;
+  const changed: ChangedTexture | undefined = d.changed.find((c) => c.path === row.path);
+  const renamed = d.renamed.find((r) => r.to === row.path && !r.folder_only);
+  const added = d.added.includes(row.path);
+  if (!changed && !renamed && !added) return null;
+  const older = d.other_is_older;
+  // the older version on the left
+  const sides = changed
+    ? [
+        { dir: d.other_dir, path: changed.other_path, version: d.other_version, w: changed.other_width, h: changed.other_height },
+        { dir: d.this_dir, path: changed.path, version: d.this_version, w: changed.width, h: changed.height },
+      ]
+    : [];
+  if (!older) sides.reverse();
+  return (
+    <div className="eras">
+      <div className="caps">{older ? `Since ${d.other_version}` : `Compared with ${d.other_version}`}</div>
+      {added && <div style={{ fontSize: 12 }}>{older ? `New in ${d.this_version}: not in ${d.other_version}.` : `Gone in ${d.other_version}.`}</div>}
+      {renamed && (
+        <div style={{ fontSize: 12 }}>
+          Called <span className="mono">{renamed.from}</span> in {d.other_version}.
+        </div>
+      )}
+      {changed && (
+        <>
+          <div style={{ fontSize: 12 }}>
+            <span className="tag redrawn">redrawn by Mojang</span>
+            {row.mine && <span style={{ color: "var(--warn)" }}> Your pack has its own drawing: check it still matches.</span>}
+          </div>
+          <div className="compare">
+            {sides.map((s) => (
+              <div key={s.version}>
+                <div className="preview checker"><img className="pixel" src={images.vanillaFull(s.dir, s.path)} alt={`Game texture in ${s.version}`} /></div>
+                <div className="dim" style={{ fontSize: 11 }}>{s.version} · {s.w}×{s.h}</div>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -341,6 +574,7 @@ function revertTexture(row: TextureRow) {
 function Inspector({ row, now }: { row: TextureRow | null; now: number }) {
   const pack = useApp((s) => s.pack)!;
   const stamp = useApp((s) => s.stamp);
+  const whatsNew = useApp((s) => s.whatsNew);
   const [detail, setDetail] = useState<TextureDetail | null>(null);
   const path = row?.path ?? null;
 
@@ -410,6 +644,7 @@ function Inspector({ row, now }: { row: TextureRow | null; now: number }) {
           </>
         )}
       </dl>
+      {whatsNew && <WhatsNewFacts row={row} w={whatsNew} />}
       {detail && detail.eras.length > 0 && (
         <div className="eras">
           <div className="caps">Name across versions</div>

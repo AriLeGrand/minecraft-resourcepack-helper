@@ -7,9 +7,11 @@
 use crate::error::{CoreError, IoCtx, Result};
 use crate::minecraft::InstalledVersion;
 use crate::textures::{build_entries, VanillaIndex, INDEX_SCHEMA};
+use std::collections::HashMap;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex, OnceLock};
 
 /// Folders of the jar that are extracted (textures, and the small JSON files
 /// that describe models and particles, used by later previews).
@@ -80,6 +82,17 @@ fn wanted(name: &str) -> bool {
     })
 }
 
+/// One lock per extracted folder, shared by every thread of the app.
+fn version_lock(cache_root: &Path, dir_name: &str) -> Arc<Mutex<()>> {
+    static LOCKS: OnceLock<Mutex<HashMap<PathBuf, Arc<Mutex<()>>>>> = OnceLock::new();
+    let key = vanilla_dir(cache_root, dir_name);
+    let mut map = LOCKS
+        .get_or_init(|| Mutex::new(HashMap::new()))
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
+    map.entry(key).or_default().clone()
+}
+
 /// Extracts a version (or returns the cached index when it is up to date).
 /// `progress(done, total)` is called while files are written.
 pub fn extract_version(
@@ -103,6 +116,14 @@ pub fn extract_version(
             format!("Minecraft {}: {p}", version.dir_name),
         ));
     }
+    if let Some(idx) = load_index(cache_root, version) {
+        return Ok(idx);
+    }
+    // Two requests for the same version (for example the start screen and
+    // the browser at once) must not write the same temporary folder: the
+    // second one waits, then uses what the first one extracted.
+    let lock = version_lock(cache_root, &version.dir_name);
+    let _guard = lock.lock().unwrap_or_else(|e| e.into_inner());
     if let Some(idx) = load_index(cache_root, version) {
         return Ok(idx);
     }
@@ -375,5 +396,28 @@ mod tests {
         clear_version(&cache, "1.21.4").unwrap();
         assert!(!is_extracted(&cache, v));
         clear_version(&cache, "1.21.4").unwrap(); // twice is fine
+    }
+
+    #[test]
+    fn two_extractions_of_the_same_version_at_once_both_succeed() {
+        let (_tmp, cache, vs) = setup();
+        let v = by_name(&vs, "1.21.4").clone();
+        let handles: Vec<_> = (0..4)
+            .map(|_| {
+                let (cache, v) = (cache.clone(), v.clone());
+                std::thread::spawn(move || extract_version(&cache, &v, &mut |_, _| {}))
+            })
+            .collect();
+        let results: Vec<_> = handles.into_iter().map(|h| h.join().unwrap()).collect();
+        for r in &results {
+            assert_eq!(r.as_ref().unwrap(), results[0].as_ref().unwrap());
+        }
+        assert!(is_extracted(&cache, &v));
+        let leftovers: Vec<_> = fs::read_dir(cache.join("vanilla"))
+            .unwrap()
+            .flatten()
+            .filter(|e| e.file_name().to_string_lossy().contains(".tmp-"))
+            .collect();
+        assert!(leftovers.is_empty());
     }
 }

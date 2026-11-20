@@ -5,6 +5,7 @@
 //! the legacy particle sheet, jar extraction, the texture index, `.mcmeta`
 //! files, packs, import and export.
 
+pub mod batch;
 pub mod error;
 pub mod export;
 pub mod extract;
@@ -24,6 +25,7 @@ pub mod settings;
 pub mod share;
 pub mod textures;
 pub mod version;
+pub mod whats_new;
 pub mod workfile;
 
 pub use error::{CoreError, Result};

@@ -4,6 +4,7 @@
 mod images;
 mod watch;
 
+use packcreator_core::batch::{self, BatchItem, BatchScan, ItemResult};
 use packcreator_core::error::{CoreError, Result};
 use packcreator_core::export::{self, AltTarget, Check, ExportKind, ExportOptions, ExportOutput};
 use packcreator_core::extract;
@@ -19,6 +20,7 @@ use packcreator_core::particles::ParticleSheet;
 use packcreator_core::rows::{self, NameEra, TextureRow};
 use packcreator_core::settings::{self, RecentPack, Settings};
 use packcreator_core::textures::{TextureEntry, VanillaIndex};
+use packcreator_core::whats_new::{self, VersionDiff};
 use packcreator_core::workfile;
 use packcreator_core::McVersion;
 use serde::{Deserialize, Serialize};
@@ -42,6 +44,15 @@ pub struct Inner {
     pub indexes: HashMap<String, Arc<VanillaIndex>>,
     pub pack: Option<OpenPack>,
     pub watcher: Option<watch::PackWatcher>,
+    /// The last batch-import scan: the only files the batch commands and the
+    /// `pcimg://localhost/batch/<id>` route may read.
+    pub batch: Option<BatchSession>,
+}
+
+pub struct BatchSession {
+    pub pack_dir: PathBuf,
+    /// Per row id: the source file and the textures it may become.
+    pub rows: Vec<(PathBuf, Vec<String>)>,
 }
 
 #[derive(Default)]
@@ -613,6 +624,163 @@ fn own_pack<'a>(inner: &'a Inner, pack_dir: &str) -> Result<&'a OpenPack> {
     Ok(p)
 }
 
+#[derive(Serialize)]
+struct WhatsNewView {
+    diff: VersionDiff,
+    /// Changed textures (pack's names) the pack has its own file for.
+    changed_in_pack: Vec<String>,
+    /// How long the comparison took (0 or close when it came from the cache).
+    millis: u64,
+}
+
+/// "What's new in this version": the pack's version compared with another
+/// installed one. The other version is extracted first if needed (with the
+/// usual progress events); the result is cached per pair of jars.
+#[tauri::command(async)]
+fn whats_new(
+    app: AppHandle,
+    state: State<AppState>,
+    other_dir_name: String,
+    pack_dir: String,
+) -> Result<WhatsNewView> {
+    let started = std::time::Instant::now();
+    let (dir, cache, this, other, this_index) = {
+        let mut inner = state.lock();
+        let p = own_pack(&inner, &pack_dir)?;
+        let dir = p.dir.clone();
+        let version_dir = p.project.version_dir.clone();
+        let this = inner.version(&version_dir)?;
+        let other = inner.version(&other_dir_name)?;
+        let index = inner.index(&version_dir).ok_or_else(|| {
+            CoreError::new(
+                "not_extracted",
+                "The game textures for this version are not extracted yet.",
+            )
+        })?;
+        (dir, inner.cache_dir.clone(), this, other, index)
+    };
+    let emit = |done: usize, total: usize| {
+        let _ = app.emit(
+            "extract-progress",
+            Progress {
+                dir_name: other_dir_name.clone(),
+                done,
+                total,
+            },
+        );
+    };
+    // the lock is not held while files are extracted or compared
+    let other_index = Arc::new(extract::extract_version(&cache, &other, &mut |d, t| {
+        emit(d, t)
+    })?);
+    state
+        .lock()
+        .indexes
+        .insert(other_dir_name.clone(), other_index.clone());
+    let diff = whats_new::compare(&cache, &this, &this_index, &other, &other_index, &emit)?;
+    let mine: std::collections::HashSet<String> =
+        pack::scan_pack(&dir).into_iter().map(|t| t.path).collect();
+    let changed_in_pack = diff
+        .changed
+        .iter()
+        .filter(|c| mine.contains(&c.path))
+        .map(|c| c.path.clone())
+        .collect();
+    own_pack(&state.lock(), &pack_dir)?;
+    Ok(WhatsNewView {
+        diff,
+        changed_in_pack,
+        millis: started.elapsed().as_millis() as u64,
+    })
+}
+
+/// Batch import, step 1: matches every PNG of `paths` (a folder, or dropped
+/// files and folders) to a texture of the pack's version. Nothing is written. The rows are remembered so that only
+/// these files can be shown or imported afterwards.
+#[tauri::command(async)]
+fn batch_scan(state: State<AppState>, paths: Vec<String>, pack_dir: String) -> Result<BatchScan> {
+    let (dir, resolution, version_dir) = {
+        let inner = state.lock();
+        let p = own_pack(&inner, &pack_dir)?;
+        (
+            p.dir.clone(),
+            p.project.resolution,
+            p.project.version_dir.clone(),
+        )
+    };
+    let (index, mc) = {
+        let mut inner = state.lock();
+        let (_, mc) = inner.pack_version()?;
+        let index = inner.index(&version_dir).ok_or_else(|| {
+            CoreError::new(
+                "not_extracted",
+                "The game textures for this version are not extracted yet.",
+            )
+        })?;
+        (index, mc)
+    };
+    let sources: Vec<PathBuf> = paths.iter().map(PathBuf::from).collect();
+    let scan = batch::scan(&sources, &dir, &index, mc.as_ref(), resolution)?;
+    let mut inner = state.lock();
+    own_pack(&inner, &pack_dir)?;
+    inner.batch = Some(BatchSession {
+        pack_dir: dir,
+        rows: scan
+            .rows
+            .iter()
+            .map(|r| {
+                let targets = r.candidates.iter().map(|c| c.path.clone()).collect();
+                (PathBuf::from(&r.source), targets)
+            })
+            .collect(),
+    });
+    Ok(scan)
+}
+
+/// Batch import, step 2: imports the accepted rows of the last scan. Each
+/// item gets its own result; a failure does not stop the others.
+#[tauri::command(async)]
+fn batch_import(
+    state: State<AppState>,
+    items: Vec<BatchItem>,
+    pack_dir: String,
+) -> Result<Vec<ItemResult>> {
+    let (dir, work, mut refused) = {
+        let inner = state.lock();
+        let p = own_pack(&inner, &pack_dir)?;
+        let session = inner
+            .batch
+            .as_ref()
+            .filter(|b| b.pack_dir == p.dir)
+            .ok_or_else(|| CoreError::new("no_scan", "Scan the folder again, then import."))?;
+        let mut work = Vec::new();
+        let mut refused = Vec::new();
+        for it in items {
+            match session.rows.get(it.id) {
+                Some((src, targets)) if targets.contains(&it.target) => {
+                    work.push((it.id, src.clone(), it.target, it.frames))
+                }
+                _ => refused.push(ItemResult {
+                    id: it.id,
+                    target: it.target,
+                    ok: false,
+                    replaced: false,
+                    wrote_mcmeta: false,
+                    unchanged: false,
+                    error: Some(CoreError::new(
+                        "bad_item",
+                        "This file was not matched to that texture by the scan.",
+                    )),
+                }),
+            }
+        }
+        (p.dir.clone(), work, refused)
+    };
+    let mut out = batch::import_all(&dir, &work);
+    out.append(&mut refused);
+    Ok(out)
+}
+
 /// Opens a texture (or the pack icon) in the built-in editor. Nothing is
 /// written until it is saved.
 #[tauri::command(async)]
@@ -1080,6 +1248,9 @@ pub fn run() {
             run_checks,
             apply_fix,
             export_pack,
+            batch_scan,
+            batch_import,
+            whats_new,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Pack Creator");

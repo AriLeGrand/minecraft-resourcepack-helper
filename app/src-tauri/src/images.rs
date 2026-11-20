@@ -7,10 +7,14 @@
 //! * `pcimg://localhost/pack/full/<texture path>`
 //! * `pcimg://localhost/pack/icon`
 //! * `pcimg://localhost/packicon?dir=<pack folder>` (recent packs: `pack.png` only)
+//! * `pcimg://localhost/batch/<row id>` (the files of the last batch-import
+//!   scan only, as a small thumbnail)
 
 use crate::AppState;
 use packcreator_core::extract::vanilla_dir;
-use packcreator_core::textures::{is_safe_texture_path, texture_file, thumb_file};
+use packcreator_core::textures::{
+    is_safe_texture_path, make_thumbnail, png_dimensions, texture_file, thumb_file,
+};
 use std::path::PathBuf;
 use tauri::http::{Request, Response, StatusCode};
 use tauri::{AppHandle, Manager};
@@ -78,13 +82,33 @@ fn resolve(app: &AppHandle, path: &str, query: Option<&str>) -> Option<PathBuf> 
             let known = inner.settings.recent.iter().any(|r| r.path == dir);
             known.then(|| PathBuf::from(dir).join("pack.png"))
         }
+        "batch" => {
+            // only a file listed by the last scan, and only for the open pack
+            let id: usize = parts.next()?.parse().ok()?;
+            let session = inner.batch.as_ref()?;
+            if inner.pack.as_ref()?.dir != session.pack_dir {
+                return None;
+            }
+            session.rows.get(id).map(|(src, _)| src.clone())
+        }
         _ => None,
     }
+}
+
+/// First square frame of a tall strip, shrunk when large; small images as they are.
+fn batch_thumb(bytes: Vec<u8>) -> Vec<u8> {
+    let Some((w, h)) = png_dimensions(&bytes) else {
+        return bytes;
+    };
+    let frame = if h > w && h % w == 0 { w } else { h };
+    make_thumbnail(&bytes, frame).unwrap_or(bytes)
 }
 
 pub fn serve(app: &AppHandle, request: &Request<Vec<u8>>) -> Response<Vec<u8>> {
     let uri = request.uri();
     let file = resolve(app, uri.path(), uri.query());
+    // the UI encodes the slash (batch%2F3)
+    let is_batch = percent_decode(uri.path().trim_start_matches('/')).starts_with("batch/");
     let not_found = || {
         Response::builder()
             .status(StatusCode::NOT_FOUND)
@@ -92,7 +116,7 @@ pub fn serve(app: &AppHandle, request: &Request<Vec<u8>>) -> Response<Vec<u8>> {
             .expect("valid response")
     };
     let Some(file) = file else { return not_found() };
-    match std::fs::read(&file) {
+    match std::fs::read(&file).map(|b| if is_batch { batch_thumb(b) } else { b }) {
         Ok(bytes) => Response::builder()
             .status(StatusCode::OK)
             .header("Content-Type", "image/png")

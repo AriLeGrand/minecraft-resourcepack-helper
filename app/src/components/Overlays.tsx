@@ -116,7 +116,7 @@ export function CommandPalette() {
           edit("Redo (Ctrl+Y)", () => ed().redo()),
           edit("Copy (Ctrl+C)", () => ed().copy()),
           edit("Cut (Ctrl+X)", () => ed().cut()),
-          edit("Paste (Ctrl+V)", () => ed().paste()),
+          edit("Paste (Ctrl+V)", () => void ed().paste()),
           edit("Select all (Ctrl+A)", () => ed().selectAll()),
           edit("Deselect (Ctrl+D)", () => ed().deselect()),
           edit("Delete selection (Del)", () => ed().deleteSelection()),

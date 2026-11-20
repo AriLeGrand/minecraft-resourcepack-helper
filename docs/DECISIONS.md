@@ -162,7 +162,7 @@ Lasso clears the selection.
 as nothing else is done, the Move tool keeps moving them without damaging what
 is under them. Any other edit puts them down. Paste switches to the Move tool
 and lands where the pixels were copied from. The clipboard is the app's own
-(shared between tabs), not the Windows clipboard.
+(shared between tabs); since D-076 copies also go to the Windows clipboard.
 
 **D-029 · Tool details that the design left open.**
 - Curve: drag the line, then move the mouse to bend it and click to fix it.
@@ -569,3 +569,81 @@ version then wrongly reported success. Saving goes through Rust
 (`core/src/share.rs`), which only writes `.md`, `.txt` or `.csv` files.
 Formatting is pure TypeScript (`src/lib/share.ts`, tested), since it is
 presentation, not pack data.
+
+**D-075 · Batch import: matching rules, review, and what it may read.** A
+folder (or files and folders dropped on the browser) is scanned in Rust
+(`core/src/batch.rs`): PNG files only, hidden folders and the pack itself left
+out, at most 5000 files. The target is decided in this order: a path containing
+`assets/minecraft/textures/` (a pack or an export), then a texture path inside
+the relative path (`block/x.png`, `blocks/x.png`, `gui/…`; the first folders
+are those of the version's names), then the file name against the version's
+texture list (unique = match, several = the user picks). Old and newer names
+come from the rename table: every texture's `history` gives the names it had in
+other versions, so `planks_oak.png` finds `block/oak_planks` in a 1.21 pack and
+`item/red_dye.png` finds `items/dye_powder_red` in a 1.8.9 pack ("renamed
+from …"). Each row has a status (new, replaces, same pixels, unknown, choose)
+plus warnings (duplicate target, wrong size for the pack resolution, frames?).
+"Same pixels" compares decoded pixels, not bytes, and is unticked by default;
+two files for one texture start unticked and ticking one unticks the other.
+Importing copies each PNG byte for byte through `import::import_image` (never
+resized), copies a `<name>.png.mcmeta` next to it byte for byte, moves replaced
+files (PNG and `.mcmeta`) to `.packcreator/trash`, skips files identical to
+the pack, and carries on after a failure with one result per file. A texture
+with unsaved changes in an editor tab is never replaced: the row is skipped and
+the reason shown. The scan's file list is kept in Rust: `batch_import` only
+takes row ids of the last scan with one of that row's matched textures, and the
+`pcimg://localhost/batch/<id>` route serves only those files (as a small
+thumbnail), so the web view still cannot read arbitrary files. Both commands
+check `own_pack`. Dropping uses Tauri's window drag-drop event, so dragging
+inside the page (HTML drag and drop) stays unused.
+
+**D-076 · Editor copy / paste through the Windows clipboard.** Copy and Cut
+in the pixel editor still fill the app's own clipboard (exact pixels and
+where they came from, shared between tabs, D-028) and also put the copied
+pixels on the Windows clipboard as an image, so other programs can paste
+them. Paste takes the Windows image when it is not the one Pack Creator left
+there itself (the app remembers the exact pixels it last wrote and compares);
+otherwise it pastes the app's own clipboard where it was copied from. An image
+from another program lands at the top-left texture pixel in view (0,0 when
+the whole texture is visible), lifted for the Move tool, never resized, as one
+undo step, clipped by "Edit only these cells"; when it is bigger than the
+texture, only the part over the texture is kept and the status line says so.
+Images go through Tauri's clipboard plugin as raw RGBA, never through a
+browser canvas (which would change semi-transparent pixels): writing passes
+`{rgba, width, height}` (`tauri::image::JsImage::Rgba`, no Cargo image
+feature needed) and the plugin (arboard) puts both a "PNG" format and a
+CF_DIBV5 bitmap with alpha on the clipboard; reading takes "PNG" when present
+(exact, with alpha), else CF_DIBV5. A bitmap whose alpha bytes are all 0 is
+taken as opaque (programs that write 24-bit or "alpha unused" bitmaps).
+Bitmaps with premultiplied alpha are not detected: semi-transparent pixels
+from such a program come out darker. If Windows refuses the copy, the pixels
+stay in the app's clipboard, a warning says so, and the image already on the
+Windows clipboard no longer counts as newer. The logic is in
+`src/editor/sysClipboard.ts` (tested with a fake plugin).
+
+**D-077 · "What's new since…": comparing the pack's version with another.**
+The texture browser's side bar ("Only show") compares the pack's game version
+with another installed, usable version, older or newer (default: the newest
+older one). Rust (`core/src/whats_new.rs`) walks the pack's version index and
+maps every texture to the other version through the rename table
+(`RenameTable::map` in the right direction; when the table gives no name the
+other version has, the same name counts as the same texture). No match =
+**added**; a match under another name = **renamed** (folder-only renames such
+as `blocks/` → `block/` are marked and left out of the "Renamed" list);
+textures of the other version that nothing maps to = **removed**. Matched
+pairs are compared on the extracted files: equal bytes are equal, otherwise
+both PNGs are decoded to RGBA with every fully transparent pixel set to
+0,0,0,0 (its colour is invisible); a different size counts as **changed**.
+Animation `.mcmeta` changes are not compared. The work runs on up to 8
+threads and sends the usual `extract-progress` events. The result is cached
+as JSON in `<cache>/whats_new/<this>__vs__<other>.json`, valid only for the
+same two jar stamps and schema, so the second time is instant (about 20 ms
+instead of 3–6 s in a debug build). Command `whats_new(otherDirName,
+packDir)` checks `own_pack`, extracts the other version first if needed, and
+adds which changed textures the pack has its own file for. The UI reuses the
+`only` filter with a new `onlyTitle` (the list heading, also the share list's
+subtitle, e.g. "New in 1.21.11 since 1.20.1"); the notice line gives all the
+counts; removed textures (not in the pack's version) are listed only in the
+side bar. Changed textures the pack has are tagged "redrawn by Mojang" in the
+list; the inspector shows both game versions side by side for any changed
+texture, and "New in …" / "Called … in …" for added and renamed ones.

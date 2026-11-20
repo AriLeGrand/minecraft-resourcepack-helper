@@ -33,8 +33,10 @@ are the places where the app is less complete or less certain than it looks.
 
 - After undoing back to the saved state, the tab still counts as unsaved (the
   safe side) (D-024).
-- Copy and paste use the app's own clipboard, shared between tabs, not the
-  Windows clipboard (D-028).
+- Copy / paste with other programs goes through the Windows clipboard as an
+  image. Semi-transparent pixels from a program that puts only a
+  premultiplied bitmap (no PNG) on the clipboard come out darker; a program
+  that puts only a bitmap without alpha pastes opaque (D-076).
 - A layer's lock is not an undo step (D-023).
 - The Text tool draws with JetBrains Mono, not the game's font (D-029).
 - Frames are reordered with buttons, not by dragging.
@@ -87,6 +89,33 @@ are the places where the app is less complete or less certain than it looks.
   this piece" limits drawing to the piece only when the pack's image is a whole
   multiple of 256 pixels wide (D-071).
 
+## Batch import
+
+- Only PNG files are taken (the single "Import image" also converts JPEG, BMP
+  and GIF). At most 5000 files per scan (D-075).
+- Only textures of the pack's version are matched: a file the version does not
+  have (an OptiFine / CTM file, a modded texture) is listed as unknown and not
+  imported.
+- A file whose name the game uses twice (for example `button.png`) needs a
+  choice; two files for the same texture need a pick. Another target cannot be
+  typed in for a duplicate: rename the file or use "Import image" on the
+  texture.
+- A tall image without an `.mcmeta` gets frame time 2 when "frames?" is
+  ticked; replacing a texture keeps the pack's existing `.mcmeta` unless the
+  imported file has its own (as the single import does).
+- The summary chips at the top count the scan's statuses, not the picks made
+  afterwards.
+
+## What's new since…
+
+- Only pixels are compared: a texture whose animation file (`.mcmeta`) changed
+  but whose image did not is not reported (D-077).
+- Textures are matched through the rename table; layout changes (entity
+  sheets, old single GUI / painting sheets) show as "new" and "removed", not
+  as redrawn.
+- Removed textures are listed in the side bar only, since the list shows the
+  pack's version.
+
 ## Platform
 
 - Built and tested on Windows 10/11 only.
@@ -103,6 +132,9 @@ Ideas for after 0.1.0, roughly in order of usefulness:
 - **Models section** in the left bar (shown as "later" today).
 - **A dedicated "Port to another version" screen**: today it opens the pack in
   Pack and export, where "Also export a copy for" does the renaming (D-017).
+  The texture browser's "What's new since…" (D-077) already lists what a port
+  needs: new textures to draw, textures Mojang redrew that the pack has, and
+  renames.
 - **More checks with fixes** on the export screen (for example GUI sprites that
   lost the game's nine-slice, unused files, very large images).
 - **Item models in 3D**, and **blockstate rotations / multipart** blocks.
@@ -113,7 +145,7 @@ Ideas for after 0.1.0, roughly in order of usefulness:
   game's own font for the text.
 - **Converting the old single sheets** (paintings, GUI icons) when porting a
   pack between old and new versions.
-- **Drag to reorder frames**, and the Windows clipboard for copy / paste.
+- **Drag to reorder frames**.
 - **Auto-update** of the app.
 - **macOS and Linux builds** (Tauri supports both; not built or tested yet).
 - **Code signing** of the Windows installer.

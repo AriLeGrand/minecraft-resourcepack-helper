@@ -1,5 +1,5 @@
 // Pure helpers (no React, no Tauri) so they can be unit-tested.
-import type { Category, PackFormat, Status, TextureRow } from "./api";
+import type { Category, PackFormat, Status, TextureRow, VersionView, WhatsNewView } from "./api";
 
 export const CATEGORIES: { key: Category; label: string }[] = [
   { key: "blocks", label: "Blocks" },
@@ -25,6 +25,10 @@ export interface Filters {
   search: string;
   /** When set (from a check's "Show" button), only these textures are listed. */
   only: string[] | null;
+  /** What `only` came from, for the notice ("from the check", "just imported"). */
+  onlyLabel?: string;
+  /** Heading of the list while `only` is set ("New in 1.21.11 since 1.20.1"). */
+  onlyTitle?: string;
 }
 
 export const defaultFilters: Filters = {
@@ -211,4 +215,81 @@ export function safeFileName(name: string): string {
   // eslint-disable-next-line no-control-regex
   const cleaned = name.replace(/[<>:"/\\|?*\u0000-\u001f]/g, "_").trim().replace(/\.+$/, "").trim();
   return cleaned || "pack";
+}
+
+// ---- "What's new in this version" ----
+
+export type WhatsNewMode = "new" | "changed" | "renamed";
+
+/** Compares "1.21.11" with "1.8.9" by their numbers (1.21.11 is newer). */
+export function compareMc(a: string, b: string): number {
+  const pa = a.split(/[^0-9]+/).filter(Boolean).map(Number);
+  const pb = b.split(/[^0-9]+/).filter(Boolean).map(Number);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const d = (pa[i] ?? 0) - (pb[i] ?? 0);
+    if (d !== 0) return d;
+  }
+  return 0;
+}
+
+/** Versions the pack can be compared with: usable, not the pack's own, newest first. */
+export function compareChoices(versions: VersionView[], packDir: string, packLabel: string): VersionView[] {
+  return versions
+    .filter((v) => v.usable && v.dir_name !== packDir && v.label !== packLabel)
+    .sort((a, b) => compareMc(b.label, a.label) || a.dir_name.localeCompare(b.dir_name));
+}
+
+/** The newest version older than the pack's; else the oldest newer one. */
+export function defaultCompareVersion(choices: VersionView[], packLabel: string): string | null {
+  const older = choices.filter((v) => compareMc(v.label, packLabel) < 0);
+  if (older.length) return older[0].dir_name;
+  return choices.length ? choices[choices.length - 1].dir_name : null;
+}
+
+/** Real renames (not only a new folder name). */
+export const realRenames = (w: WhatsNewView) => w.diff.renamed.filter((r) => !r.folder_only);
+
+/** The textures of the pack's version to list for a mode. */
+export function whatsNewOnly(w: WhatsNewView, mode: WhatsNewMode): string[] {
+  if (mode === "new") return [...w.diff.added];
+  if (mode === "changed") return w.diff.changed.map((c) => c.path);
+  return realRenames(w).map((r) => r.to);
+}
+
+/** Heading of the list (and of a shared list). */
+export function whatsNewTitle(w: WhatsNewView, mode: WhatsNewMode): string {
+  const { this_version: me, other_version: other, other_is_older: older } = w.diff;
+  if (older) {
+    if (mode === "new") return `New in ${me} since ${other}`;
+    if (mode === "changed") return `Changed by Mojang since ${other}`;
+    return `Renamed since ${other}`;
+  }
+  if (mode === "new") return `In ${me}, gone in ${other}`;
+  if (mode === "changed") return `Redrawn by Mojang in ${other}`;
+  return `Renamed in ${other}`;
+}
+
+const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+
+/**
+ * The summary line: "38 textures are new in 1.21.11 since 1.20.1 · 12 changed
+ * by Mojang (4 in your pack) · 5 renamed · 2 removed". `inPack` = changed
+ * textures the pack has its own file for.
+ */
+export function whatsNewNotice(w: WhatsNewView, inPack: number): string {
+  const d = w.diff;
+  const renamed = realRenames(w).length;
+  const moved = d.renamed.length - renamed;
+  const parts: string[] = [];
+  if (d.other_is_older) {
+    parts.push(`${plural(d.added.length, "texture")} ${d.added.length === 1 ? "is" : "are"} new in ${d.this_version} since ${d.other_version}`);
+    parts.push(`${d.changed.length} changed by Mojang (${inPack} in your pack)`);
+  } else {
+    parts.push(`${d.other_version} adds ${plural(d.removed.length, "texture")}`);
+    parts.push(`redraws ${d.changed.length} (${inPack} in your pack)`);
+  }
+  parts.push(`${renamed} renamed${moved ? ` (+${moved} moved to a new folder)` : ""}`);
+  if (d.other_is_older) parts.push(`${d.removed.length} removed`);
+  else parts.push(`${d.added.length} gone`);
+  return parts.join(" · ");
 }
