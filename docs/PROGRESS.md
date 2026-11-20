@@ -31,6 +31,18 @@ and `.mcmeta` byte-identical to its source, replaced files in the trash, a
 texture with unsaved editor changes skipped. Screenshot
 `app/target/devdata/screenshots/12-batch-import.png` (git-ignored).
 
+After the final stage (2026-11-20): **What's new since…** (D-077). Texture
+browser side bar: compare the pack's version with another installed one;
+lists New / Changed by Mojang / Renamed, removed in a summary.
+`core/src/whats_new.rs` (5 tests on synthetic jars), command `whats_new`,
+helpers in `lib/logic.ts` (5 tests). Checked in `tauri dev` on the real game
+(Deep Sea Pack 1.21.11): vs 1.20.1 1125 new, 97 changed, 62 renamed (+35
+folder-only), 39 removed, 6.2 s the first time; vs 1.21.8 128 new, 22
+changed, 3 renamed (+1), 3 removed, 3.3 s; second time 16–20 ms (cache).
+Name sets and pixels cross-checked with a separate script over the extracted
+folders (`tools/research/pngmini.py`). Demo screenshot
+`app/target/devdata/screenshots/14-whats-new.png` (git-ignored).
+
 Done in the final stage:
 - `README.md` rewritten for Pack Creator (what it is, screens, install, quick
   start, where files go, building from source, the old plugin, not affiliated

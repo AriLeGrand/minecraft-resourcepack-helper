@@ -25,6 +25,7 @@ pub mod settings;
 pub mod share;
 pub mod textures;
 pub mod version;
+pub mod whats_new;
 pub mod workfile;
 
 pub use error::{CoreError, Result};

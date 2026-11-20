@@ -1,6 +1,6 @@
 // App state. Screens read from here and call these actions; the actions call Rust.
 import { create } from "zustand";
-import { api, toError, type Bootstrap, type CoreError, type PackState, type PackSummary, type TextureRow } from "./lib/api";
+import { api, toError, type Bootstrap, type CoreError, type PackState, type PackSummary, type TextureRow, type WhatsNewView } from "./lib/api";
 import { defaultFilters, type Filters } from "./lib/logic";
 
 export type Screen =
@@ -61,6 +61,8 @@ interface State {
   palette: boolean;
   status: string;
   busy: { text: string; done: number; total: number } | null;
+  /** The last "What's new since…" comparison of the open pack. */
+  whatsNew: WhatsNewView | null;
 
   init: () => Promise<void>;
   go: (s: Screen) => void;
@@ -89,6 +91,7 @@ interface State {
   setPalette: (open: boolean) => void;
   setStatus: (s: string) => void;
   setBusy: (b: State["busy"]) => void;
+  setWhatsNew: (w: WhatsNewView | null) => void;
 }
 
 let toastId = 1;
@@ -109,6 +112,7 @@ export const useApp = create<State>((set, get) => ({
   palette: false,
   status: "Ready",
   busy: null,
+  whatsNew: null,
 
   init: async () => {
     try {
@@ -142,7 +146,7 @@ export const useApp = create<State>((set, get) => ({
       pack = next;
     }
     guard.packChanged(pack.dir);
-    set({ pack, rows: [], summary: null, selected: null, filters: defaultFilters, screen: "textures" });
+    set({ pack, rows: [], summary: null, selected: null, filters: defaultFilters, screen: "textures", whatsNew: null });
     api.bootstrap().then((boot) => set({ boot })).catch(() => {});
     await get().reload();
     return true;
@@ -153,7 +157,7 @@ export const useApp = create<State>((set, get) => ({
     await api.closePack().catch(() => {});
     const boot = await api.bootstrap().catch(() => get().boot);
     guard.packChanged(null);
-    set({ pack: null, rows: [], summary: null, selected: null, screen: "home", status: "Ready", boot });
+    set({ pack: null, rows: [], summary: null, selected: null, screen: "home", status: "Ready", boot, whatsNew: null });
     return true;
   },
 
@@ -205,7 +209,15 @@ export const useApp = create<State>((set, get) => ({
 
   select: (selected) => set({ selected }),
   // a new `only` list without its own label gets the default notice
-  setFilters: (f) => set({ filters: { ...get().filters, ...("only" in f && !("onlyLabel" in f) ? { onlyLabel: undefined } : {}), ...f } }),
+  // a new `only` list without its own label / title gets the default notice and heading
+  setFilters: (f) => set({
+    filters: {
+      ...get().filters,
+      ...("only" in f && !("onlyLabel" in f) ? { onlyLabel: undefined } : {}),
+      ...("only" in f && !("onlyTitle" in f) ? { onlyTitle: undefined } : {}),
+      ...f,
+    },
+  }),
   setView: (view) => set({ view }),
 
   toast: (text, kind = "ok", action) => {
@@ -224,4 +236,5 @@ export const useApp = create<State>((set, get) => ({
   setPalette: (palette) => set({ palette }),
   setStatus: (status) => set({ status }),
   setBusy: (busy) => set({ busy }),
+  setWhatsNew: (whatsNew) => set({ whatsNew }),
 }));

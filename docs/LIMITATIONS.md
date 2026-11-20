@@ -106,6 +106,16 @@ are the places where the app is less complete or less certain than it looks.
 - The summary chips at the top count the scan's statuses, not the picks made
   afterwards.
 
+## What's new since…
+
+- Only pixels are compared: a texture whose animation file (`.mcmeta`) changed
+  but whose image did not is not reported (D-077).
+- Textures are matched through the rename table; layout changes (entity
+  sheets, old single GUI / painting sheets) show as "new" and "removed", not
+  as redrawn.
+- Removed textures are listed in the side bar only, since the list shows the
+  pack's version.
+
 ## Platform
 
 - Built and tested on Windows 10/11 only.
@@ -122,6 +132,9 @@ Ideas for after 0.1.0, roughly in order of usefulness:
 - **Models section** in the left bar (shown as "later" today).
 - **A dedicated "Port to another version" screen**: today it opens the pack in
   Pack and export, where "Also export a copy for" does the renaming (D-017).
+  The texture browser's "What's new since…" (D-077) already lists what a port
+  needs: new textures to draw, textures Mojang redrew that the pack has, and
+  renames.
 - **More checks with fixes** on the export screen (for example GUI sprites that
   lost the game's nine-slice, unused files, very large images).
 - **Item models in 3D**, and **blockstate rotations / multipart** blocks.

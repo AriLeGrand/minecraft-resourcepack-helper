@@ -20,6 +20,7 @@ use packcreator_core::particles::ParticleSheet;
 use packcreator_core::rows::{self, NameEra, TextureRow};
 use packcreator_core::settings::{self, RecentPack, Settings};
 use packcreator_core::textures::{TextureEntry, VanillaIndex};
+use packcreator_core::whats_new::{self, VersionDiff};
 use packcreator_core::workfile;
 use packcreator_core::McVersion;
 use serde::{Deserialize, Serialize};
@@ -623,6 +624,76 @@ fn own_pack<'a>(inner: &'a Inner, pack_dir: &str) -> Result<&'a OpenPack> {
     Ok(p)
 }
 
+#[derive(Serialize)]
+struct WhatsNewView {
+    diff: VersionDiff,
+    /// Changed textures (pack's names) the pack has its own file for.
+    changed_in_pack: Vec<String>,
+    /// How long the comparison took (0 or close when it came from the cache).
+    millis: u64,
+}
+
+/// "What's new in this version": the pack's version compared with another
+/// installed one. The other version is extracted first if needed (with the
+/// usual progress events); the result is cached per pair of jars.
+#[tauri::command(async)]
+fn whats_new(
+    app: AppHandle,
+    state: State<AppState>,
+    other_dir_name: String,
+    pack_dir: String,
+) -> Result<WhatsNewView> {
+    let started = std::time::Instant::now();
+    let (dir, cache, this, other, this_index) = {
+        let mut inner = state.lock();
+        let p = own_pack(&inner, &pack_dir)?;
+        let dir = p.dir.clone();
+        let version_dir = p.project.version_dir.clone();
+        let this = inner.version(&version_dir)?;
+        let other = inner.version(&other_dir_name)?;
+        let index = inner.index(&version_dir).ok_or_else(|| {
+            CoreError::new(
+                "not_extracted",
+                "The game textures for this version are not extracted yet.",
+            )
+        })?;
+        (dir, inner.cache_dir.clone(), this, other, index)
+    };
+    let emit = |done: usize, total: usize| {
+        let _ = app.emit(
+            "extract-progress",
+            Progress {
+                dir_name: other_dir_name.clone(),
+                done,
+                total,
+            },
+        );
+    };
+    // the lock is not held while files are extracted or compared
+    let other_index = Arc::new(extract::extract_version(&cache, &other, &mut |d, t| {
+        emit(d, t)
+    })?);
+    state
+        .lock()
+        .indexes
+        .insert(other_dir_name.clone(), other_index.clone());
+    let diff = whats_new::compare(&cache, &this, &this_index, &other, &other_index, &emit)?;
+    let mine: std::collections::HashSet<String> =
+        pack::scan_pack(&dir).into_iter().map(|t| t.path).collect();
+    let changed_in_pack = diff
+        .changed
+        .iter()
+        .filter(|c| mine.contains(&c.path))
+        .map(|c| c.path.clone())
+        .collect();
+    own_pack(&state.lock(), &pack_dir)?;
+    Ok(WhatsNewView {
+        diff,
+        changed_in_pack,
+        millis: started.elapsed().as_millis() as u64,
+    })
+}
+
 /// Batch import, step 1: matches every PNG of `paths` (a folder, or dropped
 /// files and folders) to a texture of the pack's version. Nothing is written. The rows are remembered so that only
 /// these files can be shown or imported afterwards.
@@ -1179,6 +1250,7 @@ pub fn run() {
             export_pack,
             batch_scan,
             batch_import,
+            whats_new,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Pack Creator");

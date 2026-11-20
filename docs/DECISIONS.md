@@ -620,3 +620,30 @@ from such a program come out darker. If Windows refuses the copy, the pixels
 stay in the app's clipboard, a warning says so, and the image already on the
 Windows clipboard no longer counts as newer. The logic is in
 `src/editor/sysClipboard.ts` (tested with a fake plugin).
+
+**D-077 · "What's new since…": comparing the pack's version with another.**
+The texture browser's side bar ("Only show") compares the pack's game version
+with another installed, usable version, older or newer (default: the newest
+older one). Rust (`core/src/whats_new.rs`) walks the pack's version index and
+maps every texture to the other version through the rename table
+(`RenameTable::map` in the right direction; when the table gives no name the
+other version has, the same name counts as the same texture). No match =
+**added**; a match under another name = **renamed** (folder-only renames such
+as `blocks/` → `block/` are marked and left out of the "Renamed" list);
+textures of the other version that nothing maps to = **removed**. Matched
+pairs are compared on the extracted files: equal bytes are equal, otherwise
+both PNGs are decoded to RGBA with every fully transparent pixel set to
+0,0,0,0 (its colour is invisible); a different size counts as **changed**.
+Animation `.mcmeta` changes are not compared. The work runs on up to 8
+threads and sends the usual `extract-progress` events. The result is cached
+as JSON in `<cache>/whats_new/<this>__vs__<other>.json`, valid only for the
+same two jar stamps and schema, so the second time is instant (about 20 ms
+instead of 3–6 s in a debug build). Command `whats_new(otherDirName,
+packDir)` checks `own_pack`, extracts the other version first if needed, and
+adds which changed textures the pack has its own file for. The UI reuses the
+`only` filter with a new `onlyTitle` (the list heading, also the share list's
+subtitle, e.g. "New in 1.21.11 since 1.20.1"); the notice line gives all the
+counts; removed textures (not in the pack's version) are listed only in the
+side bar. Changed textures the pack has are tagged "redrawn by Mojang" in the
+list; the inspector shows both game versions side by side for any changed
+texture, and "New in …" / "Called … in …" for added and renamed ones.

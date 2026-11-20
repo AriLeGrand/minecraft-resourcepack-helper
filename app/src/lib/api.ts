@@ -465,11 +465,57 @@ export interface SettingsPatch {
   export_only_changed?: boolean;
 }
 
+export interface RenamedTexture {
+  /** Name in the other version. */
+  from: string;
+  /** Name in the pack's version. */
+  to: string;
+  /** Only the folder changed (`blocks/stone` → `block/stone`). */
+  folder_only: boolean;
+}
+
+export interface ChangedTexture {
+  /** Name in the pack's version. */
+  path: string;
+  /** Name in the other version (the same unless renamed). */
+  other_path: string;
+  width: number;
+  height: number;
+  other_width: number;
+  other_height: number;
+}
+
+/** The pack's game version compared with another installed one. */
+export interface VersionDiff {
+  this_dir: string;
+  other_dir: string;
+  this_version: string;
+  other_version: string;
+  other_is_older: boolean;
+  /** In the pack's version, not in the other one (after renames). */
+  added: string[];
+  /** In the other version, not in the pack's. */
+  removed: string[];
+  renamed: RenamedTexture[];
+  /** Same texture, pixels redrawn by Mojang. */
+  changed: ChangedTexture[];
+  matched: number;
+}
+
+export interface WhatsNewView {
+  diff: VersionDiff;
+  /** Changed textures the pack has its own file for (when compared). */
+  changed_in_pack: string[];
+  millis: number;
+}
+
 export const api = {
   bootstrap: () => invoke<Bootstrap>("bootstrap"),
   updateSettings: (patch: SettingsPatch) => invoke<Bootstrap>("update_settings", { patch }),
   forgetRecent: (path: string) => invoke<Bootstrap>("forget_recent", { path }),
   extractVersion: (dirName: string) => invoke<number>("extract_version", { dirName }),
+  /** The pack's version compared with another one (extracted first if needed; cached per pair of jars). */
+  whatsNew: (otherDirName: string, packDir: string) => invoke<WhatsNewView>("whats_new", { otherDirName, packDir }),
   clearCache: (dirName: string) => invoke<void>("clear_cache", { dirName }),
   createPack: (input: { name: string; version_dir: string; resolution: number; location: string }) =>
     invoke<PackState>("create_pack", { input }),

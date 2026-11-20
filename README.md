@@ -38,6 +38,13 @@ in a 1.21 pack). You review the list (new, replaces, same pixels, unknown,
 "choose one" for names used twice, duplicates, wrong size, animation strips),
 then import the ticked files in one go, unchanged; replaced files go to the
 pack's trash.
+"What's new since…" compares the pack's game version with another installed
+one (older or newer): which textures are new, which Mojang redrew (and which
+of those your pack already has, tagged "redrawn by Mojang", with both game
+versions side by side in the inspector), which were renamed and which were
+removed. Names are followed through the rename table, so a texture that was
+only renamed is not counted as new. Each list can be shown and shared like any
+other view; the comparison is cached, so the second time is instant.
 
 ![Texture browser](docs/screenshots/browser.png)
 

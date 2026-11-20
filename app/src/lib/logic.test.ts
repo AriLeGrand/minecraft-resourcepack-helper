@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
-import type { TextureRow } from "./api";
+import type { TextureRow, VersionView, WhatsNewView } from "./api";
 import {
-  agoLabel, bytesLabel, countRows, dayLabel, defaultFilters, filterRows, formatLabel, joinPath, matchesElsewhere,
+  agoLabel, bytesLabel, compareChoices, compareMc, countRows, defaultCompareVersion, realRenames, whatsNewNotice,
+  whatsNewOnly, whatsNewTitle, dayLabel, defaultFilters, filterRows, formatLabel, joinPath, matchesElsewhere,
   matchesSearch, parseSectionCodes, safeFileName, searchWords, timeLabel, virtualWindow,
 } from "./logic";
 
@@ -147,5 +148,65 @@ describe("paths", () => {
     expect(safeFileName('a/b:c*d?"')).toBe("a_b_c_d__");
     expect(safeFileName("  dots... ")).toBe("dots");
     expect(safeFileName(" . ")).toBe("pack");
+  });
+});
+
+describe("what's new", () => {
+  const ver = (dir_name: string, label: string, usable = true): VersionView => ({
+    dir_name, label, id: label, has_jar: usable, format: null, format_source: null, problem: null, extracted: false, usable,
+  });
+  const versions = [
+    ver("1.8.9", "1.8.9"), ver("1.21.11", "1.21.11"), ver("1.20.1", "1.20.1"), ver("1.21.8", "1.21.8"),
+    ver("fabric-1.20.4", "1.20.4"), ver("1.21.9", "1.21.9", false), ver("fabric-1.21.11", "1.21.11"),
+  ];
+  const view = (older: boolean): WhatsNewView => ({
+    diff: {
+      this_dir: "1.21.11", other_dir: "1.20.1", this_version: "1.21.11", other_version: "1.20.1", other_is_older: older,
+      added: ["block/crafter_top", "block/copper_bulb"],
+      removed: ["item/old"],
+      renamed: [
+        { from: "block/grass", to: "block/short_grass", folder_only: false },
+        { from: "blocks/stone", to: "block/stone", folder_only: true },
+      ],
+      changed: [{ path: "block/dirt", other_path: "block/dirt", width: 16, height: 16, other_width: 16, other_height: 16 }],
+      matched: 10,
+    },
+    changed_in_pack: [],
+    millis: 5,
+  });
+
+  it("compares version numbers", () => {
+    expect(compareMc("1.21.11", "1.21.8")).toBeGreaterThan(0);
+    expect(compareMc("1.8.9", "1.20.1")).toBeLessThan(0);
+    expect(compareMc("1.21", "1.21.0")).toBe(0);
+  });
+  it("offers the other usable versions, newest first, and picks the newest older one", () => {
+    const c = compareChoices(versions, "1.21.11", "1.21.11");
+    expect(c.map((v) => v.dir_name)).toEqual(["1.21.8", "fabric-1.20.4", "1.20.1", "1.8.9"]);
+    expect(defaultCompareVersion(c, "1.21.11")).toBe("1.21.8");
+    // a pack on the oldest version gets the oldest newer one
+    const c2 = compareChoices(versions, "1.8.9", "1.8.9");
+    expect(defaultCompareVersion(c2, "1.8.9")).toBe("1.20.1");
+    expect(defaultCompareVersion([], "1.8.9")).toBeNull();
+  });
+  it("lists the textures of each mode, leaving folder-only renames out", () => {
+    const w = view(true);
+    expect(whatsNewOnly(w, "new")).toEqual(["block/crafter_top", "block/copper_bulb"]);
+    expect(whatsNewOnly(w, "changed")).toEqual(["block/dirt"]);
+    expect(whatsNewOnly(w, "renamed")).toEqual(["block/short_grass"]);
+    expect(realRenames(w)).toHaveLength(1);
+  });
+  it("titles and summary say what the list is", () => {
+    expect(whatsNewTitle(view(true), "new")).toBe("New in 1.21.11 since 1.20.1");
+    expect(whatsNewTitle(view(true), "changed")).toBe("Changed by Mojang since 1.20.1");
+    expect(whatsNewTitle(view(false), "changed")).toBe("Redrawn by Mojang in 1.20.1");
+    expect(whatsNewNotice(view(true), 1)).toBe(
+      "2 textures are new in 1.21.11 since 1.20.1 · 1 changed by Mojang (1 in your pack) · 1 renamed (+1 moved to a new folder) · 1 removed",
+    );
+    expect(whatsNewNotice(view(false), 0)).toBe("1.20.1 adds 1 texture · redraws 1 (0 in your pack) · 1 renamed (+1 moved to a new folder) · 2 gone");
+  });
+  it("a what's-new list is shown through the only filter", () => {
+    const f = { ...defaultFilters, only: whatsNewOnly(view(true), "changed") };
+    expect(filterRows([row("block/dirt"), row("block/stone")], f).map((r) => r.path)).toEqual(["block/dirt"]);
   });
 });
