@@ -21,12 +21,16 @@ vi.mock("../lib/api", () => ({
       : { kind: "error", message: String(e), hint: null },
 }));
 
+vi.mock("@tauri-apps/plugin-clipboard-manager", () => import("./fakeClipboard"));
+
 import type { PackState } from "../lib/api";
 import { cellsMask } from "../particles/cells";
 import { useApp } from "../store";
 import { pointerDown, pointerMove, pointerUp, resetController, setPreviewScheduler, sprayTick } from "./controller";
 import { activeCel, flatStrip, fromRaw } from "./doc";
 import { activeTab, openForTest, useEditor, type CellsRequest } from "./editorStore";
+import { fake } from "./fakeClipboard";
+import { resetSystemClipboard } from "./sysClipboard";
 import { base64ToBytes, newBuf, setPx, type Buf, type Pt } from "./pixels";
 import { andMask, cellsRegion, clipToMask, editMask, rectRegion } from "./region";
 import { BLUE, opened, RED } from "./testutil";
@@ -82,6 +86,8 @@ const ACROSS: Pt[] = [[0, 0], [31, 31], [0, 31], [31, 0], [5, 12], [20, 10], [1,
 beforeEach(() => {
   resetController();
   setPreviewScheduler(null);
+  fake.reset();
+  resetSystemClipboard();
   Object.values(rust).forEach((f) => f.mockReset());
   rust.loadTextures.mockResolvedValue({ rows: [], summary: null });
   rust.editorSave.mockResolvedValue(undefined);
@@ -175,7 +181,7 @@ describe("tools never touch pixels outside the cells", () => {
     expect(changes(original, cel(), mask).outside).toBe(0);
   });
 
-  it("select all + delete, cut and paste", () => {
+  it("select all + delete, cut and paste", async () => {
     const { original, mask } = openSheet();
     ed().selectAll();
     ed().deleteSelection();
@@ -183,8 +189,18 @@ describe("tools never touch pixels outside the cells", () => {
     ed().deselect();
     ed().copy();
     ed().cut();
-    ed().paste();
+    await ed().paste();
     expect(changes(original, cel(), mask).outside).toBe(0);
+  });
+
+  it("an image pasted from another program, bigger than the sheet, lands only in the cells", async () => {
+    const { original, mask } = openSheet();
+    fake.put(new Array(40 * 40 * 4).fill(200), 40, 40);
+    await ed().paste();
+    expect(ed().tool).toBe("move");
+    expect(changes(original, cel(), mask)).toEqual({ outside: 0, inside: 4 });
+    drag([[5, 5], [4, 3]]);
+    expect(changes(original, cel(), mask)).toEqual({ outside: 0, inside: 4 });
   });
 
   it("delete with nothing selected clears only the cells", () => {

@@ -59,7 +59,7 @@ export function useShortcuts(active: boolean) {
         case "delete": ed.deleteSelection(); break;
         case "copy": ed.copy(); break;
         case "cut": ed.cut(); break;
-        case "paste": ed.paste(); break;
+        case "paste": void ed.paste(); break;
         case "swap": ed.swapColors(); break;
         case "size": ed.setOptions({ size: ed.options.size + s.delta }); break;
         case "zoom": ed.zoomStep(s.delta); break;
@@ -160,14 +160,13 @@ export function NumberField({ value, min, max, suffix, label, onChange, classNam
 function SelectionButtons() {
   const ed = useEditor.getState;
   const hasSelection = useEditor((s) => !!activeTab(s)?.doc.selection);
-  const hasClip = useEditor((s) => s.clipboard !== null);
   return (
     <span className="ed-cmds" role="group" aria-label="Selection">
       <button title="Select everything (Ctrl+A)" onClick={() => ed().selectAll()}>Select all</button>
       <button title="Remove the selection (Ctrl+D)" disabled={!hasSelection} onClick={() => ed().deselect()}>Deselect</button>
-      <button title="Copy the selected pixels, or the whole layer when nothing is selected (Ctrl+C)" onClick={() => ed().copy()}>Copy</button>
+      <button title="Copy the selected pixels, or the whole layer when nothing is selected (Ctrl+C). Other programs can paste them too." onClick={() => ed().copy()}>Copy</button>
       <button title="Copy the selected pixels and clear them (Ctrl+X)" onClick={() => ed().cut()}>Cut</button>
-      <button title={hasClip ? "Paste what was copied (Ctrl+V), then drag it into place" : "Nothing copied yet"} disabled={!hasClip} onClick={() => ed().paste()}>Paste</button>
+      <button title="Paste what was copied here, or an image copied in another program (Ctrl+V), then drag it into place" onClick={() => void ed().paste()}>Paste</button>
       <button title="Clear the selected pixels, or the whole layer when nothing is selected (Delete)" onClick={() => ed().deleteSelection()}>Delete</button>
     </span>
   );

@@ -22,6 +22,7 @@ import { clampSize, defaultOptions, pasteFloating, selectAllMask, toolDef, type 
 import { centerView, fitView, stepZoom, zoomAbout, type View } from "./view";
 import { cellsLabel, uniqueCells } from "../particles/cells";
 import { cellsRegion, clipToMask, rectRegion, type RectRequest, type Region } from "./region";
+import { choosePaste, externalClip, externalPasteStatus, readForPaste, writeSystemImage } from "./sysClipboard";
 
 /** Lifted pixels that the Move tool can keep moving without damaging what is under them. */
 export interface Float {
@@ -148,9 +149,11 @@ interface EditorState {
   selectAll: () => void;
   deselect: () => void;
   deleteSelection: () => void;
+  /** Copies to the app's clipboard and (in the background) to the Windows clipboard. */
   copy: () => boolean;
   cut: () => void;
-  paste: () => void;
+  /** Pastes a newer image from the Windows clipboard, else the app's own clipboard. */
+  paste: () => Promise<void>;
   loadPalette: (source: "vanilla" | "image") => void;
   /** Tells the user why nothing happens when the layer cannot be edited. `true` = blocked. */
   blocked: () => boolean;
@@ -836,7 +839,12 @@ export const useEditor = create<EditorState>((set, get) => {
       const clip = copyClip(activeCel(tab.doc), tab.doc.selection);
       if (!clip) return false;
       set({ clipboard: clip });
-      useApp.getState().setStatus(`Copied ${clip.buf.w}×${clip.buf.h} pixels`);
+      const what = `${clip.buf.w}×${clip.buf.h} pixels`;
+      useApp.getState().setStatus(`Copied ${what}`);
+      // also to Windows, so other programs can paste it; the app's own copy is already safe
+      void writeSystemImage(clip.buf).then((error) => {
+        if (error) warn(`Copied ${what} inside Pack Creator only: Windows did not take the image (${error}).`);
+      });
       return true;
     },
     cut: () => {
@@ -851,21 +859,33 @@ export const useEditor = create<EditorState>((set, get) => {
       clearArea(cel, tab.doc.selection);
       get().applyEdit("Cut", { cel });
     },
-    paste: () => {
+    paste: async () => {
       flushPending();
+      const id = current()?.id;
+      if (id === undefined) return;
+      const read = await readForPaste();
+      // the texture may have been closed or switched while the clipboard was read
       const tab = current();
-      const clip = get().clipboard;
-      if (!tab) return;
-      if (!clip) {
-        useApp.getState().setStatus("Nothing to paste yet. Copy something first with Ctrl+C.");
+      if (!tab || tab.id !== id) return;
+      const choice = choosePaste(read.buf, read.mine, get().clipboard);
+      if (choice.kind === "none") {
+        useApp.getState().setStatus(read.error
+          ? `Nothing to paste: the clipboard image could not be read (${read.error}).`
+          : "Nothing to paste: the clipboard has no image. Copy pixels here or an image in another program first.");
         return;
       }
       if (get().blocked()) return;
-      const p = pasteFloating(activeCel(tab.doc), clip);
+      flushPending();
+      const now = current()!;
+      const doc = now.doc;
+      const clip = choice.kind === "external" ? externalClip(choice.buf, viewOf(now, get().viewport), doc.width, doc.height) : choice.clip;
+      const p = pasteFloating(activeCel(doc), clip);
       get().applyEdit("Paste", { cel: p.cel, selection: p.selection, float: p.floating });
       // the pasted pixels stay lifted: drag them into place with the Move tool
       set({ tool: "move" });
-      useApp.getState().setStatus("Pasted. Drag to move it into place.");
+      useApp.getState().setStatus(choice.kind === "external"
+        ? externalPasteStatus(choice.buf, doc.width, doc.height)
+        : "Pasted. Drag to move it into place.");
     },
     loadPalette: (source) => {
       const tab = current();

@@ -162,7 +162,7 @@ Lasso clears the selection.
 as nothing else is done, the Move tool keeps moving them without damaging what
 is under them. Any other edit puts them down. Paste switches to the Move tool
 and lands where the pixels were copied from. The clipboard is the app's own
-(shared between tabs), not the Windows clipboard.
+(shared between tabs); since D-075 copies also go to the Windows clipboard.
 
 **D-029 · Tool details that the design left open.**
 - Curve: drag the line, then move the mouse to bend it and click to fix it.
@@ -569,3 +569,27 @@ version then wrongly reported success. Saving goes through Rust
 (`core/src/share.rs`), which only writes `.md`, `.txt` or `.csv` files.
 Formatting is pure TypeScript (`src/lib/share.ts`, tested), since it is
 presentation, not pack data.
+
+**D-075 · Editor copy / paste through the Windows clipboard.** Copy and Cut
+in the pixel editor still fill the app's own clipboard (exact pixels and
+where they came from, shared between tabs, D-028) and also put the copied
+pixels on the Windows clipboard as an image, so other programs can paste
+them. Paste takes the Windows image when it is not the one Pack Creator left
+there itself (the app remembers the exact pixels it last wrote and compares);
+otherwise it pastes the app's own clipboard where it was copied from. An image
+from another program lands at the top-left texture pixel in view (0,0 when
+the whole texture is visible), lifted for the Move tool, never resized, as one
+undo step, clipped by "Edit only these cells"; when it is bigger than the
+texture, only the part over the texture is kept and the status line says so.
+Images go through Tauri's clipboard plugin as raw RGBA, never through a
+browser canvas (which would change semi-transparent pixels): writing passes
+`{rgba, width, height}` (`tauri::image::JsImage::Rgba`, no Cargo image
+feature needed) and the plugin (arboard) puts both a "PNG" format and a
+CF_DIBV5 bitmap with alpha on the clipboard; reading takes "PNG" when present
+(exact, with alpha), else CF_DIBV5. A bitmap whose alpha bytes are all 0 is
+taken as opaque (programs that write 24-bit or "alpha unused" bitmaps).
+Bitmaps with premultiplied alpha are not detected: semi-transparent pixels
+from such a program come out darker. If Windows refuses the copy, the pixels
+stay in the app's clipboard, a warning says so, and the image already on the
+Windows clipboard no longer counts as newer. The logic is in
+`src/editor/sysClipboard.ts` (tested with a fake plugin).

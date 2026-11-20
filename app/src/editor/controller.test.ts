@@ -20,6 +20,8 @@ vi.mock("../lib/api", () => ({
       : { kind: "error", message: String(e), hint: null },
 }));
 
+vi.mock("@tauri-apps/plugin-clipboard-manager", () => import("./fakeClipboard"));
+
 import type { PackState, TextureRow } from "../lib/api";
 import { useApp } from "../store";
 import {
@@ -27,8 +29,10 @@ import {
 } from "./controller";
 import { activeCel, flatStrip, fromRaw, PACK_ICON, patchLayer } from "./doc";
 import { activeTab, openForTest, shownDoc, useEditor } from "./editorStore";
+import { fake } from "./fakeClipboard";
 import { base64ToBytes, getPx, type Pt } from "./pixels";
 import { art, BLUE, bufFrom, GREEN, maskArt, opened, RED, solid } from "./testutil";
+import { resetSystemClipboard } from "./sysClipboard";
 import { applyStroke, defaultOptions } from "./tools";
 
 const ed = () => useEditor.getState();
@@ -63,6 +67,8 @@ function row(path: string, modified_ms: number): TextureRow {
 beforeEach(() => {
   resetController();
   setPreviewScheduler(null);
+  fake.reset();
+  resetSystemClipboard();
   vi.restoreAllMocks();
   Object.values(rust).forEach((f) => f.mockReset());
   rust.loadTextures.mockResolvedValue({ rows: [], summary: null });
@@ -338,16 +344,16 @@ describe("selection, clipboard and move", () => {
     expect(tab().history.undo.length).toBe(2);
   });
 
-  it("copies, cuts and pastes; the pasted pixels can be dragged into place", () => {
+  it("copies, cuts and pastes; the pasted pixels can be dragged into place", async () => {
     openForTest(fromRaw(opened([[bufFrom(["ab..", "...."], { a: RED, b: BLUE })]])));
-    ed().paste();
+    await ed().paste();
     expect(tab().history.undo.length).toBe(0);
     ed().setTool("marquee");
     drag([[0, 0], [1, 0]]);
     ed().cut();
     expect(art(cel())).toEqual(["....", "...."]);
     expect([ed().clipboard!.buf.w, ed().clipboard!.x]).toEqual([2, 0]);
-    ed().paste();
+    await ed().paste();
     expect(art(cel())).toEqual(["##..", "...."]);
     expect(ed().tool).toBe("move");
     expect(maskArt(tab().doc.selection, 4)).toEqual(["##..", "...."]);
@@ -356,7 +362,7 @@ describe("selection, clipboard and move", () => {
     expect(getPx(cel(), 3, 1)).toEqual(BLUE);
     // paste again into another texture: the clipboard is shared between tabs
     open(["....", "...."], "block/other");
-    ed().paste();
+    await ed().paste();
     expect(art(cel())).toEqual(["##..", "...."]);
     // copy alone changes nothing
     const steps = tab().history.undo.length;
@@ -795,6 +801,78 @@ describe("review fixes: never lose work", () => {
     deliver();
     await opening;
     expect(ed().tabs.length).toBe(0);
+  });
+});
+
+describe("the Windows clipboard", () => {
+  const view = { zoom: 10, panX: -20, panY: -10 };
+
+  it("copy puts the copied pixels on the Windows clipboard, exactly", async () => {
+    open(["#.", ".#"]);
+    ed().copy();
+    await ed().paste();
+    expect(fake.writes).toBe(1);
+    expect([fake.image!.width, fake.image!.height]).toEqual([2, 2]);
+    expect(Array.from(fake.image!.rgba)).toEqual(Array.from(cel().data));
+  });
+
+  it("pastes an image copied in another program at the top-left in view, lifted, as one undo step", async () => {
+    open(["....", "....", "....", "...."]);
+    useEditor.setState({ tool: "pencil" });
+    ed().setView(view);
+    // a 2×1 image with a half-transparent pixel
+    fake.put([0, 255, 0, 255, 0, 0, 255, 128], 2, 1);
+    await ed().paste();
+    expect(art(cel())).toEqual(["....", "..#+", "....", "...."]);
+    expect(getPx(cel(), 3, 1)).toEqual([0, 0, 255, 128]);
+    expect(ed().tool).toBe("move");
+    expect(maskArt(tab().doc.selection, 4)).toEqual(["....", "..##", "....", "...."]);
+    expect(tab().history.undo.map((c) => c.label)).toEqual(["Paste"]);
+    expect(useApp.getState().status).toMatch(/Pasted a 2×1 image/);
+    drag([[2, 1], [0, 3]]);
+    expect(art(cel())).toEqual(["....", "....", "....", "#+.."]);
+    ed().undo();
+    ed().undo();
+    expect(art(cel())).toEqual(["....", "....", "....", "...."]);
+  });
+
+  it("uses its own clipboard (and position) while Windows still holds what was copied here", async () => {
+    open(["....", ".#..", "...."]);
+    ed().setTool("marquee");
+    drag([[1, 1], [1, 1]]);
+    ed().cut();
+    ed().setView(view);
+    await ed().paste();
+    expect(art(cel())).toEqual(["....", ".#..", "...."]);
+    // another program copies something: that is newer
+    fake.put([0, 255, 0, 255], 1, 1);
+    await ed().paste();
+    expect(getPx(cel(), 2, 1)).toEqual(GREEN);
+  });
+
+  it("pastes a bigger image unresized and says so", async () => {
+    open(["..", ".."]);
+    fake.put(new Array(5 * 3 * 4).fill(255), 5, 3);
+    await ed().paste();
+    expect(art(cel())).toEqual(["##", "##"]);
+    expect(tab().float!.floating.clip.w).toBe(5);
+    expect(useApp.getState().status).toMatch(/bigger than this 2×2 texture/);
+  });
+
+  it("says when there is nothing to paste", async () => {
+    open([".."]);
+    await ed().paste();
+    expect(tab().history.undo.length).toBe(0);
+    expect(useApp.getState().status).toMatch(/Nothing to paste/);
+  });
+
+  it("keeps the copy inside the app and warns when Windows refuses it", async () => {
+    open(["#"]);
+    fake.writeError = "busy";
+    ed().copy();
+    await ed().paste();
+    expect(tab().history.undo.map((c) => c.label)).toEqual(["Paste"]);
+    expect(useApp.getState().toasts.some((t) => t.kind === "warn" && /inside Pack Creator only.*busy/.test(t.text))).toBe(true);
   });
 });
 
