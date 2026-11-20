@@ -1,0 +1,21 @@
+name: Idea or feature request
+description: Suggest something that would make making packs easier.
+labels: ["idea"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do?
+      description: Describe the task or the annoyance, not only the solution.
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would help?
+      description: How you imagine it working in the app.
+  - type: textarea
+    id: game
+    attributes:
+      label: Game details
+      description: Minecraft versions, mods (OptiFine, Continuity…) or file formats involved, if any.

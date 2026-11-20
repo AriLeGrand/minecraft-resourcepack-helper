@@ -6,12 +6,13 @@
 
 <p align="center">
   <b>Make Minecraft look like yours.</b><br>
-  A free Windows app for making Minecraft Java Edition resource packs:<br>
+  A free, open-source Windows app for making Minecraft Java Edition resource packs:<br>
   every texture of your game, a pixel editor made for blocks, and a pack that is ready to play.
 </p>
 
 <p align="center">
   <a href="https://github.com/AriLeGrand/minecraft-resourcepack-helper/actions/workflows/build.yml"><img src="https://github.com/AriLeGrand/minecraft-resourcepack-helper/actions/workflows/build.yml/badge.svg" alt="Build status"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-3b82f6" alt="License: MIT"></a>
 </p>
 
 <p align="center">
@@ -20,7 +21,8 @@
   <a href="#features">Features</a> ·
   <a href="#where-your-files-go">Your files</a> ·
   <a href="#building-from-source">Build from source</a> ·
-  <a href="docs/LIMITATIONS.md">Limitations</a>
+  <a href="docs/LIMITATIONS.md">Limitations</a> ·
+  <a href="CONTRIBUTING.md">Contributing</a>
 </p>
 
 ![The Blockwright editor with the live 3D block preview](docs/screenshots/editor.png)
@@ -184,6 +186,20 @@ python tools/demo/make_demo_minecraft.py app/target/devdata/demo/.minecraft
 | `site/` | The presentation website (plain HTML, CSS and JavaScript); see [site/README.md](site/README.md). |
 | `docs/` | [Decisions](docs/DECISIONS.md), [progress](docs/PROGRESS.md), [limitations](docs/LIMITATIONS.md), [checked game facts](docs/research/domain-facts.md), design and mockups. |
 | `tools/` | Developer scripts: game-file research, app screenshots and the demo game. |
+
+## Contributing
+
+Bug reports, ideas and pull requests are welcome. Please read
+[CONTRIBUTING.md](CONTRIBUTING.md) first: it has the ground rules (above all,
+never commit Minecraft's own files), the setup and the checks to run. Report
+bugs and suggest ideas with the
+[issue forms](https://github.com/AriLeGrand/minecraft-resourcepack-helper/issues/new/choose).
+
+## License
+
+Blockwright is open source under the [MIT License](LICENSE): you can use,
+change and share it freely, including in your own projects, as long as the
+license notice stays with it.
 
 ## The old Aseprite plugin
 

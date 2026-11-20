@@ -141,7 +141,7 @@ export function Settings() {
             </div>
 
             <div className="row" style={{ gap: 12 }}>
-              <span className="dim grow" style={{ fontSize: 12 }}>Blockwright {boot.app_version} preview. Not affiliated with Mojang or Microsoft.</span>
+              <span className="dim grow" style={{ fontSize: 12 }}>Blockwright {boot.app_version} preview. Open source under the MIT License. Not affiliated with Mojang or Microsoft.</span>
               <button className="btn ghost" onClick={() => void save({ welcome_seen: false }, "Welcome tour opened.")}>Show the welcome tour</button>
             </div>
           </div>
