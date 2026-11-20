@@ -23,6 +23,7 @@ use packcreator_core::textures::{TextureEntry, VanillaIndex};
 use packcreator_core::whats_new::{self, VersionDiff};
 use packcreator_core::workfile;
 use packcreator_core::McVersion;
+use packcreator_core::{ctm, variants};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -1181,6 +1182,119 @@ fn export_pack(state: State<AppState>, request: ExportRequest) -> Result<ExportR
     })
 }
 
+// ------------------------------------------------- variety (random variants, CTM)
+
+/// Pack folder, game folder, era (before 1.13?) and enlargement (pack
+/// resolution / 16) for the Variety screen, for the pack the screen belongs to.
+fn variety_roots(state: &State<AppState>, pack_dir: &str) -> Result<(PathBuf, PathBuf, bool, u32)> {
+    let inner = state.lock();
+    let p = own_pack(&inner, pack_dir)?;
+    let vanilla = extract::vanilla_dir(&inner.cache_dir, &p.project.version_dir);
+    let flat = McVersion::parse("1.13").expect("valid version");
+    let legacy = match inner.pack_version().ok().and_then(|(_, mc)| mc) {
+        Some(v) => v < flat,
+        // unknown version: old versions keep block textures in `blocks/`
+        None => vanilla.join("assets/minecraft/textures/blocks").is_dir(),
+    };
+    Ok((
+        p.dir.clone(),
+        vanilla,
+        legacy,
+        (p.project.resolution / 16).max(1),
+    ))
+}
+
+macro_rules! roots {
+    ($t:expr) => {
+        variants::Roots {
+            pack: &$t.0,
+            vanilla: &$t.1,
+            legacy: $t.2,
+        }
+    };
+}
+
+/// Every block with a block state file (game or pack).
+#[tauri::command(async)]
+fn variety_blocks(state: State<AppState>, pack_dir: String) -> Result<Vec<variants::BlockEntry>> {
+    let t = variety_roots(&state, &pack_dir)?;
+    Ok(variants::list_blocks(&t.0, &t.1))
+}
+
+#[tauri::command(async)]
+fn variants_info(
+    state: State<AppState>,
+    block: String,
+    pack_dir: String,
+) -> Result<variants::BlockInfo> {
+    let t = variety_roots(&state, &pack_dir)?;
+    variants::info(roots!(t), &block)
+}
+
+/// Adds the next random variant of `texture` (texture copy, models, block state).
+#[tauri::command(async)]
+fn variants_add(
+    state: State<AppState>,
+    block: String,
+    texture: String,
+    pack_dir: String,
+) -> Result<variants::Added> {
+    let t = variety_roots(&state, &pack_dir)?;
+    variants::add(roots!(t), &block, &texture, t.3)
+}
+
+/// Weight / random turns of the original (`n` 1) or of variant `n`.
+#[tauri::command(async)]
+fn variants_set(
+    state: State<AppState>,
+    block: String,
+    n: u32,
+    weight: u32,
+    rotate: bool,
+    pack_dir: String,
+) -> Result<variants::BlockInfo> {
+    let t = variety_roots(&state, &pack_dir)?;
+    variants::set_choice(roots!(t), &block, n, variants::Choice { weight, rotate })
+}
+
+/// Removes variant `n` (its files go to the trash).
+#[tauri::command(async)]
+fn variants_remove(
+    state: State<AppState>,
+    block: String,
+    n: u32,
+    pack_dir: String,
+) -> Result<variants::BlockInfo> {
+    let t = variety_roots(&state, &pack_dir)?;
+    variants::remove(roots!(t), &block, n)
+}
+
+#[tauri::command(async)]
+fn ctm_info(state: State<AppState>, block: String, pack_dir: String) -> Result<ctm::CtmInfo> {
+    let t = variety_roots(&state, &pack_dir)?;
+    ctm::info(roots!(t), &block)
+}
+
+/// Writes the five starting tiles and the `.properties` file (old files to the trash).
+#[tauri::command(async)]
+fn ctm_create(
+    state: State<AppState>,
+    block: String,
+    texture: String,
+    faces: String,
+    match_blocks: String,
+    pack_dir: String,
+) -> Result<ctm::CtmInfo> {
+    let t = variety_roots(&state, &pack_dir)?;
+    ctm::create(roots!(t), &block, &texture, &faces, &match_blocks, t.3)
+}
+
+#[tauri::command(async)]
+fn ctm_remove(state: State<AppState>, block: String, pack_dir: String) -> Result<ctm::CtmInfo> {
+    let t = variety_roots(&state, &pack_dir)?;
+    ctm::remove(roots!(t), &block)
+}
+
 // ----------------------------------------------------------------- setup
 
 fn env_dir(key: &str) -> Option<PathBuf> {
@@ -1251,6 +1365,14 @@ pub fn run() {
             batch_scan,
             batch_import,
             whats_new,
+            variety_blocks,
+            variants_info,
+            variants_add,
+            variants_set,
+            variants_remove,
+            ctm_info,
+            ctm_create,
+            ctm_remove,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Pack Creator");

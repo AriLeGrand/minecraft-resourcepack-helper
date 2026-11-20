@@ -481,7 +481,15 @@ fn plan(
             continue;
         }
         let Some((tex, ext)) = split_texture(rel) else {
-            out.files.insert(rel.clone(), Source::File(abs.clone()));
+            match alt.map(|a| for_version(rel, abs, main, &a.version)) {
+                Some(ForVersion::Skip(why)) => out.skipped.push(why),
+                Some(ForVersion::Rewrite(bytes)) => {
+                    out.files.insert(rel.clone(), Source::Bytes(bytes));
+                }
+                _ => {
+                    out.files.insert(rel.clone(), Source::File(abs.clone()));
+                }
+            }
             continue;
         };
         if unchanged.contains(&tex) {
@@ -502,7 +510,10 @@ fn plan(
         }
         for target in targets {
             if let Some(a) = alt {
-                if a.index.as_ref().is_some_and(|i| i.get(&target).is_none()) {
+                // the pack's own new textures (random variants…) exist in no game version
+                if a.index.as_ref().is_some_and(|i| i.get(&target).is_none())
+                    && in_main_game(opts, tex)
+                {
                     if ext == ".png" {
                         out.skipped.push(format!("{tex} (not in {})", a.label));
                     }
@@ -526,6 +537,163 @@ fn plan(
     );
     out.skipped.sort();
     out
+}
+
+/// True when the main version's game has this texture (or the game files
+/// are not known): only those can be missing from another version.
+fn in_main_game(opts: &ExportOptions, tex: &str) -> bool {
+    opts.vanilla_root
+        .as_ref()
+        .is_none_or(|root| texture_file(root, tex).is_ok_and(|f| f.is_file()))
+}
+
+// ------------------------------------- copies for other versions: references
+
+/// What a copy for another version does with one file that is not a texture.
+#[derive(Debug, PartialEq)]
+enum ForVersion {
+    Keep,
+    Rewrite(Vec<u8>),
+    Skip(String),
+}
+
+/// A texture reference (`minecraft:block/stone`, `blocks/stone`) under its
+/// name in `to`, when that name differs.
+fn renamed_ref(reference: &str, from: &McVersion, to: &McVersion) -> Option<String> {
+    let (ns, path) = match reference.strip_prefix("minecraft:") {
+        Some(p) => ("minecraft:", p),
+        None => ("", reference),
+    };
+    if !crate::textures::is_safe_texture_path(path) {
+        return None;
+    }
+    let new = RenameTable::builtin()
+        .map(path, from, to)
+        .into_iter()
+        .next()?;
+    (new != path).then(|| format!("{ns}{new}"))
+}
+
+/// Renames the texture references of a model file (`textures` values and
+/// face textures that are paths). `true` when something changed.
+fn rename_model_refs(json: &mut serde_json::Value, from: &McVersion, to: &McVersion) -> bool {
+    use serde_json::Value;
+    let mut changed = false;
+    let mut fix = |v: &mut Value| {
+        let new = match v {
+            Value::String(s) if !s.starts_with('#') => renamed_ref(s, from, to),
+            _ => None,
+        };
+        if let Some(n) = new {
+            *v = Value::from(n);
+            changed = true;
+        }
+    };
+    if let Some(t) = json.get_mut("textures").and_then(Value::as_object_mut) {
+        for v in t.values_mut() {
+            match v {
+                Value::Object(o) => {
+                    if let Some(s) = o.get_mut("sprite") {
+                        fix(s);
+                    }
+                }
+                other => fix(other),
+            }
+        }
+    }
+    if let Some(Value::Array(elements)) = json.get_mut("elements") {
+        for el in elements {
+            if let Some(faces) = el.get_mut("faces").and_then(Value::as_object_mut) {
+                for f in faces.values_mut() {
+                    if let Some(t) = f.get_mut("texture") {
+                        fix(t);
+                    }
+                }
+            }
+        }
+    }
+    changed
+}
+
+/// Renames texture paths in the texture keys of an OptiFine `.properties`
+/// file (`matchTiles`, `tiles`, `connectTiles`; only tokens with a folder:
+/// tile numbers and plain names are relative and stay). `None` when nothing changes.
+fn rename_properties_refs(text: &str, from: &McVersion, to: &McVersion) -> Option<String> {
+    let mut changed = false;
+    let lines: Vec<String> = text
+        .lines()
+        .map(|line| {
+            let Some((key, value)) = line.split_once('=') else {
+                return line.to_owned();
+            };
+            if !matches!(key.trim(), "matchTiles" | "tiles" | "connectTiles") {
+                return line.to_owned();
+            }
+            let tokens: Vec<String> = value
+                .split_whitespace()
+                .map(|tok| {
+                    match tok
+                        .contains('/')
+                        .then(|| renamed_ref(tok, from, to))
+                        .flatten()
+                    {
+                        Some(n) => {
+                            changed = true;
+                            n
+                        }
+                        None => tok.to_owned(),
+                    }
+                })
+                .collect();
+            format!("{key}={}", tokens.join(" "))
+        })
+        .collect();
+    changed.then(|| {
+        let mut out = lines.join("\n");
+        if text.ends_with('\n') {
+            out.push('\n');
+        }
+        out
+    })
+}
+
+/// Keeps the pack's own models and connected textures working in a copy for
+/// another version: texture references follow the renamed textures. Block
+/// state files are left out of a copy on the other side of 1.13 (states and
+/// model names changed then; the game would show missing models).
+fn for_version(rel: &str, abs: &Path, main: &McVersion, to: &McVersion) -> ForVersion {
+    if rel.starts_with("assets/minecraft/blockstates/") {
+        let flat = McVersion::parse("1.13").expect("valid version");
+        if (*main >= flat) != (*to >= flat) {
+            return ForVersion::Skip(format!(
+                "{} (block states changed in 1.13)",
+                rel.trim_start_matches("assets/minecraft/")
+            ));
+        }
+        return ForVersion::Keep;
+    }
+    let optifine = rel.starts_with("assets/minecraft/optifine/")
+        || rel.starts_with("assets/minecraft/mcpatcher/");
+    if rel.starts_with("assets/minecraft/models/") && rel.ends_with(".json") {
+        let Some(mut json) = fs::read_to_string(abs).ok().and_then(|t| {
+            serde_json::from_str::<serde_json::Value>(t.trim_start_matches('\u{feff}')).ok()
+        }) else {
+            return ForVersion::Keep;
+        };
+        if rename_model_refs(&mut json, main, to) {
+            let mut out = serde_json::to_string_pretty(&json).expect("JSON serialises");
+            out.push('\n');
+            return ForVersion::Rewrite(out.into_bytes());
+        }
+    } else if optifine && rel.ends_with(".properties") {
+        if let Some(new) = fs::read_to_string(abs)
+            .ok()
+            .and_then(|t| rename_properties_refs(&t, main, to))
+        {
+            return ForVersion::Rewrite(new.into_bytes());
+        }
+    }
+    ForVersion::Keep
 }
 
 fn read_source(src: &Source) -> Result<Vec<u8>> {
@@ -1030,6 +1198,119 @@ mod tests {
         // the main export keeps the new names
         assert!(zip_names(Path::new(&out[0].path))
             .contains(&"assets/minecraft/textures/block/short_grass.png".to_owned()));
+    }
+
+    #[test]
+    fn copies_for_other_versions_rename_model_and_ctm_references() {
+        let (new, old) = (v("1.21.4"), v("1.8.9"));
+        assert_eq!(
+            renamed_ref("minecraft:block/stone_2", &new, &old).as_deref(),
+            Some("minecraft:blocks/stone_2")
+        );
+        assert_eq!(
+            renamed_ref("block/oak_planks", &new, &old).as_deref(),
+            Some("blocks/planks_oak")
+        );
+        assert_eq!(renamed_ref("block/stone", &new, &v("1.21.1")), None);
+        assert_eq!(renamed_ref("mymod:block/x", &new, &old), None);
+        let mut m = serde_json::json!({
+            "parent": "minecraft:block/cube_all",
+            "textures": {"all": "minecraft:block/stone_2", "particle": "#all", "side": {"sprite": "block/oak_planks"}},
+            "elements": [{"faces": {"up": {"texture": "block/short_grass"}, "down": {"texture": "#all"}}}]
+        });
+        assert!(rename_model_refs(&mut m, &new, &old));
+        assert_eq!(m["textures"]["all"], "minecraft:blocks/stone_2");
+        assert_eq!(m["textures"]["particle"], "#all");
+        assert_eq!(m["textures"]["side"]["sprite"], "blocks/planks_oak");
+        assert_eq!(
+            m["elements"][0]["faces"]["up"]["texture"],
+            "blocks/tallgrass"
+        );
+        assert_eq!(m["parent"], "minecraft:block/cube_all");
+        let p =
+            "matchBlocks=glass\nmethod=ctm_compact\ntiles=0-4\nmatchTiles=block/oak_planks glass\n";
+        assert_eq!(
+            rename_properties_refs(p, &new, &old).unwrap(),
+            "matchBlocks=glass\nmethod=ctm_compact\ntiles=0-4\nmatchTiles=blocks/planks_oak glass\n"
+        );
+        assert_eq!(rename_properties_refs("tiles=0-4\n", &new, &old), None);
+    }
+
+    #[test]
+    fn copy_for_an_old_version_keeps_variants_working() {
+        let f = fixture();
+        let models = f.pack.join("assets/minecraft/models/block");
+        fs::create_dir_all(&models).unwrap();
+        fs::write(
+            models.join("stone_2.json"),
+            r#"{"parent": "minecraft:block/cube_all", "textures": {"all": "minecraft:block/stone_2"}}"#,
+        )
+        .unwrap();
+        let states = f.pack.join("assets/minecraft/blockstates");
+        fs::create_dir_all(&states).unwrap();
+        fs::write(
+            states.join("stone.json"),
+            r#"{"variants": {"": [{"model": "minecraft:block/stone"}, {"model": "minecraft:block/stone_2"}]}}"#,
+        )
+        .unwrap();
+        let ctm = f.pack.join("assets/minecraft/optifine/ctm/glass");
+        fs::create_dir_all(&ctm).unwrap();
+        fs::write(
+            ctm.join("glass.properties"),
+            "matchBlocks=glass\nmethod=ctm_compact\ntiles=0-4\n",
+        )
+        .unwrap();
+        fs::write(ctm.join("0.png"), png(16, 16, 1)).unwrap();
+        put(&f.pack, "block/stone", png(32, 32, 4));
+        put(&f.pack, "block/stone_2", png(32, 32, 5)); // the pack's own texture
+        put(&f.pack, "block/prismarine", png(32, 32, 6)); // a game texture missing in 1.8.9
+        let old = f.versions.iter().find(|x| x.dir_name == "1.8.9").unwrap();
+        let alt = AltTarget {
+            label: "1.8.9".into(),
+            version: v("1.8.9"),
+            format: PackFormat::new(1),
+            index: Some(extract_version(&f.cache, old, &mut |_, _| {}).unwrap()),
+        };
+        let mut o = opts(&f, ExportKind::Zip);
+        o.vanilla_root = Some(vanilla_dir(&f.cache, "1.21.4"));
+        let out = export_pack(&f.pack, &f.project, &v("1.21.4"), &[alt], &o).unwrap();
+        let zip = Path::new(&out[1].path);
+        let names = zip_names(zip);
+        assert!(
+            names.contains(&"assets/minecraft/textures/blocks/stone_2.png".to_owned()),
+            "{names:?}"
+        );
+        assert!(!names.iter().any(|n| n.contains("prismarine")));
+        assert!(!names.iter().any(|n| n.contains("blockstates")));
+        assert!(out[1]
+            .skipped
+            .contains(&"blockstates/stone.json (block states changed in 1.13)".to_owned()));
+        let model: serde_json::Value =
+            serde_json::from_slice(&zip_read(zip, "assets/minecraft/models/block/stone_2.json"))
+                .unwrap();
+        assert_eq!(model["textures"]["all"], "minecraft:blocks/stone_2");
+        assert_eq!(
+            zip_read(zip, "assets/minecraft/optifine/ctm/glass/glass.properties"),
+            b"matchBlocks=glass\nmethod=ctm_compact\ntiles=0-4\n"
+        );
+        assert!(names.contains(&"assets/minecraft/optifine/ctm/glass/0.png".to_owned()));
+        // the main export is untouched
+        let main = Path::new(&out[0].path);
+        assert_eq!(
+            zip_read(main, "assets/minecraft/models/block/stone_2.json"),
+            fs::read(models.join("stone_2.json")).unwrap()
+        );
+        assert!(zip_names(main).contains(&"assets/minecraft/blockstates/stone.json".to_owned()));
+        // a copy on the same side of 1.13 keeps the block state as it is
+        let same = AltTarget {
+            label: "1.21.1".into(),
+            version: v("1.21.1"),
+            format: PackFormat::new(34),
+            index: None,
+        };
+        let out = export_pack(&f.pack, &f.project, &v("1.21.4"), &[same], &o).unwrap();
+        assert!(zip_names(Path::new(&out[1].path))
+            .contains(&"assets/minecraft/blockstates/stone.json".to_owned()));
     }
 
     #[test]

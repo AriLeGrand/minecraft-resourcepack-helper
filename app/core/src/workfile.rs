@@ -18,6 +18,25 @@ pub const WORK_SCHEMA: u32 = 1;
 /// Reserved "texture path" of the pack icon (`pack.png` in the pack folder).
 /// It is not a valid texture name, so it can never collide with a texture.
 pub const ICON_PATH: &str = ":pack-icon";
+/// Editor paths starting with this name a PNG under `assets/minecraft/optifine/`
+/// (connected-texture tiles), e.g. `:optifine/ctm/glass/0`.
+pub const OPTIFINE_PREFIX: &str = ":optifine/";
+
+/// The PNG of an [`OPTIFINE_PREFIX`] path (`rest` is what follows the prefix).
+pub fn optifine_png(pack_dir: &Path, rest: &str) -> Result<PathBuf> {
+    if !is_safe_texture_path(rest) || rest.contains('.') {
+        return Err(CoreError::new(
+            "bad_path",
+            format!("\"{rest}\" is not a valid OptiFine file name."),
+        ));
+    }
+    let mut p = pack_dir.join("assets").join("minecraft").join("optifine");
+    for seg in rest.split('/') {
+        p.push(seg);
+    }
+    p.set_extension("png");
+    Ok(p)
+}
 /// Size of a new pack icon when the pack has none.
 const NEW_ICON_SIZE: u32 = 64;
 
@@ -130,6 +149,19 @@ struct Target {
 }
 
 fn target(pack_dir: &Path, vanilla_root: Option<&Path>, tex_path: &str) -> Result<Target> {
+    if let Some(rest) = tex_path.strip_prefix(OPTIFINE_PREFIX) {
+        let mut work = pack_dir.join(PROJECT_DIR).join("optifine-work");
+        for seg in rest.split('/') {
+            work.push(seg);
+        }
+        let png = optifine_png(pack_dir, rest)?;
+        work.set_extension("json");
+        return Ok(Target {
+            png,
+            work,
+            vanilla: None,
+        });
+    }
     if tex_path == ICON_PATH {
         return Ok(Target {
             png: pack_dir.join("pack.png"),
@@ -280,6 +312,11 @@ fn read_animation(png: &Path) -> Option<Animation> {
     fs::read_to_string(mcmeta_file(png))
         .ok()
         .and_then(|t| mcmeta::parse_animation(&t).ok().flatten())
+}
+
+/// The working file (layers) of an editor path, for code that moves it away.
+pub fn work_file_of(pack_dir: &Path, tex_path: &str) -> Result<PathBuf> {
+    Ok(target(pack_dir, None, tex_path)?.work)
 }
 
 /// Opens a texture (or the pack icon, [`ICON_PATH`]) for editing. Nothing is
