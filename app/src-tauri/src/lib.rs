@@ -10,10 +10,12 @@ use packcreator_core::export::{self, AltTarget, Check, ExportKind, ExportOptions
 use packcreator_core::extract;
 use packcreator_core::gui::{self, Scaling};
 use packcreator_core::gui_screens;
+use packcreator_core::history;
 use packcreator_core::import::{self, ImageInfo, ImportResult};
 use packcreator_core::mcmeta::Animation;
 use packcreator_core::minecraft::{self, InstalledVersion};
 use packcreator_core::models;
+use packcreator_core::notes;
 use packcreator_core::pack::{self, PackSummary, Project};
 use packcreator_core::particle_list;
 use packcreator_core::particles::ParticleSheet;
@@ -47,6 +49,9 @@ pub struct Inner {
     /// The last batch-import scan: the only files the batch commands and the
     /// `pcimg://localhost/batch/<id>` route may read.
     pub batch: Option<BatchSession>,
+    /// The texture whose earlier versions the inspector listed last: the only
+    /// one the `pcimg://localhost/history/...` route may read versions of.
+    pub history_tex: Option<String>,
 }
 
 pub struct BatchSession {
@@ -1183,6 +1188,52 @@ fn export_pack(state: State<AppState>, request: ExportRequest) -> Result<ExportR
 
 // ----------------------------------------------------------------- setup
 
+// ---------------------------------------------- notes, tags and history
+
+#[tauri::command(async)]
+fn notes_load(state: State<AppState>, pack_dir: String) -> Result<notes::LoadedNotes> {
+    let dir = own_pack(&state.lock(), &pack_dir)?.dir.clone();
+    notes::load(&dir)
+}
+
+#[tauri::command(async)]
+fn notes_set(
+    state: State<AppState>,
+    path: String,
+    note: notes::TextureNote,
+    pack_dir: String,
+) -> Result<notes::TextureNote> {
+    let dir = own_pack(&state.lock(), &pack_dir)?.dir.clone();
+    notes::set(&dir, &path, &note)
+}
+
+/// Earlier versions of one texture (history and trash folders of the pack).
+#[tauri::command(async)]
+fn texture_history(
+    state: State<AppState>,
+    path: String,
+    pack_dir: String,
+) -> Result<Vec<history::Version>> {
+    let dir = {
+        let mut inner = state.lock();
+        let dir = own_pack(&inner, &pack_dir)?.dir.clone();
+        inner.history_tex = Some(path.clone());
+        dir
+    };
+    history::list(&dir, &path)
+}
+
+#[tauri::command(async)]
+fn restore_version(
+    state: State<AppState>,
+    path: String,
+    id: String,
+    pack_dir: String,
+) -> Result<history::Restored> {
+    let dir = own_pack(&state.lock(), &pack_dir)?.dir.clone();
+    history::restore(&dir, &path, &id)
+}
+
 fn env_dir(key: &str) -> Option<PathBuf> {
     std::env::var_os(key)
         .map(PathBuf::from)
@@ -1251,6 +1302,10 @@ pub fn run() {
             batch_scan,
             batch_import,
             whats_new,
+            notes_load,
+            notes_set,
+            texture_history,
+            restore_version,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Pack Creator");

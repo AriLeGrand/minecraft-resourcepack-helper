@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { TextureRow } from "./api";
+import type { TextureNote, TextureRow } from "./api";
 import { formatShareList, groupForShare, shareFileName, type ShareOptions } from "./share";
 
 const row = (path: string, extra: Partial<TextureRow> = {}): TextureRow => ({
@@ -76,10 +76,53 @@ describe("formatShareList", () => {
   it("spreadsheet with proper quoting", () => {
     const csv = formatShareList([...rows, row("block/odd,name\"x")], opts({ format: "csv" }));
     const lines = csv.split("\r\n");
-    expect(lines[0]).toBe("category,texture,file,status,size,animated,frames,notes");
-    expect(lines).toContain('Blocks,prismarine,textures/block/prismarine.png,done,32×128,yes,4,"animated, 4 frames; changed since export"');
-    expect(lines).toContain('Blocks,"odd,name""x","textures/block/odd,name""x.png",to do,16×16,no,1,');
+    expect(lines[0]).toBe("category,texture,file,status,size,animated,frames,details,note,tags,assigned_to");
+    expect(lines).toContain('Blocks,prismarine,textures/block/prismarine.png,done,32×128,yes,4,"animated, 4 frames; changed since export",,,');
+    expect(lines).toContain('Blocks,"odd,name""x","textures/block/odd,name""x.png",to do,16×16,no,1,,,,');
     expect(csv.endsWith("\r\n")).toBe(true);
+  });
+});
+
+const team: Record<string, TextureNote> = {
+  "block/andesite": { note: "darker edges\nless noise", tags: ["needs redo"], assignee: "Sam", updated_ms: 1 },
+  "item/apple": { note: "", tags: ["waiting feedback", "food"], assignee: "alex", updated_ms: 1 },
+  "block/stone": { note: "ok, final", tags: [], assignee: "Alex", updated_ms: 1 },
+};
+
+describe("notes, tags and who does it", () => {
+  it("follow each texture in the checklist", () => {
+    const t = formatShareList(rows, opts({ notes: team }));
+    expect(t).toContain("- [ ] andesite: `textures/block/andesite.png` · tags: needs redo · assigned to Sam · note: darker edges / less noise");
+    expect(t).toContain("- [x] stone: `textures/block/stone.png` · assigned to Alex · note: ok, final");
+    expect(t).toContain("- [ ] apple: `textures/item/apple.png` · tags: waiting feedback, food · assigned to alex");
+  });
+  it("group by person: names A→Z (any case), Unassigned last, no repeated name", () => {
+    const t = formatShareList(rows, opts({ format: "text", notes: team, byPerson: true }));
+    expect(t.split("\n")).toEqual([
+      "Deep Sea Pack: to-do list",
+      "Java 1.21.11 · 32× · 2 / 4 done, 2 to do · 2026-11-20",
+      "",
+      "Alex (1 to do, 1 done)",
+      "[x] stone  textures/block/stone.png · note: ok, final",
+      "[ ] apple  textures/item/apple.png · tags: waiting feedback, food",
+      "",
+      "Sam (1 to do, 0 done)",
+      "[ ] andesite  textures/block/andesite.png · tags: needs redo · note: darker edges / less noise",
+      "",
+      "Unassigned (0 to do, 1 done)",
+      "[x] prismarine  textures/block/prismarine.png (animated, 4 frames, changed since export)",
+      "",
+    ]);
+  });
+  it("CSV gets note, tags and assigned_to columns", () => {
+    const lines = formatShareList(rows, opts({ format: "csv", notes: team })).split("\r\n");
+    expect(lines).toContain('Blocks,andesite,textures/block/andesite.png,to do,16×16,no,1,,"darker edges\nless noise",needs redo,Sam');
+    expect(lines).toContain("Items,apple,textures/item/apple.png,to do,16×16,no,1,,,waiting feedback; food,alex");
+  });
+  it("grouping by person keeps the category column right in CSV", () => {
+    const lines = formatShareList(rows, opts({ format: "csv", notes: team, byPerson: true })).split("\r\n");
+    expect(lines[1].startsWith("Blocks,stone,")).toBe(true);
+    expect(lines[2].startsWith("Items,apple,")).toBe(true);
   });
 });
 

@@ -8,10 +8,14 @@ import { useEditor } from "../editor/editorStore";
 import { api, images, type BatchScan, type ChangedTexture, type TextureDetail, type TextureRow, type WhatsNewView } from "../lib/api";
 import {
   baseName, CATEGORIES, categoryLabel, compareChoices, countRows, dayLabel, defaultCompareVersion, filterRows, folderOf,
-  matchesElsewhere, realRenames, timeLabel, virtualWindow, whatsNewNotice, whatsNewOnly, whatsNewTitle, type WhatsNewMode,
+  matchesElsewhere, progressStats, realRenames, timeLabel, virtualWindow, whatsNewNotice, whatsNewOnly, whatsNewTitle, type WhatsNewMode,
 } from "../lib/logic";
 import { BatchImportDialog } from "../components/BatchImportDialog";
+import { HistorySection } from "../components/HistorySection";
+import { ProgressCard, ProgressDialog } from "../components/ProgressPanel";
 import { ShareDialog } from "../components/ShareDialog";
+import { NoteBadges, NotesSection, TeamFilters } from "../components/TeamNotes";
+import { useNotes } from "../lib/notesStore";
 import { useApp } from "../store";
 
 const ROW_H = 41;
@@ -45,9 +49,17 @@ export function Browser() {
   const whatsNew = useApp((s) => s.whatsNew);
 
   const dirName = pack.project.version_dir;
-  const visible = useMemo(() => filterRows(rows, filters), [rows, filters]);
+  const notes = useNotes((s) => s.notes);
+  const me = useNotes((s) => s.me);
+  useEffect(() => {
+    void useNotes.getState().load(pack.dir);
+  }, [pack.dir]);
+  const noteCtx = useMemo(() => ({ notes, me }), [notes, me]);
+  const visible = useMemo(() => filterRows(rows, filters, noteCtx), [rows, filters, noteCtx]);
   const counts = useMemo(() => countRows(rows, filters.category), [rows, filters.category]);
-  const elsewhere = useMemo(() => matchesElsewhere(rows, filters), [rows, filters]);
+  const elsewhere = useMemo(() => matchesElsewhere(rows, filters, noteCtx), [rows, filters, noteCtx]);
+  const inList = useMemo(() => new Set(rows.map((r) => r.path)), [rows]);
+  const [showProgress, setShowProgress] = useState(false);
   const selectedRow = useMemo(() => rows.find((r) => r.path === selected) ?? null, [rows, selected]);
   // textures Mojang redrew since the compared version, for the row tag
   const redrawn = useMemo(() => new Set(whatsNew?.diff.changed.map((c) => c.path) ?? []), [whatsNew]);
@@ -57,6 +69,9 @@ export function Browser() {
   ) ?? null;
   const redrawnInPack = useMemo(() => rows.filter((r) => r.mine && redrawn.has(r.path)).length, [rows, redrawn]);
   const now = Date.now();
+  // file times change only on reload; the stats follow the rows
+  const stats = useMemo(() => progressStats(rows, Date.now()), [rows]);
+  const catProgress = useMemo(() => new Map(stats.categories.map((c) => [c.key as string, c.pct])), [stats]);
 
   // virtual list
   const bodyRef = useRef<HTMLDivElement>(null);
@@ -161,6 +176,7 @@ export function Browser() {
       <div className="body">
         <NavBar />
         <aside className="side">
+          {rows.length > 0 && <ProgressCard stats={stats} onOpen={() => setShowProgress(true)} />}
           <div className="group">
             <div className="caps">Categories</div>
             <button className={`cat ${filters.category === "all" && !filters.only ? "on" : ""}`} onClick={() => setFilters({ category: "all", only: null })}>
@@ -169,6 +185,9 @@ export function Browser() {
             {CATEGORIES.map((c) => (
               <button key={c.key} className={`cat ${filters.category === c.key && !filters.only ? "on" : ""}`} onClick={() => setFilters({ category: c.key, only: null })}>
                 <span className="grow">{c.label}</span><span className="n">{counts.byCategory[c.key] ?? 0}</span>
+                {catProgress.has(c.key) && (
+                  <span className="catbar" title={`${catProgress.get(c.key)}% done`}><span style={{ width: `${catProgress.get(c.key)}%` }} /></span>
+                )}
               </button>
             ))}
           </div>
@@ -189,13 +208,16 @@ export function Browser() {
             <label><input type="checkbox" checked={filters.wrongSize} onChange={(e) => setFilters({ wrongSize: e.target.checked })} /> Wrong size for {pack.project.resolution}×</label>
             <WhatsNewPanel mode={whatsNewMode} />
           </div>
+          <TeamFilters filters={filters} setFilters={setFilters} inList={inList} />
         </aside>
 
         <main className="main" onKeyDown={onKeyDown} tabIndex={-1} style={{ outline: "none" }}>
           <div className="listhead">
             <h1>{title}</h1>
             <span className="dim" style={{ fontSize: 12 }}>
-              {filters.only ? `${visible.length} textures` : `${total} textures · ${done} done`}
+              {filters.only ? `${visible.length} textures`
+                : filters.tag !== null || filters.assignee.kind !== "any" || filters.hasNote ? `${visible.length} of ${total} textures`
+                : `${total} textures · ${done} done`}
             </span>
             <div className="grow" />
             <label className="searchbox">
@@ -276,6 +298,7 @@ export function Browser() {
                         {baseName(r.path)}
                         {filters.category === "all" || filters.only ? <span className="dim"> · {folderOf(r.path)}</span> : folderOf(r.path).includes("/") ? <span className="dim"> · {folderOf(r.path).split("/").slice(1).join("/")}</span> : null}
                       </span>
+                      <NoteBadges path={r.path} />
                       {r.mine && redrawn.has(r.path) && (
                         <span className="tag redrawn" title={`Mojang redrew the game's texture in ${whatsNew!.diff.other_is_older ? whatsNew!.diff.this_version : whatsNew!.diff.other_version}: your drawing may need an update`}>redrawn by Mojang</span>
                       )}
@@ -296,6 +319,17 @@ export function Browser() {
 
         <Inspector row={selectedRow} now={now} />
       </div>
+      {showProgress && (
+        <ProgressDialog
+          stats={stats}
+          packName={pack.project.name}
+          onClose={() => setShowProgress(false)}
+          onShowChanged={() => {
+            setShowProgress(false);
+            setFilters({ category: "all", status: "changed", only: null });
+          }}
+        />
+      )}
       {sharing && <ShareDialog visible={visible} all={rows} viewTitle={title} onClose={() => setSharing(false)} />}
       {batch && <BatchImportDialog scan={batch.scan} scanStamp={batch.stamp} onClose={() => setBatch(null)} />}
       {dragging && (
@@ -645,6 +679,8 @@ function Inspector({ row, now }: { row: TextureRow | null; now: number }) {
         )}
       </dl>
       {whatsNew && <WhatsNewFacts row={row} w={whatsNew} />}
+      <NotesSection path={row.path} />
+      <HistorySection row={row} />
       {detail && detail.eras.length > 0 && (
         <div className="eras">
           <div className="caps">Name across versions</div>

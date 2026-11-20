@@ -729,3 +729,46 @@ button.pv-frame:hover .pv-thumb { border-color: var(--link); }
 .gi-actions { display: flex; gap: 8px; margin-top: 4px; }
 .gi-actions .btn { height: 36px; }
 .gi-actions .btn.primary { flex: 1; }
+
+/* ---------- organising a pack: progress, notes / tags / assignee, history ---------- */
+.pbar { display: block; height: 4px; background: var(--line); border-radius: 2px; overflow: hidden; }
+.pbar > span { display: block; height: 100%; background: var(--ok); }
+.side .cat { position: relative; }
+.side .catbar { position: absolute; left: 8px; right: 8px; bottom: 1px; height: 2px; border-radius: 1px; background: var(--line-soft); overflow: hidden; }
+.side .catbar > span { display: block; height: 100%; background: var(--ok); opacity: 0.75; }
+.progcard { display: flex; flex-direction: column; gap: 6px; padding: 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--bar); color: var(--text); text-align: left; width: 100%; flex: none; }
+.progcard:hover { border-color: var(--line-input); background: #1b1c20; }
+.progcard .pc-head { display: flex; justify-content: space-between; font-size: 12px; font-weight: 600; }
+.progcard .pc-pct { color: var(--ok); font-family: var(--mono); }
+.progcard .pc-sub { font-size: 11px; color: var(--text-2); }
+.progress-modal .pm-big { display: flex; align-items: baseline; gap: 12px; font-size: 12px; }
+.progress-modal .pm-pct { font-size: 28px; font-weight: 600; color: var(--ok); font-family: var(--mono); }
+.progress-modal .pm-bar { height: 6px; }
+.progress-modal .pm-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.progress-modal .pm-cards > div { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; font-size: 11px; }
+.progress-modal .pm-n { font-size: 18px; font-weight: 600; font-family: var(--mono); }
+.progress-modal .pm-cats { display: flex; flex-direction: column; gap: 6px; }
+.progress-modal .pm-cat { display: grid; grid-template-columns: 110px minmax(0, 1fr) 90px 44px; align-items: center; gap: 12px; font-size: 12px; }
+.progress-modal .pm-cat .mono { text-align: right; font-size: 11px; }
+.side .team label.sel { cursor: default; padding: 3px 8px; }
+.side .team label.sel > span { width: 34px; flex: none; color: var(--text-2); font-size: 11px; }
+.side .team label.sel .input { flex: 1; min-width: 0; height: 28px; font-size: 12px; padding: 0 6px; }
+.noteflag { display: inline-flex; align-items: center; gap: 2px; color: var(--link); flex: none; }
+.noteflag-n { font-size: 10px; }
+.initials { flex: none; min-width: 20px; height: 18px; padding: 0 4px; border-radius: 9px; background: var(--accent-seg); color: var(--text); font-size: 10px; font-weight: 600; display: inline-flex; align-items: center; justify-content: center; letter-spacing: 0.02em; }
+.notesbox .notearea { height: 64px; padding: 6px 8px; font-size: 12px; resize: vertical; line-height: 1.4; font-family: var(--font); }
+.notesbox .tagrow { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.notesbox .tag.chip { display: inline-flex; align-items: center; gap: 4px; padding: 1px 2px 1px 6px; }
+.notesbox .tag.chip button { border: 0; background: transparent; color: var(--text-2); display: inline-flex; padding: 2px; border-radius: 3px; }
+.notesbox .tag.chip button:hover { color: var(--text); background: var(--hover); }
+.notesbox .taginput { flex: 1; min-width: 120px; height: 24px; border: 1px dashed var(--line-input); border-radius: 4px; background: transparent; color: var(--text); font-size: 11px; padding: 0 6px; outline: none; }
+.notesbox .taginput:focus { border-style: solid; border-color: var(--accent); }
+.notesbox .assignrow { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+.notesbox .assignrow .input { flex: 1; min-width: 0; height: 28px; font-size: 12px; padding: 0 8px; }
+.notesbox .assignrow .btn { height: 28px; padding: 0 10px; }
+.histgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(70px, 1fr)); gap: 6px; max-height: 220px; overflow-y: auto; }
+.hist { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 5px 3px; border: 1px solid transparent; border-radius: 6px; background: transparent; color: var(--text-soft); }
+.hist:hover { background: #1b1c20; }
+.hist.on { border-color: var(--accent); background: var(--accent-soft); color: var(--text); }
+.hist .thumb { width: 44px; height: 44px; }
+.hist .when { font-size: 10px; text-align: center; line-height: 1.2; }

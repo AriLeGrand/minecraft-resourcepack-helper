@@ -300,6 +300,9 @@ pub fn apply_fix(
                 if fm.is_file() && !tm.exists() {
                     fs::rename(&fm, &tm).ctx(&fm)?;
                 }
+                // notes and earlier versions follow the texture (best effort)
+                let _ = crate::notes::rename(pack_dir, &old, &new);
+                let _ = crate::history::rename(pack_dir, &old, &new);
                 renamed += 1;
             }
             Ok(if kept > 0 {

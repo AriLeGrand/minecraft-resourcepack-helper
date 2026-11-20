@@ -1,6 +1,6 @@
 // "Share the to-do list": turns the texture list into text people can paste
 // (Discord, GitHub, Notion…) or open in a spreadsheet. Pure, so it is tested.
-import type { Category, TextureRow } from "./api";
+import type { TextureNote, TextureRow } from "./api";
 import { baseName, CATEGORIES, safeFileName } from "./logic";
 
 export type ShareFormat = "checklist" | "text" | "csv";
@@ -13,6 +13,10 @@ export interface ShareOptions {
   /** e.g. "Java 1.21.11 · 32×". */
   subtitle: string;
   now: number;
+  /** The pack's notes (texture path → note): tags, assignee and note follow each texture. */
+  notes?: Record<string, TextureNote>;
+  /** One group per person ("Unassigned" last) instead of one per category. */
+  byPerson?: boolean;
 }
 
 export const SHARE_FORMATS: { key: ShareFormat; label: string; ext: string; hint: string }[] = [
@@ -38,13 +42,46 @@ function notes(r: TextureRow): string[] {
   return out;
 }
 
-/** Rows to share, grouped by category in the app's order, sorted by name. */
-export function groupForShare(rows: TextureRow[], includeDone: boolean): { key: Category; label: string; rows: TextureRow[] }[] {
-  const kept = rows.filter((r) => !r.extra && (includeDone || !isDone(r)));
+export const UNASSIGNED = "Unassigned";
+
+/** One line: the note without line breaks. */
+const oneLine = (s: string) => s.trim().split(/\s*\r?\n\s*/).filter(Boolean).join(" / ");
+
+/** "tags: needs redo, waiting feedback", "assigned to Alex", "note: …" for a texture. */
+function teamNotes(n: TextureNote | undefined, withAssignee: boolean): string[] {
+  if (!n) return [];
+  const out: string[] = [];
+  if (n.tags.length) out.push(`tags: ${n.tags.join(", ")}`);
+  if (withAssignee && n.assignee) out.push(`assigned to ${n.assignee}`);
+  if (n.note.trim()) out.push(`note: ${oneLine(n.note)}`);
+  return out;
+}
+
+/**
+ * Rows to share, sorted by name, grouped by category in the app's order or,
+ * with `byPerson`, by assignee (A→Z, "Unassigned" last).
+ */
+export function groupForShare(
+  rows: TextureRow[],
+  includeDone: boolean,
+  opt: { notes?: Record<string, TextureNote>; byPerson?: boolean } = {},
+): { key: string; label: string; rows: TextureRow[] }[] {
+  const kept = rows.filter((r) => !r.extra && (includeDone || !isDone(r))).sort((a, b) => a.path.localeCompare(b.path));
+  if (opt.byPerson) {
+    const groups = new Map<string, { key: string; label: string; rows: TextureRow[] }>();
+    for (const r of kept) {
+      const who = opt.notes?.[r.path]?.assignee.trim() ?? "";
+      const key = who.toLowerCase();
+      const g = groups.get(key) ?? { key, label: who || UNASSIGNED, rows: [] };
+      g.rows.push(r);
+      groups.set(key, g);
+    }
+    return [...groups.values()].sort((a, b) => (a.key === "" ? 1 : b.key === "" ? -1 : a.label.localeCompare(b.label)));
+  }
   return CATEGORIES.map((c) => ({
-    key: c.key,
+    key: c.key as string,
     label: c.label,
-    rows: kept.filter((r) => r.category === c.key).sort((a, b) => a.path.localeCompare(b.path)),
+    rows: kept.filter((r) => r.category === c.key),
   })).filter((g) => g.rows.length > 0);
 }
 
@@ -62,17 +99,22 @@ function csvCell(v: string | number): string {
 
 /** The shared text. `rows` is what the user chose to share (filtered or whole pack). */
 export function formatShareList(rows: TextureRow[], o: ShareOptions): string {
-  const groups = groupForShare(rows, o.includeDone);
+  const groups = groupForShare(rows, o.includeDone, { notes: o.notes, byPerson: o.byPerson });
   const all = rows.filter((r) => !r.extra);
   const done = all.filter(isDone).length;
   const left = all.length - done;
 
   if (o.format === "csv") {
-    const lines = [["category", "texture", "file", "status", "size", "animated", "frames", "notes"].join(",")];
+    const lines = [["category", "texture", "file", "status", "size", "animated", "frames", "details", "note", "tags", "assigned_to"].join(",")];
     for (const g of groups) {
       for (const r of g.rows) {
+        const n = o.notes?.[r.path];
         lines.push(
-          [g.label, baseName(r.path), `textures/${r.path}.png`, isDone(r) ? "done" : "to do", sizeOf(r), r.animated ? "yes" : "no", r.frames, notes(r).join("; ")]
+          [
+            CATEGORIES.find((c) => c.key === r.category)?.label ?? r.category, baseName(r.path), `textures/${r.path}.png`,
+            isDone(r) ? "done" : "to do", sizeOf(r), r.animated ? "yes" : "no", r.frames, notes(r).join("; "),
+            n?.note.trim() ?? "", n?.tags.join("; ") ?? "", n?.assignee ?? "",
+          ]
             .map(csvCell)
             .join(","),
         );
@@ -98,7 +140,8 @@ export function formatShareList(rows: TextureRow[], o: ShareOptions): string {
     out.push(md ? `## ${head}` : head);
     for (const r of g.rows) {
       const n = notes(r);
-      const extra = n.length ? ` (${n.join(", ")})` : "";
+      const team = teamNotes(o.notes?.[r.path], !o.byPerson);
+      const extra = (n.length ? ` (${n.join(", ")})` : "") + team.map((t) => ` · ${t}`).join("");
       if (md) out.push(`- [${isDone(r) ? "x" : " "}] ${baseName(r.path)}: \`textures/${r.path}.png\`${extra}`);
       else out.push(`[${isDone(r) ? "x" : " "}] ${baseName(r.path)}  textures/${r.path}.png${extra}`);
     }
