@@ -6,12 +6,20 @@
 //! * `pcimg://localhost/vanilla/<version folder>/full/<texture path>`
 //! * `pcimg://localhost/pack/full/<texture path>`
 //! * `pcimg://localhost/pack/icon`
+//! * `pcimg://localhost/pack/optifine/<path>` (connected-texture tiles)
 //! * `pcimg://localhost/packicon?dir=<pack folder>` (recent packs: `pack.png` only)
 //! * `pcimg://localhost/batch/<row id>` (the files of the last batch-import
 //!   scan only, as a small thumbnail)
+//! * `pcimg://localhost/history/<version id>/<texture path>` (an earlier
+//!   version of the texture the inspector listed last, only from the open
+//!   pack's `.packcreator/history` and `.packcreator/trash`, see
+//!   `history::version_file`)
+//! * `pcimg://localhost/compare/<row id>` (the other pack's PNG of a row of
+//!   the last "Compare with another pack", full size)
 
 use crate::AppState;
 use packcreator_core::extract::vanilla_dir;
+use packcreator_core::history;
 use packcreator_core::textures::{
     is_safe_texture_path, make_thumbnail, png_dimensions, texture_file, thumb_file,
 };
@@ -72,6 +80,10 @@ fn resolve(app: &AppHandle, path: &str, query: Option<&str>) -> Option<PathBuf> 
             if rest == "icon" {
                 return Some(pack.dir.join("pack.png"));
             }
+            // connected-texture tiles: `pack/optifine/ctm/<block>/<n>`
+            if let Some(of) = rest.strip_prefix("optifine/") {
+                return packcreator_core::workfile::optifine_png(&pack.dir, of).ok();
+            }
             let tex = rest.strip_prefix("full/")?;
             texture_file(&pack.dir, tex).ok()
         }
@@ -90,6 +102,24 @@ fn resolve(app: &AppHandle, path: &str, query: Option<&str>) -> Option<PathBuf> 
                 return None;
             }
             session.rows.get(id).map(|(src, _)| src.clone())
+        }
+        "history" => {
+            // only versions of the texture whose history was listed last
+            let (id, tex) = parts.next()?.split_once('/')?;
+            if inner.history_tex.as_deref() != Some(tex) {
+                return None;
+            }
+            let pack = inner.pack.as_ref()?;
+            history::version_file(&pack.dir, tex, id).ok()
+        }
+        "compare" => {
+            // only their file of a row of the last comparison, for the open pack
+            let id: usize = parts.next()?.parse().ok()?;
+            let session = inner.compare.as_ref()?;
+            if inner.pack.as_ref()?.dir != session.pack_dir {
+                return None;
+            }
+            session.rows.get(id)?.0.clone()
         }
         _ => None,
     }

@@ -13,8 +13,13 @@ import { cubeModel, modelFaces, QUAD_TRIANGLES, tintFor } from "./blockMesh";
 import { releaseAfterMouse } from "./focus";
 import type { LiveTexture } from "./liveTexture";
 import { Icon } from "../components/Icon";
+import { useLighting } from "../scene/lighting";
+import { lightColor, levelLabel, TIMES, type Rgb } from "../scene/light";
+import { hardPixels, loadFirst, missingTexture } from "../scene/threeTextures";
 
 const RESET = "M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7";
+/** A crescent moon with a small star: the light and time-of-day controls. */
+const MOON = "M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5zM17 3v3M15.5 4.5h3";
 const SUN = "M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6L7 7M17 17l1.4 1.4M5.6 18.4L7 17M17 7l1.4-1.4M12 8a4 4 0 1 0 0 8a4 4 0 1 0 0-8z";
 
 const CUBE = ":cube";
@@ -23,51 +28,7 @@ const DEFAULT_VIEW = { yaw: Math.PI / 4, pitch: Math.PI / 6, zoom: 1 };
 // what was picked per texture, and the background, for the rest of the session
 const picked = new Map<string, string>();
 let lightBackground = false;
-
-function hardPixels<T extends THREE.Texture>(t: T): T {
-  t.magFilter = THREE.NearestFilter;
-  t.minFilter = THREE.NearestFilter;
-  t.generateMipmaps = false;
-  // the pixels go to the screen as they are, like the game (no colour conversion)
-  t.colorSpace = THREE.NoColorSpace;
-  return t;
-}
-
-function loadImage(url: string): Promise<HTMLImageElement> {
-  return new Promise((ok, fail) => {
-    const img = new Image();
-    img.crossOrigin = "anonymous";
-    img.onload = () => ok(img);
-    img.onerror = () => fail(new Error(`no image at ${url}`));
-    img.src = url;
-  });
-}
-
-/** First frame of an image (animated textures are vertical strips of square frames). */
-function firstFrame(img: HTMLImageElement): HTMLCanvasElement {
-  const w = img.naturalWidth;
-  const h = img.naturalHeight > w && img.naturalHeight % w === 0 ? w : img.naturalHeight;
-  const c = document.createElement("canvas");
-  c.width = w;
-  c.height = h;
-  c.getContext("2d")?.drawImage(img, 0, 0);
-  return c;
-}
-
-/** The game's "missing texture": magenta and black squares. */
-function missingTexture(): THREE.Texture {
-  const c = document.createElement("canvas");
-  c.width = c.height = 2;
-  const g = c.getContext("2d");
-  if (g) {
-    g.fillStyle = "#f800f8";
-    g.fillRect(0, 0, 2, 2);
-    g.fillStyle = "#000";
-    g.fillRect(1, 0, 1, 1);
-    g.fillRect(0, 1, 1, 1);
-  }
-  return hardPixels(new THREE.CanvasTexture(c));
-}
+let lightRowOpen = false;
 
 export interface BlockPreviewProps {
   /** Path of the texture being edited (`block/oak_planks`). */
@@ -91,6 +52,11 @@ export const BlockPreview = memo(function BlockPreview({ texture, live, packDir,
   const [model, setModel] = useState<BlockModel>(() => cubeModel(texture));
   const [error, setError] = useState<string | null>(null);
   const [light, setLight] = useState(lightBackground);
+  const [lightRow, setLightRow] = useState(lightRowOpen);
+  const time = useLighting((s) => s.time);
+  const level = useLighting((s) => s.level);
+  const setTime = useLighting((s) => s.setTime);
+  const setLevel = useLighting((s) => s.setLevel);
   const view = useRef({ ...DEFAULT_VIEW });
   const engine = useRef<Engine | null>(null);
 
@@ -149,6 +115,11 @@ export const BlockPreview = memo(function BlockPreview({ texture, live, packDir,
     engine.current?.setModel(model, texture, live, (tex) => [images.packFull(tex, Date.now()), images.vanillaFull(versionDir, tex)]);
   }, [model, texture, live, versionDir]);
 
+  // the game's light: time of day and block light level (no neighbours here, so no AO)
+  useEffect(() => {
+    engine.current?.setLight(lightColor(level, time));
+  }, [level, time]);
+
   const pick = (name: string) => {
     picked.set(texture, name);
     setChoice(name);
@@ -161,6 +132,11 @@ export const BlockPreview = memo(function BlockPreview({ texture, live, packDir,
     lightBackground = !light;
     setLight(!light);
   };
+  const toggleLightRow = () => {
+    lightRowOpen = !lightRow;
+    setLightRow(!lightRow);
+  };
+  const lit = time !== "day" || level > 0;
   const options = choices.some((c) => c.name === shown) ? choices : [...choices, { name: shown, label: shown.split("/").pop() ?? shown }];
 
   return (
@@ -190,7 +166,30 @@ export const BlockPreview = memo(function BlockPreview({ texture, live, packDir,
         >
           <Icon d={SUN} size={14} />
         </button>
+        <button
+          className={`bp-btn${lightRow || lit ? " on" : ""}`} aria-pressed={lightRow} aria-label="Light and time of day"
+          title={`Light: ${TIMES.find((t) => t.v === time)?.label}, block light ${level}. Click to ${lightRow ? "hide" : "show"} the controls.`}
+          onClick={toggleLightRow}
+        >
+          <Icon d={MOON} size={14} />
+        </button>
       </div>
+      {lightRow && (
+        <div className="bp-light">
+          <span className="bp-seg" role="group" aria-label="Time of day">
+            {TIMES.map((t) => (
+              <button key={t.v} className={t.v === time ? "on" : ""} aria-pressed={t.v === time} onClick={() => setTime(t.v)}>{t.label}</button>
+            ))}
+          </span>
+          <label className="bp-level" title="Block light (torches, lamps), 0-15, with the game's brightness curve">
+            <input
+              type="range" min={0} max={15} step={1} value={level} aria-label="Block light level"
+              onChange={(e) => setLevel(Number(e.target.value))}
+            />
+            <span className="mono">{levelLabel(level)}</span>
+          </label>
+        </div>
+      )}
     </div>
   );
 });
@@ -215,6 +214,7 @@ class Engine {
   private builds = 0;
   private observer: ResizeObserver;
   private disposed = false;
+  private light = new THREE.Color(1, 1, 1);
 
   constructor(private host: HTMLElement, private view: View) {
     this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
@@ -293,16 +293,7 @@ class Engine {
   private texture(path: string, urls: (tex: string) => string[]): Promise<THREE.Texture | null> {
     let p = this.loaded.get(path);
     if (!p) {
-      p = (async () => {
-        for (const url of urls(path)) {
-          try {
-            return hardPixels(new THREE.CanvasTexture(firstFrame(await loadImage(url))));
-          } catch {
-            // the pack does not have it: try the game
-          }
-        }
-        return null;
-      })();
+      p = loadFirst(urls(path));
       this.loaded.set(path, p);
     }
     return p;
@@ -376,6 +367,7 @@ class Engine {
       const mat = new THREE.MeshBasicMaterial({
         vertexColors: true, transparent: true, alphaTest: 0.1, side: THREE.FrontSide,
       });
+      mat.color.copy(this.light);
       if (key === edited) {
         mat.map = this.liveTex;
         mat.visible = this.liveTex !== null;
@@ -397,6 +389,13 @@ class Engine {
       this.group.add(mesh);
       this.meshes.push(mesh);
     }
+    this.render();
+  }
+
+  /** The lightmap colour every face is multiplied by. */
+  setLight(rgb: Rgb) {
+    this.light.setRGB(rgb[0], rgb[1], rgb[2]);
+    for (const m of this.meshes) (m.material as THREE.MeshBasicMaterial).color.copy(this.light);
     this.render();
   }
 

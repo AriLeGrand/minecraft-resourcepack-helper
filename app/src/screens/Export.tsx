@@ -1,11 +1,14 @@
 // Screen 5: pack settings, checks with one-click fixes, export.
 import { open } from "@tauri-apps/plugin-dialog";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { openCompare } from "../components/CompareDialog";
 import { NavBar, StatusBar, TopBar } from "../components/Shell";
+import { ShowcaseCard } from "../components/Showcase";
 import { PACK_ICON } from "../editor/doc";
 import { useEditor } from "../editor/editorStore";
 import { api, images, type Check, type VersionView } from "../lib/api";
 import { bytesLabel, formatLabel, joinPath, parseSectionCodes, safeFileName, timeLabel } from "../lib/logic";
+import { savingsLabel } from "../lib/showcase";
 import { useApp } from "../store";
 
 /** True for versions before the 1.13 rename of blocks/ and items/. */
@@ -36,6 +39,7 @@ export function Export() {
   const [folder, setFolder] = useState(boot.settings.export_kind_folder);
   const [install, setInstall] = useState(boot.settings.export_install);
   const [onlyChanged, setOnlyChanged] = useState(boot.settings.export_only_changed);
+  const [optimize, setOptimize] = useState(boot.settings.export_optimize ?? false);
   const [also, setAlso] = useState<string[]>(project.also_export);
   const [working, setWorking] = useState(false);
   const now = Date.now();
@@ -120,8 +124,8 @@ export function Export() {
           await api.extractVersion(dir);
         }
       }
-      setBusy({ text: "Exporting…", done: 0, total: 0 });
-      const report = await api.exportPack({ folder, install, only_changed: onlyChanged, also });
+      setBusy({ text: optimize ? "Exporting and making PNG files smaller…" : "Exporting…", done: 0, total: 0 });
+      const report = await api.exportPack({ folder, install, only_changed: onlyChanged, also, optimize_png: optimize });
       setPack(report.pack);
       setBoot(await api.bootstrap());
       await reload(true);
@@ -129,8 +133,9 @@ export function Export() {
       const skipped = report.outputs.reduce((n, o) => n + o.skipped.length, 0);
       const copies = report.outputs.length - 1;
       const extra = copies > 0 ? ` and ${copies} more cop${copies === 1 ? "y" : "ies"}` : "";
+      const saved = optimize ? ` ${savingsLabel(first.png_bytes_before, first.png_bytes_after)}` : "";
       toast(
-        `Exported ${first.files} files for ${first.version}${extra}${first.installed_to ? ", installed into Minecraft" : ""}.`,
+        `Exported ${first.files} files for ${first.version}${extra}${first.installed_to ? ", installed into Minecraft" : ""}.${saved}`,
         "ok",
         { label: "Show in folder", run: () => void api.reveal(first.path).catch(() => {}) },
       );
@@ -139,9 +144,9 @@ export function Export() {
           .filter((o) => o.skipped.length)
           .map((o) => `${o.version}: ${o.skipped.slice(0, 6).join(", ")}${o.skipped.length > 6 ? ` and ${o.skipped.length - 6} more` : ""}`);
         ask({
-          title: `${skipped} texture${skipped === 1 ? " was" : "s were"} left out`,
+          title: `${skipped} file${skipped === 1 ? " was" : "s were"} left out`,
           text: lines.join("\n"),
-          hint: "This is expected: a texture is left out when it does not exist in that version, or when it is identical to the game's.",
+          hint: "This is expected: a texture is left out when it does not exist in that version, or when it is identical to the game's; a block state file is left out of a copy on the other side of 1.13.",
           buttons: [{ label: "OK", primary: true }],
         });
       }
@@ -223,6 +228,8 @@ export function Export() {
                   </label>
                 ))}
               </div>
+
+              <ShowcaseCard also={also} />
             </section>
 
             <aside>
@@ -250,8 +257,17 @@ export function Export() {
                 </div>
                 <label className="check"><input type="checkbox" checked={install} onChange={(e) => setInstall(e.target.checked)} /> Install into Minecraft’s resourcepacks folder</label>
                 <label className="check"><input type="checkbox" checked={onlyChanged} onChange={(e) => setOnlyChanged(e.target.checked)} /> Only include textures you changed</label>
+                <label className="check" title="The exported PNG files are compressed better and checked to show exactly the same pixels. Your pack's own files are not changed. Text and other metadata inside the PNG files is left out (Minecraft does not read it).">
+                  <input type="checkbox" checked={optimize} onChange={(e) => setOptimize(e.target.checked)} /> Make PNG files smaller (same pixels)
+                </label>
                 <div className="mono dim" style={{ fontSize: 11, overflowWrap: "anywhere", userSelect: "text" }}>→ {target}</div>
                 <button className="btn primary xl" onClick={doExport} disabled={working}>{working ? "Exporting…" : "Export pack"}</button>
+              </div>
+
+              <div className="card col" style={{ padding: 18, gap: 10 }}>
+                <h2>Compare</h2>
+                <div className="dim" style={{ fontSize: 12 }}>See which textures differ from another pack (a .zip or a folder, any version), look at them side by side and copy the ones you want.</div>
+                <button className="btn" style={{ alignSelf: "flex-start" }} onClick={openCompare}>Compare with another pack…</button>
               </div>
             </aside>
           </div>

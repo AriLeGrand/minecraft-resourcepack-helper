@@ -5,9 +5,13 @@
 //! never exported. Images inside a working file are PNGs encoded as base64.
 
 use crate::error::{CoreError, IoCtx, Result};
+use crate::history;
 use crate::mcmeta::{self, Animation};
 use crate::pack::{modified_ms, now_ms, PROJECT_DIR};
-use crate::textures::{is_safe_texture_path, mcmeta_file, png_dimensions, texture_file};
+use crate::textures::{
+    category_of, is_safe_texture_path, mcmeta_file, png_dimensions, texture_file, Category,
+};
+use crate::upscale::{self, Upscale};
 use base64::Engine;
 use serde::{Deserialize, Serialize};
 use std::fs;
@@ -18,6 +22,25 @@ pub const WORK_SCHEMA: u32 = 1;
 /// Reserved "texture path" of the pack icon (`pack.png` in the pack folder).
 /// It is not a valid texture name, so it can never collide with a texture.
 pub const ICON_PATH: &str = ":pack-icon";
+/// Editor paths starting with this name a PNG under `assets/minecraft/optifine/`
+/// (connected-texture tiles), e.g. `:optifine/ctm/glass/0`.
+pub const OPTIFINE_PREFIX: &str = ":optifine/";
+
+/// The PNG of an [`OPTIFINE_PREFIX`] path (`rest` is what follows the prefix).
+pub fn optifine_png(pack_dir: &Path, rest: &str) -> Result<PathBuf> {
+    if !is_safe_texture_path(rest) || rest.contains('.') {
+        return Err(CoreError::new(
+            "bad_path",
+            format!("\"{rest}\" is not a valid OptiFine file name."),
+        ));
+    }
+    let mut p = pack_dir.join("assets").join("minecraft").join("optifine");
+    for seg in rest.split('/') {
+        p.push(seg);
+    }
+    p.set_extension("png");
+    Ok(p)
+}
 /// Size of a new pack icon when the pack has none.
 const NEW_ICON_SIZE: u32 = 64;
 
@@ -130,6 +153,19 @@ struct Target {
 }
 
 fn target(pack_dir: &Path, vanilla_root: Option<&Path>, tex_path: &str) -> Result<Target> {
+    if let Some(rest) = tex_path.strip_prefix(OPTIFINE_PREFIX) {
+        let mut work = pack_dir.join(PROJECT_DIR).join("optifine-work");
+        for seg in rest.split('/') {
+            work.push(seg);
+        }
+        let png = optifine_png(pack_dir, rest)?;
+        work.set_extension("json");
+        return Ok(Target {
+            png,
+            work,
+            vanilla: None,
+        });
+    }
     if tex_path == ICON_PATH {
         return Ok(Target {
             png: pack_dir.join("pack.png"),
@@ -186,7 +222,13 @@ fn encode_png(img: &image::RgbaImage) -> Result<Vec<u8>> {
 }
 
 /// Builds a one-layer document from a flattened PNG, splitting animation frames.
-fn doc_from_png(png: &[u8], animation: Option<Animation>, scale: u32) -> Result<WorkDoc> {
+fn doc_from_png(
+    png: &[u8],
+    animation: Option<Animation>,
+    scale: u32,
+    method: Upscale,
+    wrap: bool,
+) -> Result<WorkDoc> {
     let img = image::load_from_memory_with_format(png, image::ImageFormat::Png)
         .map_err(|e| CoreError::new("bad_image", format!("The texture could not be read: {e}")))?
         .to_rgba8();
@@ -214,12 +256,7 @@ fn doc_from_png(png: &[u8], animation: Option<Animation>, scale: u32) -> Result<
     for i in 0..count {
         let mut frame = image::imageops::crop_imm(&img, 0, i * frame_h, w, frame_h).to_image();
         if scale > 1 {
-            frame = image::imageops::resize(
-                &frame,
-                w * scale,
-                frame_h * scale,
-                image::imageops::FilterType::Nearest,
-            );
+            frame = upscale::enlarge(&frame, scale, method, wrap);
         }
         frames.push(Frame {
             cels: vec![b64(&encode_png(&frame)?)],
@@ -282,12 +319,31 @@ fn read_animation(png: &Path) -> Option<Animation> {
         .and_then(|t| mcmeta::parse_animation(&t).ok().flatten())
 }
 
+/// The working file (layers) of an editor path, for code that moves it away.
+pub fn work_file_of(pack_dir: &Path, tex_path: &str) -> Result<PathBuf> {
+    Ok(target(pack_dir, None, tex_path)?.work)
+}
+
 /// Opens a texture (or the pack icon, [`ICON_PATH`]) for editing. Nothing is
 /// written to disk.
 ///
 /// `scale` enlarges the game's texture when the pack has no file yet
 /// (pack resolution / 16 for blocks and items, 1 otherwise).
 pub fn open(pack_dir: &Path, vanilla_root: &Path, tex_path: &str, scale: u32) -> Result<OpenedDoc> {
+    open_with(pack_dir, vanilla_root, tex_path, scale, Upscale::Nearest)
+}
+
+/// [`open`] with a choice of how the game's texture is enlarged (hard pixels
+/// or Scale2x / Scale3x, see [`crate::upscale`]). Block textures count as
+/// tiling for the smooth method.
+pub fn open_with(
+    pack_dir: &Path,
+    vanilla_root: &Path,
+    tex_path: &str,
+    scale: u32,
+    method: Upscale,
+) -> Result<OpenedDoc> {
+    let wrap = category_of(tex_path) == Category::Blocks;
     let t = target(pack_dir, Some(vanilla_root), tex_path)?;
     let pack_png = &t.png;
     let vanilla = t
@@ -320,14 +376,14 @@ pub fn open(pack_dir: &Path, vanilla_root: &Path, tex_path: &str, scale: u32) ->
             None => {
                 let bytes = fs::read(pack_png).ctx(pack_png)?;
                 (
-                    doc_from_png(&bytes, read_animation(pack_png), 1)?,
+                    doc_from_png(&bytes, read_animation(pack_png), 1, Upscale::Nearest, false)?,
                     Origin::PackPng,
                 )
             }
         }
     } else if let Some((file, bytes)) = &vanilla {
         (
-            doc_from_png(bytes, read_animation(file), scale)?,
+            doc_from_png(bytes, read_animation(file), scale, method, wrap)?,
             Origin::Vanilla,
         )
     } else if tex_path == ICON_PATH {
@@ -515,6 +571,16 @@ pub fn save(pack_dir: &Path, tex_path: &str, doc: &WorkDoc, flat_png: &[u8]) -> 
     // away by this save: they go to the trash folder.
     let had_work = wf.is_file();
     let old_work_is_stale = had_work && !read_work(wf).is_some_and(|d| belongs_to(&d, png));
+    // The PNG being replaced is kept in the texture's history (see history.rs),
+    // unless it is identical to the new one. A PNG that cannot be read is not
+    // replaced either: it would be lost.
+    let old_png = if png.is_file() {
+        let bytes = fs::read(png).ctx(png)?;
+        (bytes != flat_png).then(|| (bytes, modified_ms(png)))
+    } else {
+        None
+    };
+    let mut kept_version: Option<PathBuf> = None;
 
     // 2. write the new files next to the old ones
     let tmp = sibling(png, "tmp");
@@ -542,10 +608,16 @@ pub fn save(pack_dir: &Path, tex_path: &str, doc: &WorkDoc, flat_png: &[u8]) -> 
         if let Some(text) = &meta_text {
             fs::write(&mtmp, text).ctx(&mtmp)?;
         }
+        if let Some((bytes, made)) = &old_png {
+            kept_version = Some(history::record(pack_dir, tex_path, bytes, *made)?);
+        }
         Ok(())
     })();
     if let Err(e) = staged {
         discard(&[&tmp, &wtmp, &mtmp]);
+        if let Some(k) = &kept_version {
+            discard(&[k]);
+        }
         return Err(e);
     }
 
@@ -571,7 +643,14 @@ pub fn save(pack_dir: &Path, tex_path: &str, doc: &WorkDoc, flat_png: &[u8]) -> 
     })();
     if let Err(e) = committed {
         discard(&[&tmp, &wtmp, &mtmp]);
+        // the old PNG is still in place: its history copy is not needed
+        if let Some(k) = &kept_version {
+            discard(&[k]);
+        }
         return Err(e);
+    }
+    if kept_version.is_some() {
+        let _ = history::prune(pack_dir, tex_path);
     }
     if had_work {
         let kept = pack_dir
@@ -664,7 +743,18 @@ pub fn open_raw(
     tex_path: &str,
     scale: u32,
 ) -> Result<OpenedRaw> {
-    let o = open(pack_dir, vanilla_root, tex_path, scale)?;
+    open_raw_with(pack_dir, vanilla_root, tex_path, scale, Upscale::Nearest)
+}
+
+/// [`open_raw`] with a choice of enlargement for a texture started from the game's.
+pub fn open_raw_with(
+    pack_dir: &Path,
+    vanilla_root: &Path,
+    tex_path: &str,
+    scale: u32,
+    method: Upscale,
+) -> Result<OpenedRaw> {
+    let o = open_with(pack_dir, vanilla_root, tex_path, scale, method)?;
     let mut frames = Vec::new();
     for f in &o.doc.frames {
         let mut cels = Vec::new();
@@ -782,6 +872,25 @@ mod tests {
             Some((16, 16))
         );
         assert!(!pack.exists(), "opening must not create files");
+    }
+
+    #[test]
+    fn smooth_start_enlarges_each_frame_with_scale2x() {
+        let (_t, vanilla, pack) = setup();
+        let o = open_with(&pack, &vanilla, "block/prismarine", 2, Upscale::Smooth).unwrap();
+        assert_eq!((o.doc.width, o.doc.height, o.doc.frames.len()), (32, 32, 4));
+        let strip = image::open(texture_file(&vanilla, "block/prismarine").unwrap())
+            .unwrap()
+            .to_rgba8();
+        for (i, f) in o.doc.frames.iter().enumerate() {
+            let small = image::imageops::crop_imm(&strip, 0, i as u32 * 16, 16, 16).to_image();
+            let got = png_to_rgba(&decode_b64(&f.cels[0]).unwrap()).unwrap();
+            assert_eq!(got, upscale::scale2x(&small, true), "frame {i}");
+        }
+        // a pack file is never rescaled, whatever the method
+        let raw = open_raw_with(&pack, &vanilla, "block/stone", 2, Upscale::Smooth).unwrap();
+        assert_eq!((raw.doc.width, raw.doc.height), (32, 32));
+        assert!(!pack.exists());
     }
 
     #[test]
@@ -1020,6 +1129,32 @@ mod tests {
         assert_eq!(fs::read(&file).unwrap(), flat(32, 32, 2));
         assert!(files_named(&pack, ".tmp").is_empty());
         assert!(files_named(&pack, ".bak").is_empty());
+    }
+
+    #[test]
+    fn every_save_keeps_the_png_it_replaces_in_the_history() {
+        let (_t, vanilla, pack) = setup();
+        let o = open(&pack, &vanilla, "block/stone", 2).unwrap();
+        for seed in 1..=3 {
+            save(&pack, "block/stone", &o.doc, &flat(32, 32, seed)).unwrap();
+        }
+        // saving the same pixels again adds nothing
+        save(&pack, "block/stone", &o.doc, &flat(32, 32, 3)).unwrap();
+        let versions = history::list(&pack, "block/stone").unwrap();
+        let mut kept: Vec<Vec<u8>> = versions
+            .iter()
+            .map(|v| fs::read(history::version_file(&pack, "block/stone", &v.id).unwrap()).unwrap())
+            .collect();
+        kept.sort();
+        let mut want = vec![flat(32, 32, 1), flat(32, 32, 2)];
+        want.sort();
+        assert_eq!(kept, want);
+        // a save that fails leaves no extra history copy behind
+        let wf = work_file(&pack, "block/stone").unwrap();
+        let blocker = sibling(&wf, "tmp");
+        fs::create_dir_all(blocker.join("x")).unwrap();
+        assert!(save(&pack, "block/stone", &o.doc, &flat(32, 32, 4)).is_err());
+        assert_eq!(history::list(&pack, "block/stone").unwrap().len(), 2);
     }
 
     #[test]

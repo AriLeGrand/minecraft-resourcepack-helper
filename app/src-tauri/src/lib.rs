@@ -10,19 +10,30 @@ use packcreator_core::export::{self, AltTarget, Check, ExportKind, ExportOptions
 use packcreator_core::extract;
 use packcreator_core::gui::{self, Scaling};
 use packcreator_core::gui_screens;
+use packcreator_core::history;
 use packcreator_core::import::{self, ImageInfo, ImportResult};
 use packcreator_core::mcmeta::Animation;
 use packcreator_core::minecraft::{self, InstalledVersion};
 use packcreator_core::models;
+use packcreator_core::notes;
 use packcreator_core::pack::{self, PackSummary, Project};
 use packcreator_core::particle_list;
 use packcreator_core::particles::ParticleSheet;
 use packcreator_core::rows::{self, NameEra, TextureRow};
+use packcreator_core::scene;
 use packcreator_core::settings::{self, RecentPack, Settings};
 use packcreator_core::textures::{TextureEntry, VanillaIndex};
 use packcreator_core::whats_new::{self, VersionDiff};
 use packcreator_core::workfile;
+// drawing helpers (pack palette, recolour, variants, smooth start, seams)
+use packcreator_core::recolor::{self, Recolor, WriteReport};
+use packcreator_core::seams::{self, SeamReport};
+use packcreator_core::upscale::Upscale;
 use packcreator_core::McVersion;
+// publishing and comparing
+use packcreator_core::compare::{self, Comparison};
+use packcreator_core::showcase;
+use packcreator_core::{ctm, variants};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -47,6 +58,19 @@ pub struct Inner {
     /// The last batch-import scan: the only files the batch commands and the
     /// `pcimg://localhost/batch/<id>` route may read.
     pub batch: Option<BatchSession>,
+    /// The texture whose earlier versions the inspector listed last: the only
+    /// one the `pcimg://localhost/history/...` route may read versions of.
+    pub history_tex: Option<String>,
+    /// The last "Compare with another pack": the only files of the other pack
+    /// that `compare_copy` and `pcimg://localhost/compare/<id>` may read.
+    pub compare: Option<CompareSession>,
+}
+
+pub struct CompareSession {
+    pub pack_dir: PathBuf,
+    /// Per row id: their PNG (when they have one) and the texture it is in
+    /// the open pack (when it matched one and is the file used for it).
+    pub rows: Vec<(Option<PathBuf>, Option<String>)>,
 }
 
 pub struct BatchSession {
@@ -288,6 +312,8 @@ struct SettingsPatch {
     export_kind_folder: Option<bool>,
     export_install: Option<bool>,
     export_only_changed: Option<bool>,
+    export_optimize: Option<bool>,
+    upscale: Option<Upscale>,
 }
 
 fn clean(v: Option<String>) -> Option<String> {
@@ -323,6 +349,12 @@ fn update_settings(
     }
     if let Some(v) = patch.export_only_changed {
         inner.settings.export_only_changed = v;
+    }
+    if let Some(v) = patch.export_optimize {
+        inner.settings.export_optimize = v;
+    }
+    if let Some(v) = patch.upscale {
+        inner.settings.upscale = v;
     }
     save_settings_now(&inner)?;
     let err = if rescan {
@@ -462,6 +494,7 @@ struct ProjectPatch {
     description: Option<String>,
     also_export: Option<Vec<String>>,
     resolution: Option<u32>,
+    pack_palette: Option<Vec<String>>,
 }
 
 #[tauri::command(async)]
@@ -489,6 +522,9 @@ fn update_project(state: State<AppState>, patch: ProjectPatch) -> Result<PackSta
             ));
         }
         p.project.resolution = r;
+    }
+    if let Some(colours) = patch.pack_palette {
+        p.project.pack_palette = packcreator_core::palette::normalise(&colours)?;
     }
     pack::save_project(&p.dir, &p.project)?;
     pack::write_pack_mcmeta(&p.dir, &p.project)?;
@@ -579,7 +615,7 @@ fn working_file(inner: &Inner, path: &str) -> Result<PathBuf> {
     } else {
         1
     };
-    import::start_from_vanilla(&root, &p.dir, path, scale)
+    import::start_from_vanilla_with(&root, &p.dir, path, scale, inner.settings.upscale)
 }
 
 #[tauri::command(async)]
@@ -800,7 +836,7 @@ fn editor_open(
     } else {
         1
     };
-    workfile::open_raw(&p.dir, &root, &path, scale)
+    workfile::open_raw_with(&p.dir, &root, &path, scale, inner.settings.upscale)
 }
 
 /// Saves the document: flattened PNG into the pack, layers into the working file.
@@ -865,6 +901,40 @@ fn models_for_texture(
 ) -> Result<Vec<models::ModelChoice>> {
     let (pack, vanilla) = model_roots(&state, &pack_dir)?;
     Ok(models::models_for_texture(Some(&pack), &vanilla, &path))
+}
+
+// ---- Scene screen (package B) ----
+
+/// The blocks of a scene, each resolved to the models of its default state.
+#[tauri::command(async)]
+fn scene_blocks(
+    state: State<AppState>,
+    ids: Vec<String>,
+    pack_dir: String,
+) -> Result<Vec<scene::SceneBlock>> {
+    let (pack, vanilla) = model_roots(&state, &pack_dir)?;
+    Ok(scene::scene_blocks(Some(&pack), &vanilla, &ids))
+}
+
+/// Every block the scene can place (blockstate names of the game and the pack).
+#[tauri::command(async)]
+fn scene_block_list(state: State<AppState>, pack_dir: String) -> Result<Vec<String>> {
+    let (pack, vanilla) = model_roots(&state, &pack_dir)?;
+    Ok(scene::list_blocks(Some(&pack), &vanilla))
+}
+
+/// The custom scene saved in `.packcreator/scene.json`, if any.
+#[tauri::command(async)]
+fn scene_load(state: State<AppState>, pack_dir: String) -> Result<Option<scene::SceneFile>> {
+    let (pack, _) = model_roots(&state, &pack_dir)?;
+    scene::load_scene(&pack)
+}
+
+/// Saves the custom scene into `.packcreator/scene.json`.
+#[tauri::command(async)]
+fn scene_save(state: State<AppState>, scene: scene::SceneFile, pack_dir: String) -> Result<()> {
+    let (pack, _) = model_roots(&state, &pack_dir)?;
+    scene::save_scene(&pack, &scene)
 }
 
 /// Every particle of the pack's version, for the particle viewer.
@@ -1096,6 +1166,9 @@ struct ExportRequest {
     install: bool,
     only_changed: bool,
     also: Vec<String>,
+    /// "Make PNG files smaller (same pixels)".
+    #[serde(default)]
+    optimize_png: bool,
 }
 
 #[derive(Serialize)]
@@ -1160,7 +1233,9 @@ fn export_pack(state: State<AppState>, request: ExportRequest) -> Result<ExportR
             install_dir,
             only_changed: request.only_changed,
             vanilla_root: Some(extract::vanilla_dir(&inner.cache_dir, &project.version_dir)),
+            optimize_png: request.optimize_png,
         };
+        inner.settings.export_optimize = request.optimize_png;
         inner.settings.export_kind_folder = request.folder;
         inner.settings.export_install = request.install;
         inner.settings.export_only_changed = request.only_changed;
@@ -1181,7 +1256,442 @@ fn export_pack(state: State<AppState>, request: ExportRequest) -> Result<ExportR
     })
 }
 
+// --------------------------------------------- publishing and comparing
+
+/// Saves the showcase image drawn by the UI (raw RGBA, base64) as a PNG file
+/// the user chose. Only `.png` files are written.
+#[tauri::command(async)]
+fn save_showcase(path: String, width: u32, height: u32, rgba: String) -> Result<u64> {
+    showcase::save(Path::new(&path), width, height, &rgba)
+}
+
+/// "Compare with another pack": reads a `.zip` (unpacked into the cache,
+/// safe paths and size caps) or a folder, and compares its textures with the
+/// open pack's. The rows are remembered for `compare_copy` and the image route.
+#[tauri::command(async)]
+fn compare_packs(state: State<AppState>, source: String, pack_dir: String) -> Result<Comparison> {
+    let (dir, version_dir, cache) = {
+        let inner = state.lock();
+        let p = own_pack(&inner, &pack_dir)?;
+        (
+            p.dir.clone(),
+            p.project.version_dir.clone(),
+            inner.cache_dir.clone(),
+        )
+    };
+    let (index, mc) = {
+        let mut inner = state.lock();
+        let (_, mc) = inner.pack_version()?;
+        let index = inner.index(&version_dir).ok_or_else(|| {
+            CoreError::new(
+                "not_extracted",
+                "The game textures for this version are not extracted yet.",
+            )
+        })?;
+        // the earlier comparison's files are about to go
+        inner.compare = None;
+        (index, mc)
+    };
+    let work_parent = cache.join("compare");
+    compare::clear_work(&work_parent);
+    let work = work_parent.join(pack::now_ms().to_string());
+    let source_path = PathBuf::from(&source);
+    let their = compare::open_their_pack(&source_path, &dir, &work)?;
+    let result = compare::compare(&source_path, &their, &dir, &index, mc.as_ref())?;
+    let mut inner = state.lock();
+    own_pack(&inner, &pack_dir)?;
+    inner.compare = Some(CompareSession {
+        pack_dir: dir,
+        rows: result
+            .rows
+            .iter()
+            .map(|r| {
+                let file = compare::their_file(&their.root, r);
+                let target = r.path.clone().filter(|_| r.shadowed_by.is_none());
+                (file, target)
+            })
+            .collect(),
+    });
+    Ok(result)
+}
+
+/// "Copy theirs into my pack" for rows of the last comparison: each PNG (and
+/// its `.mcmeta`) byte for byte, replaced files to the trash.
+#[tauri::command(async)]
+fn compare_copy(
+    state: State<AppState>,
+    ids: Vec<usize>,
+    pack_dir: String,
+) -> Result<Vec<ItemResult>> {
+    let (dir, work, mut refused) = {
+        let inner = state.lock();
+        let p = own_pack(&inner, &pack_dir)?;
+        let session = inner
+            .compare
+            .as_ref()
+            .filter(|c| c.pack_dir == p.dir)
+            .ok_or_else(|| CoreError::new("no_compare", "Compare the packs again, then copy."))?;
+        let mut work = Vec::new();
+        let mut refused = Vec::new();
+        for id in ids {
+            match session.rows.get(id) {
+                Some((Some(src), Some(target))) => work.push((id, src.clone(), target.clone(), false)),
+                _ => refused.push(ItemResult {
+                    id,
+                    target: String::new(),
+                    ok: false,
+                    replaced: false,
+                    wrote_mcmeta: false,
+                    unchanged: false,
+                    error: Some(CoreError::new(
+                        "bad_item",
+                        "This row has no file of the other pack that matches a texture of this pack.",
+                    )),
+                }),
+            }
+        }
+        (p.dir.clone(), work, refused)
+    };
+    let mut out = batch::import_all(&dir, &work);
+    out.append(&mut refused);
+    Ok(out)
+}
+
+// ------------------------------------------------- variety (random variants, CTM)
+
+/// Pack folder, game folder, era (before 1.13?) and enlargement (pack
+/// resolution / 16) for the Variety screen, for the pack the screen belongs to.
+fn variety_roots(state: &State<AppState>, pack_dir: &str) -> Result<(PathBuf, PathBuf, bool, u32)> {
+    let inner = state.lock();
+    let p = own_pack(&inner, pack_dir)?;
+    let vanilla = extract::vanilla_dir(&inner.cache_dir, &p.project.version_dir);
+    let flat = McVersion::parse("1.13").expect("valid version");
+    let legacy = match inner.pack_version().ok().and_then(|(_, mc)| mc) {
+        Some(v) => v < flat,
+        // unknown version: old versions keep block textures in `blocks/`
+        None => vanilla.join("assets/minecraft/textures/blocks").is_dir(),
+    };
+    Ok((
+        p.dir.clone(),
+        vanilla,
+        legacy,
+        (p.project.resolution / 16).max(1),
+    ))
+}
+
+macro_rules! roots {
+    ($t:expr) => {
+        variants::Roots {
+            pack: &$t.0,
+            vanilla: &$t.1,
+            legacy: $t.2,
+        }
+    };
+}
+
+/// Every block with a block state file (game or pack).
+#[tauri::command(async)]
+fn variety_blocks(state: State<AppState>, pack_dir: String) -> Result<Vec<variants::BlockEntry>> {
+    let t = variety_roots(&state, &pack_dir)?;
+    Ok(variants::list_blocks(&t.0, &t.1))
+}
+
+#[tauri::command(async)]
+fn variants_info(
+    state: State<AppState>,
+    block: String,
+    pack_dir: String,
+) -> Result<variants::BlockInfo> {
+    let t = variety_roots(&state, &pack_dir)?;
+    variants::info(roots!(t), &block)
+}
+
+/// Adds the next random variant of `texture` (texture copy, models, block state).
+#[tauri::command(async)]
+fn variants_add(
+    state: State<AppState>,
+    block: String,
+    texture: String,
+    pack_dir: String,
+) -> Result<variants::Added> {
+    let t = variety_roots(&state, &pack_dir)?;
+    variants::add(roots!(t), &block, &texture, t.3)
+}
+
+/// Weight / random turns of the original (`n` 1) or of variant `n`.
+#[tauri::command(async)]
+fn variants_set(
+    state: State<AppState>,
+    block: String,
+    n: u32,
+    weight: u32,
+    rotate: bool,
+    pack_dir: String,
+) -> Result<variants::BlockInfo> {
+    let t = variety_roots(&state, &pack_dir)?;
+    variants::set_choice(roots!(t), &block, n, variants::Choice { weight, rotate })
+}
+
+/// Removes variant `n` (its files go to the trash).
+#[tauri::command(async)]
+fn variants_remove(
+    state: State<AppState>,
+    block: String,
+    n: u32,
+    pack_dir: String,
+) -> Result<variants::BlockInfo> {
+    let t = variety_roots(&state, &pack_dir)?;
+    variants::remove(roots!(t), &block, n)
+}
+
+#[tauri::command(async)]
+fn ctm_info(state: State<AppState>, block: String, pack_dir: String) -> Result<ctm::CtmInfo> {
+    let t = variety_roots(&state, &pack_dir)?;
+    ctm::info(roots!(t), &block)
+}
+
+/// Writes the five starting tiles and the `.properties` file (old files to the trash).
+#[tauri::command(async)]
+fn ctm_create(
+    state: State<AppState>,
+    block: String,
+    texture: String,
+    faces: String,
+    match_blocks: String,
+    pack_dir: String,
+) -> Result<ctm::CtmInfo> {
+    let t = variety_roots(&state, &pack_dir)?;
+    ctm::create(roots!(t), &block, &texture, &faces, &match_blocks, t.3)
+}
+
+#[tauri::command(async)]
+fn ctm_remove(state: State<AppState>, block: String, pack_dir: String) -> Result<ctm::CtmInfo> {
+    let t = variety_roots(&state, &pack_dir)?;
+    ctm::remove(roots!(t), &block)
+}
+
 // ----------------------------------------------------------------- setup
+
+// ---------------------------------------------- notes, tags and history
+
+#[tauri::command(async)]
+fn notes_load(state: State<AppState>, pack_dir: String) -> Result<notes::LoadedNotes> {
+    let dir = own_pack(&state.lock(), &pack_dir)?.dir.clone();
+    notes::load(&dir)
+}
+
+#[tauri::command(async)]
+fn notes_set(
+    state: State<AppState>,
+    path: String,
+    note: notes::TextureNote,
+    pack_dir: String,
+) -> Result<notes::TextureNote> {
+    let dir = own_pack(&state.lock(), &pack_dir)?.dir.clone();
+    notes::set(&dir, &path, &note)
+}
+
+/// Earlier versions of one texture (history and trash folders of the pack).
+#[tauri::command(async)]
+fn texture_history(
+    state: State<AppState>,
+    path: String,
+    pack_dir: String,
+) -> Result<Vec<history::Version>> {
+    let dir = {
+        let mut inner = state.lock();
+        let dir = own_pack(&inner, &pack_dir)?.dir.clone();
+        inner.history_tex = Some(path.clone());
+        dir
+    };
+    history::list(&dir, &path)
+}
+
+#[tauri::command(async)]
+fn restore_version(
+    state: State<AppState>,
+    path: String,
+    id: String,
+    pack_dir: String,
+) -> Result<history::Restored> {
+    let dir = own_pack(&state.lock(), &pack_dir)?.dir.clone();
+    history::restore(&dir, &path, &id)
+}
+
+// ------------------------------------------------------ drawing helpers
+
+/// Most textures one recolour preview covers (the dialog says when there are more).
+const MAX_PREVIEW: usize = 240;
+
+struct RecolorCtx {
+    dir: PathBuf,
+    vanilla: PathBuf,
+    resolution: u32,
+    method: Upscale,
+}
+
+impl RecolorCtx {
+    fn new(inner: &Inner, pack_dir: &str) -> Result<Self> {
+        let p = own_pack(inner, pack_dir)?;
+        Ok(RecolorCtx {
+            dir: p.dir.clone(),
+            vanilla: extract::vanilla_dir(&inner.cache_dir, &p.project.version_dir),
+            resolution: p.project.resolution,
+            method: inner.settings.upscale,
+        })
+    }
+
+    /// How much the game's texture is enlarged to match the pack resolution.
+    fn scale(&self, path: &str) -> u32 {
+        if packcreator_core::textures::category_of(path).uses_pack_resolution() {
+            (self.resolution / 16).max(1)
+        } else {
+            1
+        }
+    }
+
+    fn load(&self, path: &str) -> Result<recolor::Source> {
+        recolor::load(
+            &self.dir,
+            &self.vanilla,
+            path,
+            self.scale(path),
+            self.method,
+        )
+    }
+}
+
+#[derive(Serialize)]
+struct PreviewItem {
+    path: String,
+    /// The texture as it is now (the pack's, or the game's at the pack resolution).
+    before: Option<String>,
+    after: Option<String>,
+    in_pack: bool,
+    error: Option<String>,
+}
+
+fn preview_of(
+    path: &str,
+    source: Result<recolor::Source>,
+    change: impl Fn(&recolor::Source) -> Result<recolor::Image>,
+) -> PreviewItem {
+    match source {
+        Err(e) => PreviewItem {
+            path: path.to_owned(),
+            before: None,
+            after: None,
+            in_pack: false,
+            error: Some(e.message),
+        },
+        Ok(s) => {
+            let after = change(&s);
+            PreviewItem {
+                path: path.to_owned(),
+                before: Some(recolor::preview_url(&s.img, s.frame_h)),
+                after: after
+                    .as_ref()
+                    .ok()
+                    .map(|img| recolor::preview_url(img, s.frame_h)),
+                in_pack: s.in_pack,
+                error: after.err().map(|e| e.message),
+            }
+        }
+    }
+}
+
+/// Before / after thumbnails of a recolour. Writes nothing.
+#[tauri::command(async)]
+fn recolor_preview(
+    state: State<AppState>,
+    paths: Vec<String>,
+    op: Recolor,
+    pack_dir: String,
+) -> Result<Vec<PreviewItem>> {
+    let ctx = RecolorCtx::new(&state.lock(), &pack_dir)?;
+    Ok(paths
+        .iter()
+        .take(MAX_PREVIEW)
+        .map(|p| preview_of(p, ctx.load(p), |s| recolor::apply(&s.img, &op)))
+        .collect())
+}
+
+/// Recolours the textures and writes them into the pack (replaced files go
+/// to the trash; the report is what `recolor_undo` needs).
+#[tauri::command(async)]
+fn recolor_apply(
+    state: State<AppState>,
+    paths: Vec<String>,
+    op: Recolor,
+    pack_dir: String,
+) -> Result<WriteReport> {
+    let ctx = RecolorCtx::new(&state.lock(), &pack_dir)?;
+    Ok(recolor::recolor_and_write(
+        &ctx.dir,
+        &ctx.vanilla,
+        &paths,
+        &op,
+        |p| ctx.scale(p),
+        ctx.method,
+    ))
+}
+
+/// Takes back a recolour or a set of variants: replaced files come back from
+/// the trash, new ones go to the trash.
+#[tauri::command(async)]
+fn recolor_undo(state: State<AppState>, report: WriteReport, pack_dir: String) -> Result<usize> {
+    let ctx = RecolorCtx::new(&state.lock(), &pack_dir)?;
+    recolor::undo(&ctx.dir, &report)
+}
+
+/// Before / after thumbnails of "Make variants". Writes nothing.
+#[tauri::command(async)]
+fn variants_preview(
+    state: State<AppState>,
+    source: String,
+    targets: Vec<String>,
+    pack_dir: String,
+) -> Result<Vec<PreviewItem>> {
+    let ctx = RecolorCtx::new(&state.lock(), &pack_dir)?;
+    let src = ctx.load(&source)?;
+    Ok(targets
+        .iter()
+        .take(MAX_PREVIEW)
+        .map(|t| preview_of(t, ctx.load(t), |_| recolor::variant(&src, &ctx.vanilla, t)))
+        .collect())
+}
+
+/// Writes the chosen variants into the pack (see `recolor_apply`).
+#[tauri::command(async)]
+fn variants_apply(
+    state: State<AppState>,
+    source: String,
+    targets: Vec<String>,
+    pack_dir: String,
+) -> Result<WriteReport> {
+    let ctx = RecolorCtx::new(&state.lock(), &pack_dir)?;
+    let src = ctx.load(&source)?;
+    let mut items = Vec::new();
+    let mut failed = Vec::new();
+    for t in targets.iter().filter(|t| **t != source) {
+        match recolor::variant(&src, &ctx.vanilla, t) {
+            Ok(img) => items.push((t.clone(), img)),
+            Err(e) => failed.push(recolor::Failure {
+                path: t.clone(),
+                message: e.message,
+            }),
+        }
+    }
+    let mut report = recolor::write_all(&ctx.dir, &ctx.vanilla, items);
+    report.failed.extend(failed);
+    Ok(report)
+}
+
+/// Seams of one frame drawn in the editor (raw RGBA, base64).
+#[tauri::command(async)]
+fn seam_measure(width: u32, height: u32, rgba: String) -> Result<SeamReport> {
+    seams::measure_raw(width, height, workfile::decode_b64(&rgba)?)
+}
 
 fn env_dir(key: &str) -> Option<PathBuf> {
     std::env::var_os(key)
@@ -1234,6 +1744,10 @@ pub fn run() {
             read_image_raw,
             block_model,
             models_for_texture,
+            scene_blocks,
+            scene_block_list,
+            scene_load,
+            scene_save,
             particle_list,
             particle_add_frame,
             gui_overview,
@@ -1251,6 +1765,27 @@ pub fn run() {
             batch_scan,
             batch_import,
             whats_new,
+            notes_load,
+            notes_set,
+            texture_history,
+            restore_version,
+            save_showcase,
+            compare_packs,
+            compare_copy,
+            variety_blocks,
+            variants_info,
+            variants_add,
+            variants_set,
+            variants_remove,
+            ctm_info,
+            ctm_create,
+            ctm_remove,
+            recolor_preview,
+            recolor_apply,
+            recolor_undo,
+            variants_preview,
+            variants_apply,
+            seam_measure,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Pack Creator");

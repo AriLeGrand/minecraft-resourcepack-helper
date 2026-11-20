@@ -6,16 +6,19 @@ use crate::import::{create_animation_mcmeta, move_to_trash};
 use crate::mcmeta::strip_frames;
 use crate::pack::{self, is_wrong_size, now_ms, safe_file_name, PackTexture, Project, PROJECT_DIR};
 use crate::pack_format::{self, PackFormat};
+use crate::pngopt;
 use crate::renames::RenameTable;
 use crate::textures::{
     category_of, mcmeta_file, png_dimensions, texture_file, Category, VanillaIndex, TEXTURES_DIR,
 };
 use crate::version::McVersion;
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Mutex;
 use walkdir::WalkDir;
 
 // ---------------------------------------------------------------- checks
@@ -91,10 +94,16 @@ pub fn run_checks(
         (Some(v), Some(ver)) => find_old_names(pack, v, ver),
         _ => Vec::new(),
     };
+    // the pack's own textures that its own models use (random variants) are used too
+    let own = textures_in_pack_models(pack_dir);
     let unknown: Vec<String> = match vanilla {
         Some(v) => pack
             .iter()
-            .filter(|t| v.get(&t.path).is_none() && !old_names.iter().any(|(o, _)| *o == t.path))
+            .filter(|t| {
+                v.get(&t.path).is_none()
+                    && !old_names.iter().any(|(o, _)| *o == t.path)
+                    && !own.contains(&t.path)
+            })
             .map(|t| t.path.clone())
             .collect(),
         None => Vec::new(),
@@ -210,6 +219,10 @@ pub fn run_checks(
         });
     }
 
+    // drawing helpers: pack palette and seams (warnings with "Show")
+    checks.extend(crate::palette::check(pack_dir, &project.pack_palette, pack));
+    checks.extend(crate::seams::check(pack_dir, pack));
+
     let icon = fs::read(pack_dir.join("pack.png"))
         .ok()
         .and_then(|d| png_dimensions(&d));
@@ -300,6 +313,9 @@ pub fn apply_fix(
                 if fm.is_file() && !tm.exists() {
                     fs::rename(&fm, &tm).ctx(&fm)?;
                 }
+                // notes and earlier versions follow the texture (best effort)
+                let _ = crate::notes::rename(pack_dir, &old, &new);
+                let _ = crate::history::rename(pack_dir, &old, &new);
                 renamed += 1;
             }
             Ok(if kept > 0 {
@@ -329,6 +345,54 @@ pub fn apply_fix(
             format!("There is no automatic fix for \"{other}\"."),
         )),
     }
+}
+
+/// Texture paths (without `minecraft:`) named by the pack's own model files.
+fn textures_in_pack_models(pack_dir: &Path) -> std::collections::HashSet<String> {
+    use serde_json::Value;
+    let mut out = std::collections::HashSet::new();
+    let dir = pack_dir.join("assets").join("minecraft").join("models");
+    for e in WalkDir::new(dir).into_iter().filter_map(|e| e.ok()) {
+        if e.path().extension().and_then(|x| x.to_str()) != Some("json") {
+            continue;
+        }
+        let Some(json) = fs::read_to_string(e.path())
+            .ok()
+            .and_then(|t| serde_json::from_str::<Value>(t.trim_start_matches('\u{feff}')).ok())
+        else {
+            continue;
+        };
+        let mut add = |v: &Value| {
+            let s = match v {
+                Value::Object(o) => o.get("sprite").and_then(Value::as_str),
+                other => other.as_str(),
+            };
+            if let Some(s) = s.filter(|s| !s.starts_with('#')) {
+                out.insert(s.strip_prefix("minecraft:").unwrap_or(s).to_owned());
+            }
+        };
+        if let Some(t) = json.get("textures").and_then(Value::as_object) {
+            t.values().for_each(&mut add);
+        }
+        for el in json
+            .get("elements")
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+        {
+            for f in el
+                .get("faces")
+                .and_then(Value::as_object)
+                .into_iter()
+                .flat_map(|f| f.values())
+            {
+                if let Some(t) = f.get("texture") {
+                    add(t);
+                }
+            }
+        }
+    }
+    out
 }
 
 // ---------------------------------------------------------------- export
@@ -362,6 +426,9 @@ pub struct ExportOptions {
     pub only_changed: bool,
     /// Extracted vanilla files of the main version (for `only_changed`).
     pub vanilla_root: Option<PathBuf>,
+    /// "Make PNG files smaller (same pixels)": every exported PNG is
+    /// re-compressed losslessly (`pngopt`); the pack's own files are untouched.
+    pub optimize_png: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -373,6 +440,10 @@ pub struct ExportOutput {
     /// Textures left out (not in that version, or unchanged).
     pub skipped: Vec<String>,
     pub installed_to: Option<String>,
+    /// Total size of the PNG files as they are in the pack…
+    pub png_bytes_before: u64,
+    /// …and as written (smaller when `optimize_png` found savings).
+    pub png_bytes_after: u64,
 }
 
 /// Name of the exported file or folder (without extension).
@@ -481,7 +552,15 @@ fn plan(
             continue;
         }
         let Some((tex, ext)) = split_texture(rel) else {
-            out.files.insert(rel.clone(), Source::File(abs.clone()));
+            match alt.map(|a| for_version(rel, abs, main, &a.version)) {
+                Some(ForVersion::Skip(why)) => out.skipped.push(why),
+                Some(ForVersion::Rewrite(bytes)) => {
+                    out.files.insert(rel.clone(), Source::Bytes(bytes));
+                }
+                _ => {
+                    out.files.insert(rel.clone(), Source::File(abs.clone()));
+                }
+            }
             continue;
         };
         if unchanged.contains(&tex) {
@@ -502,7 +581,10 @@ fn plan(
         }
         for target in targets {
             if let Some(a) = alt {
-                if a.index.as_ref().is_some_and(|i| i.get(&target).is_none()) {
+                // the pack's own new textures (random variants…) exist in no game version
+                if a.index.as_ref().is_some_and(|i| i.get(&target).is_none())
+                    && in_main_game(opts, tex)
+                {
                     if ext == ".png" {
                         out.skipped.push(format!("{tex} (not in {})", a.label));
                     }
@@ -528,6 +610,163 @@ fn plan(
     out
 }
 
+/// True when the main version's game has this texture (or the game files
+/// are not known): only those can be missing from another version.
+fn in_main_game(opts: &ExportOptions, tex: &str) -> bool {
+    opts.vanilla_root
+        .as_ref()
+        .is_none_or(|root| texture_file(root, tex).is_ok_and(|f| f.is_file()))
+}
+
+// ------------------------------------- copies for other versions: references
+
+/// What a copy for another version does with one file that is not a texture.
+#[derive(Debug, PartialEq)]
+enum ForVersion {
+    Keep,
+    Rewrite(Vec<u8>),
+    Skip(String),
+}
+
+/// A texture reference (`minecraft:block/stone`, `blocks/stone`) under its
+/// name in `to`, when that name differs.
+fn renamed_ref(reference: &str, from: &McVersion, to: &McVersion) -> Option<String> {
+    let (ns, path) = match reference.strip_prefix("minecraft:") {
+        Some(p) => ("minecraft:", p),
+        None => ("", reference),
+    };
+    if !crate::textures::is_safe_texture_path(path) {
+        return None;
+    }
+    let new = RenameTable::builtin()
+        .map(path, from, to)
+        .into_iter()
+        .next()?;
+    (new != path).then(|| format!("{ns}{new}"))
+}
+
+/// Renames the texture references of a model file (`textures` values and
+/// face textures that are paths). `true` when something changed.
+fn rename_model_refs(json: &mut serde_json::Value, from: &McVersion, to: &McVersion) -> bool {
+    use serde_json::Value;
+    let mut changed = false;
+    let mut fix = |v: &mut Value| {
+        let new = match v {
+            Value::String(s) if !s.starts_with('#') => renamed_ref(s, from, to),
+            _ => None,
+        };
+        if let Some(n) = new {
+            *v = Value::from(n);
+            changed = true;
+        }
+    };
+    if let Some(t) = json.get_mut("textures").and_then(Value::as_object_mut) {
+        for v in t.values_mut() {
+            match v {
+                Value::Object(o) => {
+                    if let Some(s) = o.get_mut("sprite") {
+                        fix(s);
+                    }
+                }
+                other => fix(other),
+            }
+        }
+    }
+    if let Some(Value::Array(elements)) = json.get_mut("elements") {
+        for el in elements {
+            if let Some(faces) = el.get_mut("faces").and_then(Value::as_object_mut) {
+                for f in faces.values_mut() {
+                    if let Some(t) = f.get_mut("texture") {
+                        fix(t);
+                    }
+                }
+            }
+        }
+    }
+    changed
+}
+
+/// Renames texture paths in the texture keys of an OptiFine `.properties`
+/// file (`matchTiles`, `tiles`, `connectTiles`; only tokens with a folder:
+/// tile numbers and plain names are relative and stay). `None` when nothing changes.
+fn rename_properties_refs(text: &str, from: &McVersion, to: &McVersion) -> Option<String> {
+    let mut changed = false;
+    let lines: Vec<String> = text
+        .lines()
+        .map(|line| {
+            let Some((key, value)) = line.split_once('=') else {
+                return line.to_owned();
+            };
+            if !matches!(key.trim(), "matchTiles" | "tiles" | "connectTiles") {
+                return line.to_owned();
+            }
+            let tokens: Vec<String> = value
+                .split_whitespace()
+                .map(|tok| {
+                    match tok
+                        .contains('/')
+                        .then(|| renamed_ref(tok, from, to))
+                        .flatten()
+                    {
+                        Some(n) => {
+                            changed = true;
+                            n
+                        }
+                        None => tok.to_owned(),
+                    }
+                })
+                .collect();
+            format!("{key}={}", tokens.join(" "))
+        })
+        .collect();
+    changed.then(|| {
+        let mut out = lines.join("\n");
+        if text.ends_with('\n') {
+            out.push('\n');
+        }
+        out
+    })
+}
+
+/// Keeps the pack's own models and connected textures working in a copy for
+/// another version: texture references follow the renamed textures. Block
+/// state files are left out of a copy on the other side of 1.13 (states and
+/// model names changed then; the game would show missing models).
+fn for_version(rel: &str, abs: &Path, main: &McVersion, to: &McVersion) -> ForVersion {
+    if rel.starts_with("assets/minecraft/blockstates/") {
+        let flat = McVersion::parse("1.13").expect("valid version");
+        if (*main >= flat) != (*to >= flat) {
+            return ForVersion::Skip(format!(
+                "{} (block states changed in 1.13)",
+                rel.trim_start_matches("assets/minecraft/")
+            ));
+        }
+        return ForVersion::Keep;
+    }
+    let optifine = rel.starts_with("assets/minecraft/optifine/")
+        || rel.starts_with("assets/minecraft/mcpatcher/");
+    if rel.starts_with("assets/minecraft/models/") && rel.ends_with(".json") {
+        let Some(mut json) = fs::read_to_string(abs).ok().and_then(|t| {
+            serde_json::from_str::<serde_json::Value>(t.trim_start_matches('\u{feff}')).ok()
+        }) else {
+            return ForVersion::Keep;
+        };
+        if rename_model_refs(&mut json, main, to) {
+            let mut out = serde_json::to_string_pretty(&json).expect("JSON serialises");
+            out.push('\n');
+            return ForVersion::Rewrite(out.into_bytes());
+        }
+    } else if optifine && rel.ends_with(".properties") {
+        if let Some(new) = fs::read_to_string(abs)
+            .ok()
+            .and_then(|t| rename_properties_refs(&t, main, to))
+        {
+            return ForVersion::Rewrite(new.into_bytes());
+        }
+    }
+    ForVersion::Keep
+}
+
 fn read_source(src: &Source) -> Result<Vec<u8>> {
     match src {
         Source::File(p) => fs::read(p).ctx(p),
@@ -535,7 +774,74 @@ fn read_source(src: &Source) -> Result<Vec<u8>> {
     }
 }
 
-fn write_zip(dest: &Path, plan: &Plan) -> Result<()> {
+/// Re-compressed PNG files of one export, by source file: (original size,
+/// bytes to write). Shared by the copies for other versions.
+type PngCache = HashMap<PathBuf, Optimised>;
+/// (original size, bytes to write)
+type Optimised = (u64, Vec<u8>);
+
+/// Fills `cache` for every PNG of `plan` that is not in it yet, on several threads.
+fn optimise_pngs(plan: &Plan, cache: &mut PngCache) -> Result<()> {
+    let mut todo: Vec<&PathBuf> = plan
+        .files
+        .iter()
+        .filter_map(|(rel, src)| match src {
+            Source::File(p) if rel.ends_with(".png") && !cache.contains_key(p) => Some(p),
+            _ => None,
+        })
+        .collect();
+    todo.sort();
+    todo.dedup();
+    let threads = std::thread::available_parallelism()
+        .map_or(4, |n| n.get())
+        .clamp(1, 8);
+    let next = AtomicUsize::new(0);
+    let done: Mutex<Vec<(PathBuf, Result<Optimised>)>> = Mutex::new(Vec::new());
+    std::thread::scope(|s| {
+        for _ in 0..threads.min(todo.len()) {
+            s.spawn(|| loop {
+                let i = next.fetch_add(1, Ordering::Relaxed);
+                let Some(p) = todo.get(i) else { break };
+                let r = fs::read(p)
+                    .ctx(p)
+                    .map(|d| (d.len() as u64, pngopt::smaller_png(&d)));
+                done.lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .push(((*p).clone(), r));
+            });
+        }
+    });
+    for (p, r) in done.into_inner().unwrap_or_else(|e| e.into_inner()) {
+        cache.insert(p, r?);
+    }
+    Ok(())
+}
+
+/// Sizes of the PNG files of an output, before and after.
+#[derive(Default)]
+struct PngTotals {
+    before: u64,
+    after: u64,
+}
+
+/// The bytes to write for one file, counting PNG sizes.
+fn bytes_for(rel: &str, src: &Source, cache: &PngCache, totals: &mut PngTotals) -> Result<Vec<u8>> {
+    if let Source::File(p) = src {
+        if let Some((len, data)) = cache.get(p) {
+            totals.before += len;
+            totals.after += data.len() as u64;
+            return Ok(data.clone());
+        }
+    }
+    let data = read_source(src)?;
+    if rel.ends_with(".png") {
+        totals.before += data.len() as u64;
+        totals.after += data.len() as u64;
+    }
+    Ok(data)
+}
+
+fn write_zip(dest: &Path, plan: &Plan, cache: &PngCache, totals: &mut PngTotals) -> Result<()> {
     let tmp = dest.with_extension("zip.tmp");
     let result = (|| -> Result<()> {
         let mut zip = zip::ZipWriter::new(fs::File::create(&tmp).ctx(&tmp)?);
@@ -546,7 +852,8 @@ fn write_zip(dest: &Path, plan: &Plan) -> Result<()> {
         };
         for (rel, src) in &plan.files {
             zip.start_file(rel.as_str(), opts).map_err(zerr)?;
-            zip.write_all(&read_source(src)?).ctx(&tmp)?;
+            zip.write_all(&bytes_for(rel, src, cache, totals)?)
+                .ctx(&tmp)?;
         }
         zip.finish().map_err(zerr)?;
         Ok(())
@@ -580,7 +887,7 @@ fn clear_previous_folder(dest: &Path) -> Result<()> {
     .hint("Rename or move that folder, or choose another export location."))
 }
 
-fn write_folder(dest: &Path, plan: &Plan) -> Result<()> {
+fn write_folder(dest: &Path, plan: &Plan, cache: &PngCache, totals: &mut PngTotals) -> Result<()> {
     clear_previous_folder(dest)?;
     for (rel, src) in &plan.files {
         let out = rel
@@ -589,7 +896,7 @@ fn write_folder(dest: &Path, plan: &Plan) -> Result<()> {
         if let Some(parent) = out.parent() {
             fs::create_dir_all(parent).ctx(parent)?;
         }
-        fs::write(&out, read_source(src)?).ctx(&out)?;
+        fs::write(&out, bytes_for(rel, src, cache, totals)?).ctx(&out)?;
     }
     Ok(())
 }
@@ -635,16 +942,21 @@ pub fn export_pack(
         targets.push((a.label.clone(), a.format, Some(a)));
     }
     let mut outputs = Vec::new();
+    let mut cache = PngCache::new();
     for (label, format, alt) in targets {
         let p = plan(&files, project, format, main, alt, opts);
+        if opts.optimize_png {
+            optimise_pngs(&p, &mut cache)?;
+        }
+        let mut totals = PngTotals::default();
         let name = export_name(project, &label);
         let dest = match opts.kind {
             ExportKind::Zip => opts.out_dir.join(format!("{name}.zip")),
             ExportKind::Folder => opts.out_dir.join(&name),
         };
         match opts.kind {
-            ExportKind::Zip => write_zip(&dest, &p)?,
-            ExportKind::Folder => write_folder(&dest, &p)?,
+            ExportKind::Zip => write_zip(&dest, &p, &cache, &mut totals)?,
+            ExportKind::Folder => write_folder(&dest, &p, &cache, &mut totals)?,
         }
         let mut installed_to = None;
         if let Some(dir) = &opts.install_dir {
@@ -669,6 +981,8 @@ pub fn export_pack(
             renamed: p.renamed,
             skipped: p.skipped,
             installed_to,
+            png_bytes_before: totals.before,
+            png_bytes_after: totals.after,
         });
     }
     Ok(outputs)
@@ -803,6 +1117,7 @@ mod tests {
             install_dir: None,
             only_changed: false,
             vanilla_root: None,
+            optimize_png: false,
         }
     }
 
@@ -897,7 +1212,11 @@ mod tests {
         assert!(!scan.iter().any(|t| t.path == "blocks/tallgrass"));
         let checks = run_checks(&f.pack, &f.project, &scan, Some(&f.index), Some(&ver));
         let ids: Vec<&str> = checks.iter().map(|c| c.id.as_str()).collect();
-        assert_eq!(ids, ["ready", "wrong_size", "unknown", "pack_files"]);
+        // the test images are gradients, so their edges show when tiled
+        assert_eq!(
+            ids,
+            ["ready", "wrong_size", "unknown", "seams", "pack_files"]
+        );
         assert!(checks.last().unwrap().ok);
     }
 
@@ -1033,6 +1352,143 @@ mod tests {
     }
 
     #[test]
+    fn textures_used_by_the_packs_own_models_are_not_unknown() {
+        let f = fixture();
+        put(&f.pack, "block/stone_2", png(32, 32, 5));
+        put(&f.pack, "block/leftover", png(32, 32, 6));
+        let models = f.pack.join("assets/minecraft/models/block");
+        fs::create_dir_all(&models).unwrap();
+        fs::write(
+            models.join("stone_2.json"),
+            r#"{"parent": "minecraft:block/cube_all", "textures": {"all": "minecraft:block/stone_2"}}"#,
+        )
+        .unwrap();
+        let ver = v("1.21.4");
+        let checks = run_checks(
+            &f.pack,
+            &f.project,
+            &scan_pack(&f.pack),
+            Some(&f.index),
+            Some(&ver),
+        );
+        let unknown = checks.iter().find(|c| c.id == "unknown").unwrap();
+        assert_eq!(unknown.paths, ["block/leftover"]);
+    }
+
+    #[test]
+    fn copies_for_other_versions_rename_model_and_ctm_references() {
+        let (new, old) = (v("1.21.4"), v("1.8.9"));
+        assert_eq!(
+            renamed_ref("minecraft:block/stone_2", &new, &old).as_deref(),
+            Some("minecraft:blocks/stone_2")
+        );
+        assert_eq!(
+            renamed_ref("block/oak_planks", &new, &old).as_deref(),
+            Some("blocks/planks_oak")
+        );
+        assert_eq!(renamed_ref("block/stone", &new, &v("1.21.1")), None);
+        assert_eq!(renamed_ref("mymod:block/x", &new, &old), None);
+        let mut m = serde_json::json!({
+            "parent": "minecraft:block/cube_all",
+            "textures": {"all": "minecraft:block/stone_2", "particle": "#all", "side": {"sprite": "block/oak_planks"}},
+            "elements": [{"faces": {"up": {"texture": "block/short_grass"}, "down": {"texture": "#all"}}}]
+        });
+        assert!(rename_model_refs(&mut m, &new, &old));
+        assert_eq!(m["textures"]["all"], "minecraft:blocks/stone_2");
+        assert_eq!(m["textures"]["particle"], "#all");
+        assert_eq!(m["textures"]["side"]["sprite"], "blocks/planks_oak");
+        assert_eq!(
+            m["elements"][0]["faces"]["up"]["texture"],
+            "blocks/tallgrass"
+        );
+        assert_eq!(m["parent"], "minecraft:block/cube_all");
+        let p =
+            "matchBlocks=glass\nmethod=ctm_compact\ntiles=0-4\nmatchTiles=block/oak_planks glass\n";
+        assert_eq!(
+            rename_properties_refs(p, &new, &old).unwrap(),
+            "matchBlocks=glass\nmethod=ctm_compact\ntiles=0-4\nmatchTiles=blocks/planks_oak glass\n"
+        );
+        assert_eq!(rename_properties_refs("tiles=0-4\n", &new, &old), None);
+    }
+
+    #[test]
+    fn copy_for_an_old_version_keeps_variants_working() {
+        let f = fixture();
+        let models = f.pack.join("assets/minecraft/models/block");
+        fs::create_dir_all(&models).unwrap();
+        fs::write(
+            models.join("stone_2.json"),
+            r#"{"parent": "minecraft:block/cube_all", "textures": {"all": "minecraft:block/stone_2"}}"#,
+        )
+        .unwrap();
+        let states = f.pack.join("assets/minecraft/blockstates");
+        fs::create_dir_all(&states).unwrap();
+        fs::write(
+            states.join("stone.json"),
+            r#"{"variants": {"": [{"model": "minecraft:block/stone"}, {"model": "minecraft:block/stone_2"}]}}"#,
+        )
+        .unwrap();
+        let ctm = f.pack.join("assets/minecraft/optifine/ctm/glass");
+        fs::create_dir_all(&ctm).unwrap();
+        fs::write(
+            ctm.join("glass.properties"),
+            "matchBlocks=glass\nmethod=ctm_compact\ntiles=0-4\n",
+        )
+        .unwrap();
+        fs::write(ctm.join("0.png"), png(16, 16, 1)).unwrap();
+        put(&f.pack, "block/stone", png(32, 32, 4));
+        put(&f.pack, "block/stone_2", png(32, 32, 5)); // the pack's own texture
+        put(&f.pack, "block/prismarine", png(32, 32, 6)); // a game texture missing in 1.8.9
+        let old = f.versions.iter().find(|x| x.dir_name == "1.8.9").unwrap();
+        let alt = AltTarget {
+            label: "1.8.9".into(),
+            version: v("1.8.9"),
+            format: PackFormat::new(1),
+            index: Some(extract_version(&f.cache, old, &mut |_, _| {}).unwrap()),
+        };
+        let mut o = opts(&f, ExportKind::Zip);
+        o.vanilla_root = Some(vanilla_dir(&f.cache, "1.21.4"));
+        let out = export_pack(&f.pack, &f.project, &v("1.21.4"), &[alt], &o).unwrap();
+        let zip = Path::new(&out[1].path);
+        let names = zip_names(zip);
+        assert!(
+            names.contains(&"assets/minecraft/textures/blocks/stone_2.png".to_owned()),
+            "{names:?}"
+        );
+        assert!(!names.iter().any(|n| n.contains("prismarine")));
+        assert!(!names.iter().any(|n| n.contains("blockstates")));
+        assert!(out[1]
+            .skipped
+            .contains(&"blockstates/stone.json (block states changed in 1.13)".to_owned()));
+        let model: serde_json::Value =
+            serde_json::from_slice(&zip_read(zip, "assets/minecraft/models/block/stone_2.json"))
+                .unwrap();
+        assert_eq!(model["textures"]["all"], "minecraft:blocks/stone_2");
+        assert_eq!(
+            zip_read(zip, "assets/minecraft/optifine/ctm/glass/glass.properties"),
+            b"matchBlocks=glass\nmethod=ctm_compact\ntiles=0-4\n"
+        );
+        assert!(names.contains(&"assets/minecraft/optifine/ctm/glass/0.png".to_owned()));
+        // the main export is untouched
+        let main = Path::new(&out[0].path);
+        assert_eq!(
+            zip_read(main, "assets/minecraft/models/block/stone_2.json"),
+            fs::read(models.join("stone_2.json")).unwrap()
+        );
+        assert!(zip_names(main).contains(&"assets/minecraft/blockstates/stone.json".to_owned()));
+        // a copy on the same side of 1.13 keeps the block state as it is
+        let same = AltTarget {
+            label: "1.21.1".into(),
+            version: v("1.21.1"),
+            format: PackFormat::new(34),
+            index: None,
+        };
+        let out = export_pack(&f.pack, &f.project, &v("1.21.4"), &[same], &o).unwrap();
+        assert!(zip_names(Path::new(&out[1].path))
+            .contains(&"assets/minecraft/blockstates/stone.json".to_owned()));
+    }
+
+    #[test]
     fn folder_export_and_install() {
         let f = fixture();
         put(&f.pack, "block/oak_planks", png(32, 32, 1));
@@ -1117,6 +1573,86 @@ mod tests {
         let names = zip_names(Path::new(&out[0].path));
         assert!(names.contains(&"assets/minecraft/textures/block/oak_planks.png".to_owned()));
         assert!(!names.iter().any(|n| n.contains("stone")));
+    }
+
+    #[test]
+    fn smaller_png_files_have_the_same_pixels_and_leave_the_pack_alone() {
+        let f = fixture();
+        // poorly compressed files: no filter, fast deflate, a long comment
+        let fat = |seed: u8| {
+            let raw = image::load_from_memory(&png(32, 32, seed))
+                .unwrap()
+                .to_rgba8();
+            let mut out = Vec::new();
+            {
+                let mut e = ::png::Encoder::new(&mut out, 32, 32);
+                e.set_color(::png::ColorType::Rgba);
+                e.set_compression(::png::Compression::Fast);
+                e.set_filter(::png::Filter::NoFilter);
+                e.add_text_chunk("Comment".into(), "y".repeat(300)).unwrap();
+                e.write_header().unwrap().write_image_data(&raw).unwrap();
+            }
+            out
+        };
+        let names = ["block/oak_planks", "item/diamond"];
+        put(&f.pack, names[0], fat(1));
+        put(&f.pack, names[1], fat(2));
+        let before: Vec<Vec<u8>> = names
+            .iter()
+            .map(|t| fs::read(texture_file(&f.pack, t).unwrap()).unwrap())
+            .collect();
+        let old = f.versions.iter().find(|x| x.dir_name == "1.8.9").unwrap();
+        let alt = AltTarget {
+            label: "1.8.9".into(),
+            version: v("1.8.9"),
+            format: PackFormat::new(1),
+            index: Some(extract_version(&f.cache, old, &mut |_, _| {}).unwrap()),
+        };
+        let mut o = opts(&f, ExportKind::Zip);
+        o.optimize_png = true;
+        let out = export_pack(&f.pack, &f.project, &v("1.21.4"), &[alt], &o).unwrap();
+        for (o, names) in out
+            .iter()
+            .zip([names, ["blocks/planks_oak", "items/diamond"]])
+        {
+            assert!(o.png_bytes_after < o.png_bytes_before, "{o:?}");
+            for (name, orig) in names.iter().zip(&before) {
+                let got = zip_read(
+                    Path::new(&o.path),
+                    &format!("assets/minecraft/textures/{name}.png"),
+                );
+                assert!(got.len() < orig.len());
+                assert!(pngopt::identical_pixels(&got, orig), "{name}");
+            }
+            let icon = zip_read(Path::new(&o.path), "pack.png");
+            assert!(pngopt::identical_pixels(
+                &icon,
+                &fs::read(f.pack.join("pack.png")).unwrap()
+            ));
+        }
+        // the pack's own files are never touched
+        for (t, orig) in names.iter().zip(&before) {
+            assert_eq!(&fs::read(texture_file(&f.pack, t).unwrap()).unwrap(), orig);
+        }
+        // a folder export too; without the option the sizes are unchanged
+        let mut o = opts(&f, ExportKind::Folder);
+        o.optimize_png = true;
+        let out = export_pack(&f.pack, &f.project, &v("1.21.4"), &[], &o).unwrap();
+        let file = Path::new(&out[0].path).join("assets/minecraft/textures/item/diamond.png");
+        assert!(pngopt::identical_pixels(
+            &fs::read(file).unwrap(),
+            &before[1]
+        ));
+        let plain = export_pack(
+            &f.pack,
+            &f.project,
+            &v("1.21.4"),
+            &[],
+            &opts(&f, ExportKind::Zip),
+        )
+        .unwrap();
+        assert_eq!(plain[0].png_bytes_before, plain[0].png_bytes_after);
+        assert_eq!(plain[0].png_bytes_before, out[0].png_bytes_before);
     }
 
     #[test]

@@ -83,6 +83,50 @@ copies for older versions, with the files renamed automatically.
 
 ![Pack and export](docs/screenshots/export.png)
 
+**Drawing helpers.** A pack palette shared by every texture (built in the
+editor's palette panel, with "Snap to pack palette" to keep every drawn colour
+inside it and an export check for colours outside it); "Recolour…" in the
+texture browser (or Ctrl+K) to shift hue, saturation, brightness or contrast,
+or map colours, for a whole set of textures at once, with before/after
+previews and Undo; "Make variants…" in the inspector to recolour a texture to
+look like the rest of its family (oak planks → spruce, birch, cherry…
+planks); a smooth Scale2x / Scale3x start for 32× packs and up (Settings); and
+a seam warning in the Tiled preview and the export checks when a block
+texture's edges show.
+
+**Scene** shows a small diorama of blocks in 3D with your pack's textures (the
+game's where the pack has none), including unsaved changes from any open
+editor tab: a little house, a 4 × 4 wall of one block to check tiling and
+seams, a garden, or your own scene of up to 8 × 8 × 4 blocks painted layer by
+layer and saved with the pack. Choose day, sunset or night and a block light
+level 0–15 (the game's brightness curve), turn ambient occlusion on or off,
+orbit, pan, zoom or look from eye height. Click a block to see its textures and
+open them in the editor. The editor and animation 3D previews have the same
+time-of-day and light controls.
+
+**Organising a pack** (texture browser): write a note, tags ("needs redo",
+"waiting feedback"…) and who does it for each texture in the inspector; filter
+the list by tag, by person ("Mine", "Unassigned", a name) or "Has a note";
+share the to-do list grouped by person. The inspector's **History** shows the
+earlier versions of a texture (every editor save, import, batch import and
+revert keeps the old file) and restores any of them, undoably. A Progress
+card in the side bar opens a summary: percent done overall and per category,
+textures saved today and this week, and how many changed since the last
+export.
+
+**Pack and export** also makes the PNG files of an export smaller without
+changing a single pixel (option "Make PNG files smaller (same pixels)"), draws
+a 1920×1080 **showcase image** of the pack (icon, coloured description and up
+to 24 textures with hard pixels) and writes the **page text** for CurseForge or
+Modrinth (Markdown with versions, counts, features and install steps).
+**Compare with another pack…** (also in Ctrl+K) lists what differs from
+another pack's .zip or folder, even one made for another Minecraft version,
+shows theirs, yours and the game's texture side by side, copies the textures
+you tick into your pack (old files kept in the trash), and shares the
+comparison as text.
+
+**Variety** — two tabs. *Random variants* (built into the game, no mod): pick a block (search; blocks built from parts are refused), "Add a variant" copies its texture to `<name>_2` and opens it in the editor, writes the variant model and the block state; set each look's weight (1–100) and "turn at random"; a 3D 3×3 patch shows a seeded random pick ("Shuffle"); removing a variant moves its files to the trash. *Connected textures* (needs the OptiFine or Continuity mod): pick a block (glass, bookshelves, planks), "Make the 5 tiles" writes OptiFine's compact tiles and `.properties` file; click a tile to draw it; a live 2D preview shows a 4×4 wall and an L shape joined the way the mod joins them.
+
 ## Install
 
 1. Get the installer **`Pack Creator_0.1.0_x64-setup.exe`** (it is built into

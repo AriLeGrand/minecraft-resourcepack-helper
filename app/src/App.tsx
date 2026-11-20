@@ -1,8 +1,10 @@
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useEffect } from "react";
+import { CompareHost } from "./components/CompareDialog";
 import { CommandPalette, ModalHost, Toasts } from "./components/Overlays";
 import { NavBar, PackChips, sectionLabel, StatusBar, TopBar } from "./components/Shell";
+import { RecolorHost } from "./components/RecolorDialog";
 import { useEditor } from "./editor/editorStore";
 import { Animation } from "./screens/Animation";
 import { Browser } from "./screens/Browser";
@@ -10,6 +12,8 @@ import { Editor } from "./screens/Editor";
 import { Export } from "./screens/Export";
 import { Interface } from "./screens/Interface";
 import { Particles } from "./screens/Particles";
+import { Scene } from "./screens/Scene";
+import { Variety } from "./screens/Variety";
 import { Settings } from "./screens/Settings";
 import { Welcome } from "./screens/Welcome";
 import { useApp, type Screen } from "./store";
@@ -75,18 +79,22 @@ export function App() {
   else if (!pack || screen === "home") content = <Welcome />;
   else if (screen === "textures") content = <Browser />;
   else if (screen === "editor") content = <Editor />;
+  else if (screen === "scene") content = <Scene />;
   else if (screen === "animation") content = <Animation />;
   else if (screen === "export") content = <Export />;
   else if (screen === "particles") content = <Particles />;
   else if (screen === "interface") content = <Interface />;
+  else if (screen === "variety") content = <Variety />;
   else content = <ComingLater screen={screen} />;
 
   return (
     <div className="app">
       {content}
+      <CompareHost />
       <Toasts />
       <ModalHost />
       <CommandPalette />
+      <RecolorHost />
     </div>
   );
 }

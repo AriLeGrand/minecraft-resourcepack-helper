@@ -22,6 +22,7 @@ describe("opening", () => {
     expect(frameTicks(doc)).toBe(2);
     expect(targetLabel(doc)).toBe("textures/block/prismarine.png + prismarine.png.mcmeta");
     expect(targetLabel(docFrom(["#"]))).toBe("textures/block/test.png");
+    expect(targetLabel({ ...docFrom(["#"]), path: ":optifine/ctm/glass/0" })).toBe("optifine/ctm/glass/0.png");
   });
 
   it("refuses pixel data of the wrong size", () => {
@@ -238,5 +239,6 @@ describe("review fixes: locks, onion skin, the pack icon", () => {
     const icon = fromRaw(opened([[solid(2, 2, RED)]], { path: PACK_ICON, origin: "blank" }));
     expect(targetLabel(icon)).toBe("pack.png");
     expect(targetLabel(docFrom(["#"]))).toBe("textures/block/test.png");
+    expect(targetLabel({ ...docFrom(["#"]), path: ":optifine/ctm/glass/0" })).toBe("optifine/ctm/glass/0.png");
   });
 });

@@ -116,6 +116,84 @@ are the places where the app is less complete or less certain than it looks.
 - Removed textures are listed in the side bar only, since the list shows the
   pack's version.
 
+## Drawing helpers
+
+- The recolour preview shows the first 240 chosen textures and the first frame
+  of animations; all chosen textures are written.
+- Make variants uses the first frame of the source and of each target; an
+  animated target gets a still image (its game `.mcmeta` is copied when the
+  target was not in the pack, so it plays as one frame).
+- Undo of a recolour or variants is offered in the toast only (about 9
+  seconds); afterwards the earlier files are still in `.packcreator/trash`.
+  Undo puts back the files as they were before the write, even if one was
+  edited again in between (that edit then goes to the trash too).
+- Snap to pack palette does not apply to Paste, Move or imported images, and
+  the foreground colour itself is not changed (only the drawn pixels).
+- The seam measure is a heuristic: a texture with a deliberate strong line at
+  its border (a frame, a brick edge on the last column) can be flagged.
+- The pack palette check reads every pack PNG at each check run; with
+  thousands of large textures this takes a moment.
+- The smooth start is a global setting, not per pack; changing it does not
+  change textures already started or already open in an editor tab.
+
+## 3D scene and lighting
+
+- Scene blocks show their default state only: no blockstate rotations, no
+  other variants, multipart blocks show only their unconditional parts (a fence
+  is its post).
+- Light is the same on every face: full sky light everywhere and one block
+  light level for the whole scene (no torches, light spreading or shadows,
+  inside the house is as bright as outside).
+- Render layers (solid / cut-out / translucent) come from a list of block-name
+  patterns, not the game's table; unusual blocks may be drawn with the wrong
+  one. Translucent faces are not sorted against each other.
+- AO is an approximation of the game's smooth lighting (no light-level
+  blending, and partial blocks such as slabs do not darken their neighbours).
+- One biome colour (plains) for grass and leaves. Sky colours are approximate.
+- Animated textures show their first frame (an open editor tab shows its
+  current frame).
+- Blocks drawn by the game's code (chests, beds, signs) are left out of the
+  scene and listed as "Not drawn".
+- The lightmap formula was written from memory of the game's code (1.19–1.21);
+  it was not checked against the game's output pixel by pixel.
+
+## Organising a pack
+
+- Restoring an earlier version restores the PNG only, not its `.mcmeta`; restoring an animation with a different number of frames may need its animation settings checked.
+- The history folder of each texture is capped at 50 versions / 20 MB (oldest deleted first); the trash folder is not capped and not cleaned by the app.
+- Versions of a texture saved under an old name before an export "Rename" fix are not listed under the new name when they are in the trash (the history folder and the notes do follow the rename).
+- "Mine" uses a name kept in this computer's browser storage, not in the pack: it must be typed once per computer.
+- Notes are not merged when two people edit `notes.json` at the same time on different computers (last save of the file wins; git shows the conflict).
+- "Saved today / this week" come from file times, so copying or syncing a pack (which can change file times) changes these counts.
+- The pack icon's history (`.packcreator/history-icon/`) is kept on disk but not shown in the app.
+
+## Publishing and comparing
+
+- The PNG optimiser works per file and does not use zopfli (slower, a few %
+  smaller); a file that takes more than 8 s keeps oxipng's best result so far.
+  Text and other metadata chunks inside exported PNG files are dropped.
+- The showcase layout is fixed (one style, 1920×1080); the description is one
+  line and is cut at the image edge; textures that fail to load are left out.
+- Page text is generated in English from counts only; there is no image
+  upload or direct publishing to CurseForge / Modrinth.
+- Compare: identical means same decoded pixels and same `.mcmeta` bytes; other
+  pack files (models, sounds, fonts, `pack.png`) are not compared. A zip is
+  unpacked into the cache each time (no reuse between comparisons). Textures of
+  other namespaces (mods) are ignored.
+- "Copy theirs into my pack" copies whole files; it does not convert sizes or
+  merge animations, and it does not copy textures their pack has under a name
+  this version does not know.
+
+## Variety: random variants and connected textures
+
+- One texture per block can have random variants at a time; multipart blocks (fences, walls, panes, redstone…) are refused.
+- The 3×3 preview picks with its own seeded generator, not the game's per-position hash: the proportions match, the arrangement does not. Face culling, `uvlock` and ambient occlusion are not shown.
+- "Turn at random" only adds turns around the vertical axis; for blocks that already turn their model (logs, furnaces) it may point them the wrong way (a hint says so; the choice is left to the user).
+- In copies for another version, block state files are left out when crossing 1.13 (so random variants do not work in a 1.8.9 copy of a 1.21 pack; their models and textures are still copied with renamed references). Model *names* and parents are not renamed between versions, only texture references.
+- Connected textures: only the compact method (5 tiles); no full 47-tile `ctm`, overlays, `connectTiles` UI, or per-state `matchBlocks` editing beyond the text field. Before 1.13 the block id is taken from the block state file name; blocks whose old id differs (e.g. coloured glass, which is `stained_glass` with a colour state) need `matchBlocks` edited by hand. Not checked in game with OptiFine or Continuity; whether old OptiFine versions for 1.8.9 support `ctm_compact` and read `optifine/ctm/` (rather than `mcpatcher/ctm/`) was not verified.
+- Starting tiles are a mechanical first draft (border bands removed); they need drawing for most textures.
+- Checked only on the demo game (`tools/demo/make_demo_minecraft.py` now also writes block states, including one multipart block); not on a real game.
+
 ## Platform
 
 - Built and tested on Windows 10/11 only.

@@ -318,6 +318,13 @@ the release build was run and checked (images, fonts, security policy).
     checks and fixes, export for 1.21.11 + 1.20.1 + 1.8.9 with renames,
     reopening the last pack after restart, no-Minecraft and read-only errors.
 
+- **Ideas pack** (2026-11-20): pack palette with snap and export check, recolour a set with Undo,
+  make variants, Scale2x/3x start, seam check (A); Scene screen with lightmap, ambient occlusion
+  and a saved custom scene (B); per-texture notes/tags/assignee, pack history with restore,
+  progress stats (C); PNG optimiser, showcase image, page text, compare with another pack (D);
+  Variety screen with random variants and OptiFine connected textures (E). Decisions D-078…D-105.
+  Verified in the merged app on the demo game; not checked in the real game.
+
 ## Known issues / notes
 
 - Drive C: has little free space (about 5 GB). Build output is on D:.
