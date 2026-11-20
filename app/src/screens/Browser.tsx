@@ -215,7 +215,9 @@ export function Browser() {
           <div className="listhead">
             <h1>{title}</h1>
             <span className="dim" style={{ fontSize: 12 }}>
-              {filters.only ? `${visible.length} textures` : `${total} textures · ${done} done`}
+              {filters.only ? `${visible.length} textures`
+                : filters.tag !== null || filters.assignee.kind !== "any" || filters.hasNote ? `${visible.length} of ${total} textures`
+                : `${total} textures · ${done} done`}
             </span>
             <div className="grow" />
             <label className="searchbox">
