@@ -9,6 +9,7 @@ const SECTIONS: { key: Screen; label: string; icon: IconName; needsPack: boolean
   { key: "home", label: "Home", icon: "home", needsPack: false },
   { key: "textures", label: "Textures", icon: "textures", needsPack: true },
   { key: "editor", label: "Editor", icon: "editor", needsPack: true },
+  { key: "scene", label: "Scene", icon: "scene", needsPack: true },
   { key: "interface", label: "Interface", icon: "interface", needsPack: true },
   { key: "particles", label: "Particles", icon: "particles", needsPack: true },
   { key: "animation", label: "Animation", icon: "animation", needsPack: true },

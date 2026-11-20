@@ -7,6 +7,7 @@ export type Screen =
   | "home"
   | "textures"
   | "editor"
+  | "scene"
   | "interface"
   | "particles"
   | "animation"

@@ -23,6 +23,7 @@ pub mod particle_list;
 pub mod particles;
 pub mod renames;
 pub mod rows;
+pub mod scene;
 pub mod settings;
 pub mod share;
 pub mod textures;

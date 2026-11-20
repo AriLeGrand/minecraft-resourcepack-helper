@@ -354,6 +354,23 @@ export interface ModelChoice {
   label: string;
 }
 
+/** Scene screen (Rust `core/src/scene.rs`). */
+export interface SceneBlock {
+  id: string;
+  /** Models of the block's default state (several for a multipart block). */
+  models: BlockModel[];
+  error: string | null;
+}
+
+export interface SceneFile {
+  version: number;
+  width: number;
+  depth: number;
+  height: number;
+  /** Block id per cell, "" = air; index `(y * depth + z) * width + x`. */
+  blocks: string[];
+}
+
 /** Particle viewer (Rust `core/src/particle_list.rs`). */
 export type ParticleLayout = "separate" | "sheet";
 export type ParticleStatus = "todo" | "partly" | "done";
@@ -577,6 +594,13 @@ export const api = {
   blockModel: (name: string, packDir: string) => invoke<BlockModel>("block_model", { name, packDir }),
   /** Models to offer for a texture: the cube (`name` ":cube") first, then block models using it. */
   modelsForTexture: (path: string, packDir: string) => invoke<ModelChoice[]>("models_for_texture", { path, packDir }),
+  /** Scene: the blocks, each resolved to the models of its default state. */
+  sceneBlocks: (ids: string[], packDir: string) => invoke<SceneBlock[]>("scene_blocks", { ids, packDir }),
+  /** Scene: every block id that can be placed. */
+  sceneBlockList: (packDir: string) => invoke<string[]>("scene_block_list", { packDir }),
+  /** Scene: the custom scene saved in `.packcreator/scene.json` (`null` = none yet). */
+  sceneLoad: (packDir: string) => invoke<SceneFile | null>("scene_load", { packDir }),
+  sceneSave: (scene: SceneFile, packDir: string) => invoke<void>("scene_save", { scene, packDir }),
   /** Every particle of the pack's version (the pack's files win over the game's). */
   particleList: (packDir: string) => invoke<ParticleList>("particle_list", { packDir }),
   /** Copies the particle's last frame into a new image and appends it to the pack's particle file. */
