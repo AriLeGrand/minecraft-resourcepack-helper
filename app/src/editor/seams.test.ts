@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { seamMessage, tileSize } from "./seams";
 
-const edge = (seam: boolean) => ({ edge: seam ? 100 : 5, inside: 5, seam });
+const edge = (seam: boolean) => ({ edge: seam ? 100 : 5, inside: 5, peak: 20, seam });
 
 describe("seam note", () => {
   it("names the edge", () => {

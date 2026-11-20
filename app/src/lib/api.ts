@@ -639,7 +639,10 @@ export interface WriteReport {
 
 export interface SeamEdge {
   edge: number;
+  /** Average difference between neighbours inside. */
   inside: number;
+  /** Second largest difference between neighbours inside. */
+  peak: number;
   seam: boolean;
 }
 

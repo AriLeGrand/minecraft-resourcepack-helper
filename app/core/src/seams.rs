@@ -19,6 +19,11 @@ pub const RATIO: f32 = 2.0;
 /// …and by at least this much on average (RGB distance, 0 to 441), so flat
 /// or nearly flat textures with a faint edge are not flagged.
 pub const MIN_JUMP: f32 = 12.0;
+/// …and more than the second strongest line inside by this factor: a texture
+/// made of stripes (planks, bricks) has the same kind of line at its edge as
+/// inside, which is its pattern, not a seam. The strongest line alone is left
+/// out, so one line drawn next to the edge does not hide the seam it makes.
+pub const PEAK_RATIO: f32 = 1.25;
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Default)]
 pub struct Edge {
@@ -26,6 +31,8 @@ pub struct Edge {
     pub edge: f32,
     /// Average colour difference between neighbours inside the texture.
     pub inside: f32,
+    /// The second largest difference between neighbouring columns (rows) inside.
+    pub peak: f32,
     pub seam: bool,
 }
 
@@ -55,11 +62,19 @@ fn diff(a: &image::Rgba<u8>, b: &image::Rgba<u8>) -> f32 {
     s.sqrt()
 }
 
-fn judge(edge: f32, inside: f32) -> Edge {
+fn judge(edge: f32, steps: &[f32]) -> Edge {
+    let inside = steps.iter().sum::<f32>() / steps.len().max(1) as f32;
+    let mut sorted = steps.to_vec();
+    sorted.sort_by(f32::total_cmp);
+    let peak = sorted
+        .get(sorted.len().saturating_sub(2))
+        .copied()
+        .unwrap_or(0.0);
     Edge {
         edge,
         inside,
-        seam: edge >= MIN_JUMP && edge > inside * RATIO,
+        peak,
+        seam: edge >= MIN_JUMP && edge > inside * RATIO && edge > peak * PEAK_RATIO,
     }
 }
 
@@ -81,11 +96,11 @@ pub fn measure(img: &RgbaImage) -> SeamReport {
             .sum::<f32>()
             / w as f32
     };
-    let inside_cols = (0..w - 1).map(|x| col(x, x + 1)).sum::<f32>() / (w - 1) as f32;
-    let inside_rows = (0..h - 1).map(|y| row(y, y + 1)).sum::<f32>() / (h - 1) as f32;
+    let cols: Vec<f32> = (0..w - 1).map(|x| col(x, x + 1)).collect();
+    let rows: Vec<f32> = (0..h - 1).map(|y| row(y, y + 1)).collect();
     SeamReport {
-        columns: judge(col(w - 1, 0), inside_cols),
-        rows: judge(row(h - 1, 0), inside_rows),
+        columns: judge(col(w - 1, 0), &cols),
+        rows: judge(row(h - 1, 0), &rows),
     }
 }
 
@@ -261,6 +276,46 @@ mod tests {
             measure_raw(17, 16, img.into_raw()).unwrap_err().kind,
             "bad_image"
         );
+    }
+
+    #[test]
+    fn stripes_at_the_edge_are_the_pattern_not_a_seam() {
+        // planks: a dark line every 4 rows, the last row dark too, so the edge
+        // (dark -> light) looks like every plank boundary inside
+        let img = RgbaImage::from_fn(16, 16, |x, y| {
+            if y % 4 == 3 {
+                Rgba([90, 60, 30, 255])
+            } else {
+                let v = 170 + ((x * 5 + y * 3) % 4) as u8 * 4;
+                Rgba([v, v - 40, v - 90, 255])
+            }
+        });
+        let r = measure(&img);
+        assert!(!r.rows.seam, "{r:?}");
+        // the same planks fading from light at the top to dark at the bottom:
+        // the edge jumps from darkest to lightest, more than any plank line
+        let faded = RgbaImage::from_fn(16, 16, |x, y| {
+            let p = img.get_pixel(x, y);
+            let k = 1.0 - y as f32 / 20.0;
+            Rgba([
+                (p[0] as f32 * k) as u8,
+                (p[1] as f32 * k) as u8,
+                (p[2] as f32 * k) as u8,
+                255,
+            ])
+        });
+        let r = measure(&faded);
+        assert!(r.rows.edge > r.rows.peak, "{r:?}");
+    }
+
+    #[test]
+    fn a_bright_line_drawn_on_the_last_column_is_a_seam() {
+        let mut img = seamless(32);
+        for y in 0..32 {
+            img.put_pixel(31, y, Rgba([250, 250, 250, 255]));
+        }
+        let r = measure(&img);
+        assert!(r.columns.seam && !r.rows.seam, "{r:?}");
     }
 
     #[test]

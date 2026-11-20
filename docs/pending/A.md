@@ -78,8 +78,11 @@ original are used (tested). A pack file is never rescaled.
 colour difference across the wrap edge (last column vs first, last row vs
 first; RGB weighted by alpha, plus alpha) is compared with the average
 difference between neighbouring columns (rows) inside. A seam is flagged when
-the edge is more than 2× the inside and at least 12 (out of 441), so flat
-textures with a faint edge pass. Animation frames are measured one by one. The
+the edge is more than 2× the inside average, more than 1.25× the second strongest
+line inside (the strongest alone is left out, so a line drawn next to the edge
+does not hide the seam it makes), and at least 12 (out of 441): flat textures with a faint edge
+pass, and striped textures (planks, bricks) whose edge line is just another
+line of their pattern pass too. Animation frames are measured one by one. The
 editor's Tiled preview of a block texture asks Rust (`seam_measure`, the
 flattened frame) 300 ms after the drawing stops changing, and shows "Seam on
 the left/right edge" (or top/bottom) with the edge outlined between the tiles.
