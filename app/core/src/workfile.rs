@@ -5,6 +5,7 @@
 //! never exported. Images inside a working file are PNGs encoded as base64.
 
 use crate::error::{CoreError, IoCtx, Result};
+use crate::history;
 use crate::mcmeta::{self, Animation};
 use crate::pack::{modified_ms, now_ms, PROJECT_DIR};
 use crate::textures::{is_safe_texture_path, mcmeta_file, png_dimensions, texture_file};
@@ -515,6 +516,16 @@ pub fn save(pack_dir: &Path, tex_path: &str, doc: &WorkDoc, flat_png: &[u8]) -> 
     // away by this save: they go to the trash folder.
     let had_work = wf.is_file();
     let old_work_is_stale = had_work && !read_work(wf).is_some_and(|d| belongs_to(&d, png));
+    // The PNG being replaced is kept in the texture's history (see history.rs),
+    // unless it is identical to the new one. A PNG that cannot be read is not
+    // replaced either: it would be lost.
+    let old_png = if png.is_file() {
+        let bytes = fs::read(png).ctx(png)?;
+        (bytes != flat_png).then(|| (bytes, modified_ms(png)))
+    } else {
+        None
+    };
+    let mut kept_version: Option<PathBuf> = None;
 
     // 2. write the new files next to the old ones
     let tmp = sibling(png, "tmp");
@@ -542,10 +553,16 @@ pub fn save(pack_dir: &Path, tex_path: &str, doc: &WorkDoc, flat_png: &[u8]) -> 
         if let Some(text) = &meta_text {
             fs::write(&mtmp, text).ctx(&mtmp)?;
         }
+        if let Some((bytes, made)) = &old_png {
+            kept_version = Some(history::record(pack_dir, tex_path, bytes, *made)?);
+        }
         Ok(())
     })();
     if let Err(e) = staged {
         discard(&[&tmp, &wtmp, &mtmp]);
+        if let Some(k) = &kept_version {
+            discard(&[k]);
+        }
         return Err(e);
     }
 
@@ -571,7 +588,14 @@ pub fn save(pack_dir: &Path, tex_path: &str, doc: &WorkDoc, flat_png: &[u8]) -> 
     })();
     if let Err(e) = committed {
         discard(&[&tmp, &wtmp, &mtmp]);
+        // the old PNG is still in place: its history copy is not needed
+        if let Some(k) = &kept_version {
+            discard(&[k]);
+        }
         return Err(e);
+    }
+    if kept_version.is_some() {
+        let _ = history::prune(pack_dir, tex_path);
     }
     if had_work {
         let kept = pack_dir
@@ -1020,6 +1044,32 @@ mod tests {
         assert_eq!(fs::read(&file).unwrap(), flat(32, 32, 2));
         assert!(files_named(&pack, ".tmp").is_empty());
         assert!(files_named(&pack, ".bak").is_empty());
+    }
+
+    #[test]
+    fn every_save_keeps_the_png_it_replaces_in_the_history() {
+        let (_t, vanilla, pack) = setup();
+        let o = open(&pack, &vanilla, "block/stone", 2).unwrap();
+        for seed in 1..=3 {
+            save(&pack, "block/stone", &o.doc, &flat(32, 32, seed)).unwrap();
+        }
+        // saving the same pixels again adds nothing
+        save(&pack, "block/stone", &o.doc, &flat(32, 32, 3)).unwrap();
+        let versions = history::list(&pack, "block/stone").unwrap();
+        let mut kept: Vec<Vec<u8>> = versions
+            .iter()
+            .map(|v| fs::read(history::version_file(&pack, "block/stone", &v.id).unwrap()).unwrap())
+            .collect();
+        kept.sort();
+        let mut want = vec![flat(32, 32, 1), flat(32, 32, 2)];
+        want.sort();
+        assert_eq!(kept, want);
+        // a save that fails leaves no extra history copy behind
+        let wf = work_file(&pack, "block/stone").unwrap();
+        let blocker = sibling(&wf, "tmp");
+        fs::create_dir_all(blocker.join("x")).unwrap();
+        assert!(save(&pack, "block/stone", &o.doc, &flat(32, 32, 4)).is_err());
+        assert_eq!(history::list(&pack, "block/stone").unwrap().len(), 2);
     }
 
     #[test]

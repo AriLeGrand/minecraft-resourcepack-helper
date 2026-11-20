@@ -115,6 +115,32 @@ export interface TextureRow {
   extra: boolean;
 }
 
+/** Note, tags and "assigned to" of one texture (`.packcreator/notes.json`). */
+export interface TextureNote {
+  note: string;
+  tags: string[];
+  /** "" = nobody yet. */
+  assignee: string;
+  updated_ms: number;
+}
+
+export interface LoadedNotes {
+  notes: { schema: number; textures: Record<string, TextureNote> };
+  /** Set when a damaged notes file was moved aside (where it is now). */
+  damaged_kept: string | null;
+}
+
+/** An earlier version of a texture (`.packcreator/history` or `.packcreator/trash`). */
+export interface HistoryVersion {
+  id: string;
+  kind: "history" | "trash";
+  replaced_ms: number;
+  made_ms: number;
+  width: number;
+  height: number;
+  bytes: number;
+}
+
 export interface PackSummary {
   textures: number;
   animated: number;
@@ -579,6 +605,10 @@ export const api = {
   editPackIcon: () => invoke<void>("edit_pack_icon"),
   runChecks: () => invoke<Check[]>("run_checks"),
   applyFix: (id: string) => invoke<string>("apply_fix", { id }),
+  notesLoad: (packDir: string) => invoke<LoadedNotes>("notes_load", { packDir }),
+  notesSet: (path: string, note: TextureNote, packDir: string) => invoke<TextureNote>("notes_set", { path, note, packDir }),
+  textureHistory: (path: string, packDir: string) => invoke<HistoryVersion[]>("texture_history", { path, packDir }),
+  restoreVersion: (path: string, id: string, packDir: string) => invoke<{ kept: string | null }>("restore_version", { path, id, packDir }),
   exportPack: (request: { folder: boolean; install: boolean; only_changed: boolean; also: string[] }) =>
     invoke<{ outputs: ExportOutput[]; pack: PackState }>("export_pack", { request }),
 };
@@ -603,4 +633,6 @@ export const images = {
   recentIcon: (dir: string) => `${img("packicon")}?dir=${encodeURIComponent(dir)}`,
   /** A file of the last batch-import scan (small thumbnail). */
   batchThumb: (id: number, scan: number) => `${img(`batch/${id}`)}?s=${scan}`,
+  /** An earlier version of the texture whose history was listed last. */
+  historyVersion: (id: string, tex: string) => img(`history/${id}/${tex}`),
 };

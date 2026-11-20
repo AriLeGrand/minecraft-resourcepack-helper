@@ -9,9 +9,14 @@
 //! * `pcimg://localhost/packicon?dir=<pack folder>` (recent packs: `pack.png` only)
 //! * `pcimg://localhost/batch/<row id>` (the files of the last batch-import
 //!   scan only, as a small thumbnail)
+//! * `pcimg://localhost/history/<version id>/<texture path>` (an earlier
+//!   version of the texture the inspector listed last, only from the open
+//!   pack's `.packcreator/history` and `.packcreator/trash`, see
+//!   `history::version_file`)
 
 use crate::AppState;
 use packcreator_core::extract::vanilla_dir;
+use packcreator_core::history;
 use packcreator_core::textures::{
     is_safe_texture_path, make_thumbnail, png_dimensions, texture_file, thumb_file,
 };
@@ -90,6 +95,15 @@ fn resolve(app: &AppHandle, path: &str, query: Option<&str>) -> Option<PathBuf> 
                 return None;
             }
             session.rows.get(id).map(|(src, _)| src.clone())
+        }
+        "history" => {
+            // only versions of the texture whose history was listed last
+            let (id, tex) = parts.next()?.split_once('/')?;
+            if inner.history_tex.as_deref() != Some(tex) {
+                return None;
+            }
+            let pack = inner.pack.as_ref()?;
+            history::version_file(&pack.dir, tex, id).ok()
         }
         _ => None,
     }

@@ -1,5 +1,5 @@
 // Pure helpers (no React, no Tauri) so they can be unit-tested.
-import type { Category, PackFormat, Status, TextureRow, VersionView, WhatsNewView } from "./api";
+import type { Category, PackFormat, Status, TextureNote, TextureRow, VersionView, WhatsNewView } from "./api";
 
 export const CATEGORIES: { key: Category; label: string }[] = [
   { key: "blocks", label: "Blocks" },
@@ -29,6 +29,36 @@ export interface Filters {
   onlyLabel?: string;
   /** Heading of the list while `only` is set ("New in 1.21.11 since 1.20.1"). */
   onlyTitle?: string;
+  /** Only textures with this tag (compared without case). */
+  tag: string | null;
+  /** Who does it: anyone, me, nobody yet, or one name. */
+  assignee: AssigneeFilter;
+  /** Only textures with a written note. */
+  hasNote: boolean;
+}
+
+export type AssigneeFilter = { kind: "any" } | { kind: "mine" } | { kind: "none" } | { kind: "name"; name: string };
+
+/** Notes of the open pack (texture path → note) and the user's own name, for the filters. */
+export interface NoteCtx {
+  notes: Record<string, TextureNote>;
+  me: string;
+}
+
+const sameName = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
+
+/** True when the texture passes the tag / assignee / note filters. */
+export function passesNotes(path: string, f: Filters, ctx: NoteCtx | undefined): boolean {
+  const n = ctx?.notes[path];
+  if (f.hasNote && !n?.note) return false;
+  if (f.tag && !n?.tags.some((t) => sameName(t, f.tag!))) return false;
+  const who = n?.assignee ?? "";
+  switch (f.assignee.kind) {
+    case "none": return who === "";
+    case "mine": return who !== "" && !!ctx?.me && sameName(who, ctx.me);
+    case "name": return who !== "" && sameName(who, f.assignee.name);
+    default: return true;
+  }
 }
 
 export const defaultFilters: Filters = {
@@ -39,6 +69,9 @@ export const defaultFilters: Filters = {
   wrongSize: false,
   search: "",
   only: null,
+  tag: null,
+  assignee: { kind: "any" },
+  hasNote: false,
 };
 
 /** Splits "oak pla" into words that must all appear in the path. */
@@ -60,22 +93,23 @@ function passesToggles(r: TextureRow, f: Filters): boolean {
   return true;
 }
 
-export function filterRows(rows: TextureRow[], f: Filters): TextureRow[] {
+export function filterRows(rows: TextureRow[], f: Filters, ctx?: NoteCtx): TextureRow[] {
   if (f.only) {
     const set = new Set(f.only);
     return rows.filter((r) => set.has(r.path));
   }
   const words = searchWords(f.search);
   return rows.filter(
-    (r) => (f.category === "all" || r.category === f.category) && passesToggles(r, f) && matchesSearch(r.path, words),
+    (r) => (f.category === "all" || r.category === f.category) && passesToggles(r, f) && passesNotes(r.path, f, ctx) && matchesSearch(r.path, words),
   );
 }
 
-/** How many textures match the search in the categories that are not shown. */
-export function matchesElsewhere(rows: TextureRow[], f: Filters): number {
-  if (f.category === "all" || f.only || searchWords(f.search).length === 0) return 0;
+/** How many textures match the search (and note filters) in the categories that are not shown. */
+export function matchesElsewhere(rows: TextureRow[], f: Filters, ctx?: NoteCtx): number {
+  const noteFilter = f.tag !== null || f.assignee.kind !== "any" || f.hasNote;
+  if (f.category === "all" || f.only || (searchWords(f.search).length === 0 && !noteFilter)) return 0;
   const words = searchWords(f.search);
-  return rows.filter((r) => r.category !== f.category && passesToggles(r, f) && matchesSearch(r.path, words)).length;
+  return rows.filter((r) => r.category !== f.category && passesToggles(r, f) && passesNotes(r.path, f, ctx) && matchesSearch(r.path, words)).length;
 }
 
 export interface Counts {
@@ -134,6 +168,12 @@ export function timeLabel(ms: number, now: number): string {
   const day = dayLabel(ms, now);
   const prefix = day === "Today" ? "today" : day === "Yesterday" ? "yesterday" : day;
   return `${prefix} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+/** "Today 14:32", "Yesterday 09:05", "Oct 30 14:32" (history thumbnails). */
+export function stampLabel(ms: number, now: number): string {
+  const t = timeLabel(ms, now);
+  return t.charAt(0).toUpperCase() + t.slice(1);
 }
 
 /** "Edited 2 h ago", "Yesterday", "Last week", "Oct 2". */
@@ -292,4 +332,72 @@ export function whatsNewNotice(w: WhatsNewView, inPack: number): string {
   if (d.other_is_older) parts.push(`${d.removed.length} removed`);
   else parts.push(`${d.added.length} gone`);
   return parts.join(" · ");
+}
+
+// ---- Progress ----
+
+export interface Progress {
+  done: number;
+  total: number;
+  /** 0 to 100, rounded down: 100 only when everything is done. */
+  pct: number;
+}
+
+export function progressOf(done: number, total: number): Progress {
+  return { done, total, pct: total > 0 ? Math.floor((done * 100) / total) : 0 };
+}
+
+export interface ProgressStats {
+  overall: Progress;
+  /** In the app's category order; categories without textures are left out. */
+  categories: ({ key: Category; label: string } & Progress)[];
+  /** Pack textures last saved today / since Monday (from the file times). */
+  today: number;
+  week: number;
+  /** Pack textures changed after the last export. */
+  changed: number;
+}
+
+/** Monday 00:00 of the week of `ms`, local time. */
+export function startOfWeek(ms: number): number {
+  const d = new Date(startOfDay(ms));
+  const back = (d.getDay() + 6) % 7;
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate() - back).getTime();
+}
+
+/**
+ * Done / total per category and overall. Only the textures of the pack's
+ * game version count (a pack file the game does not have is not progress).
+ */
+export function progressStats(rows: TextureRow[], now: number): ProgressStats {
+  const per: Record<string, { done: number; total: number }> = {};
+  let done = 0;
+  let total = 0;
+  let today = 0;
+  let week = 0;
+  let changed = 0;
+  const day0 = startOfDay(now);
+  const week0 = startOfWeek(now);
+  for (const r of rows) {
+    if (r.mine) {
+      if (r.mine.modified_ms >= day0) today += 1;
+      if (r.mine.modified_ms >= week0) week += 1;
+      if (r.status === "changed") changed += 1;
+    }
+    if (r.extra) continue;
+    const c = (per[r.category] ??= { done: 0, total: 0 });
+    c.total += 1;
+    total += 1;
+    if (r.status !== "todo") {
+      c.done += 1;
+      done += 1;
+    }
+  }
+  return {
+    overall: progressOf(done, total),
+    categories: CATEGORIES.filter((c) => per[c.key]).map((c) => ({ ...c, ...progressOf(per[c.key].done, per[c.key].total) })),
+    today,
+    week,
+    changed,
+  };
 }

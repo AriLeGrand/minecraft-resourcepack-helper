@@ -5,6 +5,7 @@ import { save } from "@tauri-apps/plugin-dialog";
 import { useEffect, useMemo, useState } from "react";
 import { api, type TextureRow } from "../lib/api";
 import { formatLabel, joinPath } from "../lib/logic";
+import { useNotes } from "../lib/notesStore";
 import { formatShareList, SHARE_FORMATS, shareFileName, type ShareFormat } from "../lib/share";
 import { useApp } from "../store";
 
@@ -25,6 +26,8 @@ export function ShareDialog({ visible, all, viewTitle, onClose }: Props) {
   const [scope, setScope] = useState<"view" | "pack">("view");
   const [format, setFormat] = useState<ShareFormat>("checklist");
   const [includeDone, setIncludeDone] = useState(true);
+  const [byPerson, setByPerson] = useState(false);
+  const notes = useNotes((s) => s.notes);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -45,8 +48,10 @@ export function ShareDialog({ visible, all, viewTitle, onClose }: Props) {
         subtitle: `Java ${version} · ${pack.project.resolution}× · format ${formatLabel(pack.project.format)}`
           + (scope === "view" && viewTitle !== "All textures" ? ` · ${viewTitle}` : ""),
         now: Date.now(),
+        notes,
+        byPerson,
       }),
-    [rows, format, includeDone, pack, version, scope, viewTitle],
+    [rows, format, includeDone, pack, version, scope, viewTitle, notes, byPerson],
   );
   const lines = rows.filter((r) => !r.extra && (includeDone || r.status === "todo")).length;
 
@@ -105,6 +110,11 @@ export function ShareDialog({ visible, all, viewTitle, onClose }: Props) {
           <label className="check">
             <input type="checkbox" checked={includeDone} onChange={(e) => setIncludeDone(e.target.checked)} />
             Also list finished textures (ticked)
+          </label>
+          <span />
+          <label className="check" title="One part per person (from “Assigned to” in the inspector), Unassigned last">
+            <input type="checkbox" checked={byPerson} onChange={(e) => setByPerson(e.target.checked)} />
+            Group by person
           </label>
         </div>
 
