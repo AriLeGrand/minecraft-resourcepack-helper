@@ -38,8 +38,6 @@ that break them cannot be merged.
    tests. The interface (`app/src`) stays thin.
 5. **Plain words in the interface.** Write for pack makers, not programmers:
    short sentences, no jargon, say what will happen.
-6. **The old Aseprite plugin is frozen.** Do not change `main.lua` or
-   `modules/*.lua`.
 
 ## Getting started
 

@@ -1034,3 +1034,9 @@ the installer.
 **D-111 · Website.** A static page in `site/` (HTML, CSS and a small script,
 no build step) presenting the app, with the demo-game screenshots only. It can
 be served by GitHub Pages; that is not set up.
+
+**D-112 · The old Aseprite plugin is removed.** `main.lua`, `modules/*.lua`
+and the plugin's `package.json` were kept unchanged as a reference while
+Blockwright replaced them (a rule of the original brief). The owner asked to
+remove what the project no longer needs, and chose to remove them
+(2026-11-20). They remain in the git history.

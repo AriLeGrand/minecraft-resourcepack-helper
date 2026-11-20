@@ -203,7 +203,7 @@ license notice stays with it.
 
 ## The old Aseprite plugin
 
-Before Blockwright, this repository was an Aseprite extension called *Minecraft Resource Pack Helper*. Its files (`main.lua`, `modules/`, `package.json`) are kept for reference only and are **no longer maintained**.
+Before Blockwright, this repository was an Aseprite extension called *Minecraft Resource Pack Helper*. Blockwright replaces it, and its files were removed; the last version is still in the git history (any commit before the removal has `main.lua` and `modules/`).
 
 ## Legal
 
