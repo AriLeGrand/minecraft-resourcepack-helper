@@ -1,5 +1,7 @@
 # Blockwright website
 
+Live at **https://arilegrand.com/blockwright/**.
+
 A static presentation site for Blockwright: plain HTML, CSS and JavaScript,
 no framework and no build step.
 
@@ -20,6 +22,10 @@ python -m http.server 8765 --directory site
 then go to http://localhost:8765.
 
 ## Publish it
+
+To update the live site, upload the contents of this folder (`index.html`,
+`styles.css`, `script.js`, `assets/`) to the `blockwright/` folder of the
+host. The page's canonical and preview-image links point to that address.
 
 The folder works as-is on GitHub Pages or any static host; all paths are
 relative. GitHub Pages publishes a branch's root or its `/docs` folder, so

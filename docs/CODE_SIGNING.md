@@ -7,6 +7,8 @@ is unknown).
 
 ## Code signing policy
 
+Also shown on the website: https://arilegrand.com/blockwright/
+
 Free code signing provided by [SignPath.io](https://signpath.io), certificate
 by [SignPath Foundation](https://signpath.org).
 

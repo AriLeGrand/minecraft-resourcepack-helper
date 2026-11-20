@@ -16,6 +16,7 @@
 </p>
 
 <p align="center">
+  <a href="https://arilegrand.com/blockwright/"><b>Website</b></a> ·
   <a href="#install">Install</a> ·
   <a href="#quick-start">Quick start</a> ·
   <a href="#features">Features</a> ·
@@ -184,7 +185,7 @@ python tools/demo/make_demo_minecraft.py app/target/devdata/demo/.minecraft
 | `app/core` | The Rust logic (game versions, extraction, packs, `.mcmeta`, renames, export…) with its tests; data tables in `app/core/data`. |
 | `app/src-tauri` | The desktop shell: commands, image protocol, file watcher, window. |
 | `app/src` | The interface (React and TypeScript). |
-| `site/` | The presentation website (plain HTML, CSS and JavaScript); see [site/README.md](site/README.md). |
+| `site/` | The presentation website ([live at arilegrand.com/blockwright](https://arilegrand.com/blockwright/)), plain HTML, CSS and JavaScript; see [site/README.md](site/README.md). |
 | `docs/` | [Decisions](docs/DECISIONS.md), [progress](docs/PROGRESS.md), [limitations](docs/LIMITATIONS.md), [checked game facts](docs/research/domain-facts.md), design and mockups. |
 | `tools/` | Developer scripts: game-file research, app screenshots and the demo game. |
 
