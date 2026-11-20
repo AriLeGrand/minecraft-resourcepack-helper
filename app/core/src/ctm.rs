@@ -141,7 +141,7 @@ pub fn is_match_blocks(text: &str) -> bool {
 /// The `.properties` file the app writes.
 pub fn properties_text(block: &str, match_blocks: &str, faces: &str) -> String {
     format!(
-        "# Connected textures for {block}, made by Pack Creator.\n\
+        "# Connected textures for {block}, made by Blockwright.\n\
          # Needs OptiFine or the Continuity mod; without one the game ignores this folder.\n\
          # Tiles: 0 no connection, 1 connected everywhere, 2 up and down, 3 left and right,\n\
          # 4 connected on every side but not across the corners.\n\

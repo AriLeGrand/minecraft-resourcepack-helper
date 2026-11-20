@@ -285,7 +285,7 @@ fn bad_scene(msg: impl Into<String>) -> CoreError {
 pub fn validate_scene(s: &SceneFile) -> Result<()> {
     if s.version != SCENE_VERSION {
         return Err(bad_scene(format!(
-            "The custom scene was saved by another version of Pack Creator (format {}).",
+            "The custom scene was saved by another version of Blockwright (format {}).",
             s.version
         )));
     }

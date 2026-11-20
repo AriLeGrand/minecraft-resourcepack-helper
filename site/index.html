@@ -1,0 +1,432 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Blockwright: make Minecraft resource packs, drawn by hand</title>
+  <meta name="description" content="Blockwright is a free Windows app for making Minecraft Java Edition resource packs: every texture of your installed game, a pixel editor, animation, 3D previews, interface and particles, and a ready-to-play export.">
+  <meta name="theme-color" content="#0c0d10">
+  <meta property="og:title" content="Blockwright">
+  <meta property="og:description" content="A free desktop app for making Minecraft Java Edition resource packs.">
+  <meta property="og:image" content="https://arilegrand.com/blockwright/assets/editor.png">
+  <meta property="og:url" content="https://arilegrand.com/blockwright/">
+  <meta property="og:type" content="website">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="canonical" href="https://arilegrand.com/blockwright/">
+  <link rel="icon" type="image/png" href="assets/favicon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Silkscreen:wght@400;700&display=swap">
+  <link rel="stylesheet" href="styles.css">
+  <script>document.documentElement.classList.add("js");</script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <!-- Product bar: sticky, with the main call to action -->
+  <header class="site-header" id="top">
+    <div class="wrap header-inner">
+      <a class="brand" href="#top" aria-label="Blockwright, back to top">
+        <img src="assets/icon.png" alt="" width="28" height="28" class="pixel">
+        <span>Blockwright</span>
+      </a>
+      <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="site-nav">
+        <span class="menu-toggle-bars" aria-hidden="true"></span>
+        <span class="sr-only">Menu</span>
+      </button>
+      <nav class="site-nav" id="site-nav" aria-label="Main">
+        <ul>
+          <li><a href="#overview">Overview</a></li>
+          <li><a href="#tour">Features</a></li>
+          <li><a href="#tools">Tools</a></li>
+          <li><a href="#how">How it works</a></li>
+          <li><a href="#faq">FAQ</a></li>
+        </ul>
+        <a class="pill pill-dark pill-sm" href="#download">Download free</a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="main">
+    <!-- Split hero -->
+    <section class="hero" aria-labelledby="hero-title">
+      <div class="wrap hero-inner">
+        <div class="hero-copy reveal">
+          <p class="product-badge"><img src="assets/icon.png" alt="" width="28" height="28" class="pixel"> Blockwright</p>
+          <h1 id="hero-title">Make Minecraft look like yours.</h1>
+          <p class="hero-lead">Every texture of the version you play, a pixel editor made for blocks, animation, 3D previews and a pack that is ready to install. One app, from the first pixel to the finished pack.</p>
+          <p class="hero-price"><strong>Free</strong> <span>Open source · Windows 10 and 11 · Minecraft Java Edition 1.8.9 to the newest</span></p>
+          <div class="actions">
+            <a class="pill pill-blue" href="#download">Download free</a>
+            <a class="pill pill-outline" href="#tour">See what it does</a>
+          </div>
+          <p class="hero-note">No account. No Mojang files inside: textures are read from your own game.</p>
+        </div>
+        <div class="hero-media reveal">
+          <button class="shot media-xl" type="button" data-lightbox="assets/editor.png" data-caption="The pixel editor with the 3D block preview">
+            <img src="assets/editor.png" alt="The Blockwright pixel editor: tools on the left, a plank texture being drawn in the middle, layers, palette and a live 3D block preview on the right" width="1440" height="900">
+          </button>
+          <div class="float-chip chip-a" aria-hidden="true"><span class="dot"></span>Saved to pack</div>
+          <div class="float-chip chip-b" aria-hidden="true"><img src="assets/icon.png" alt="" width="20" height="20" class="pixel">Live 3D preview</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Overview: big headline + bento of media cards -->
+    <section class="section" id="overview" aria-labelledby="overview-title">
+      <div class="wrap">
+        <header class="center-head reveal">
+          <p class="eyebrow">Built for pack makers</p>
+          <h2 id="overview-title">Redraw the game with the app made for it.</h2>
+          <p class="center-lead">Blockwright knows every texture, every name change and every pack format, so you can spend your evenings drawing instead of hunting for files.</p>
+        </header>
+        <div class="bento">
+          <figure class="bento-card bento-big reveal">
+            <button class="shot" type="button" data-lightbox="assets/browser.png" data-caption="Texture browser">
+              <img src="assets/browser.png" alt="The texture browser: categories on the left, every texture with its status, and an inspector comparing the game's texture with the pack's" width="1440" height="900" loading="lazy">
+            </button>
+            <figcaption><strong>Find any texture in seconds.</strong> Blocks, items, GUI, entities and particles of your game version, with their status: to do, done, changed since export.</figcaption>
+          </figure>
+          <figure class="bento-card reveal">
+            <button class="shot" type="button" data-lightbox="assets/animation.png" data-caption="Animation screen">
+              <img src="assets/animation.png" alt="The animation screen with frames, durations and a playback preview" width="1440" height="900" loading="lazy">
+            </button>
+            <figcaption><strong>Animate without JSON.</strong> Frames, durations and onion skin; the <code>.mcmeta</code> is written for you.</figcaption>
+          </figure>
+          <figure class="bento-card reveal">
+            <button class="shot" type="button" data-lightbox="assets/interface.png" data-caption="Interface editor">
+              <img src="assets/interface.png" alt="The interface editor showing a game screen built from the pack's GUI pieces" width="1440" height="900" loading="lazy">
+            </button>
+            <figcaption><strong>Redraw screens in place.</strong> Inventory, HUD and menus put together from your pack's pieces.</figcaption>
+          </figure>
+        </div>
+        <p class="chapter-cta reveal"><a class="text-link" href="#tour">Explore every screen</a></p>
+      </div>
+    </section>
+
+    <!-- Dark showpiece -->
+    <section class="showpiece" aria-labelledby="showpiece-title">
+      <div class="wrap">
+        <header class="center-head reveal">
+          <p class="eyebrow eyebrow-light">From first pixel to finished pack</p>
+          <h2 id="showpiece-title">The whole pack, in one place.</h2>
+          <p class="center-lead">Checks with one-click fixes, a <code>.zip</code> ready to share, installed straight into the game, and copies for older versions with every file renamed for you.</p>
+        </header>
+        <div class="showpiece-frame reveal">
+          <button class="shot" type="button" data-lightbox="assets/export.png" data-caption="Pack and export">
+            <img src="assets/export.png" alt="The Pack and export screen: pack icon, name, description, green checks and export options" width="1440" height="900" loading="lazy">
+          </button>
+        </div>
+        <ul class="stats reveal" aria-label="Key numbers">
+          <li><strong>1.8.9 → newest</strong><span>Java Edition versions, with their pack formats</span></li>
+          <li><strong>16× – 256×</strong><span>Pack resolutions, with a smooth start for big ones</span></li>
+          <li><strong>0</strong><span>Mojang files shipped: textures come from your game</span></li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- Tabbed tour -->
+    <section class="section" id="tour" aria-labelledby="tour-title">
+      <div class="wrap">
+        <header class="center-head reveal">
+          <p class="eyebrow">Features</p>
+          <h2 id="tour-title">Explore what Blockwright can do.</h2>
+        </header>
+
+        <div class="tabs reveal">
+          <div class="tab-list" role="tablist" aria-label="App screens">
+            <button class="tab" role="tab" type="button" id="tab-textures" aria-controls="panel-textures" aria-selected="true">Textures</button>
+            <button class="tab" role="tab" type="button" id="tab-editor" aria-controls="panel-editor" aria-selected="false" tabindex="-1">Editor</button>
+            <button class="tab" role="tab" type="button" id="tab-animation" aria-controls="panel-animation" aria-selected="false" tabindex="-1">Animation</button>
+            <button class="tab" role="tab" type="button" id="tab-interface" aria-controls="panel-interface" aria-selected="false" tabindex="-1">Interface</button>
+            <button class="tab" role="tab" type="button" id="tab-particles" aria-controls="panel-particles" aria-selected="false" tabindex="-1">Particles</button>
+            <button class="tab" role="tab" type="button" id="tab-export" aria-controls="panel-export" aria-selected="false" tabindex="-1">Export</button>
+          </div>
+
+          <div class="tab-panel" role="tabpanel" id="panel-textures" aria-labelledby="tab-textures" tabindex="0">
+            <button class="shot media-xl" type="button" data-lightbox="assets/browser.png" data-caption="Texture browser">
+              <img src="assets/browser.png" alt="The texture browser with categories, statuses and the inspector" width="1440" height="900" loading="lazy">
+            </button>
+            <div class="panel-copy">
+              <h3>Every texture of your game version.</h3>
+              <ul class="checks">
+                <li><strong>What's new since…</strong> lists new, redrawn, renamed and removed textures between two versions</li>
+                <li><strong>Batch import</strong> a folder of PNGs, matched to their textures, old names translated</li>
+                <li><strong>Share list</strong> as a checklist for Discord, GitHub or Notion</li>
+                <li>Notes, tags and who does what; a <strong>History</strong> that restores any earlier version</li>
+              </ul>
+            </div>
+          </div>
+
+          <div class="tab-panel" role="tabpanel" id="panel-editor" aria-labelledby="tab-editor" tabindex="0">
+            <button class="shot media-xl" type="button" data-lightbox="assets/editor.png" data-caption="Pixel editor">
+              <img src="assets/editor.png" alt="The pixel editor with tools, layers, palette and a 3D block preview" width="1440" height="900" loading="lazy">
+            </button>
+            <div class="panel-copy">
+              <h3>A pixel editor in the style of Aseprite.</h3>
+              <ul class="checks">
+                <li>Pencil, bucket, shapes, selections, gradient, text, symmetry and tiled mode, with layers and undo</li>
+                <li>A <strong>pack palette</strong> shared by every texture, with "Snap to pack palette"</li>
+                <li><strong>Seam check</strong> when a block's edges show in the tiled preview</li>
+                <li>Copy and paste with other programs through the Windows clipboard</li>
+              </ul>
+            </div>
+          </div>
+
+          <div class="tab-panel" role="tabpanel" id="panel-animation" aria-labelledby="tab-animation" tabindex="0">
+            <button class="shot media-xl" type="button" data-lightbox="assets/animation.png" data-caption="Animation screen">
+              <img src="assets/animation.png" alt="The animation screen: frames with durations, onion skin and playback" width="1440" height="900" loading="lazy">
+            </button>
+            <div class="panel-copy">
+              <h3>Animated textures, played at the game's speed.</h3>
+              <ul class="checks">
+                <li>Frames with their own durations, onion skin and smooth frames ("interpolate")</li>
+                <li>Import a vertical strip of frames; custom frame order</li>
+                <li>Watch it on a 3D block with day, night and light level controls</li>
+              </ul>
+            </div>
+          </div>
+
+          <div class="tab-panel" role="tabpanel" id="panel-interface" aria-labelledby="tab-interface" tabindex="0">
+            <button class="shot media-xl" type="button" data-lightbox="assets/interface.png" data-caption="Interface editor">
+              <img src="assets/interface.png" alt="The interface editor showing a game screen assembled from GUI pieces" width="1440" height="900" loading="lazy">
+            </button>
+            <div class="panel-copy">
+              <h3>The game's screens, rebuilt from your pieces.</h3>
+              <ul class="checks">
+                <li>Pause menu, inventory, HUD, title screen, recipe book, advancements and boss bars at GUI scale 1×, 2× or 3×</li>
+                <li>Stretch, Tile or <strong>Nine-slice</strong> with borders</li>
+                <li>Old versions: draw only inside each piece's rectangle of the shared image</li>
+              </ul>
+            </div>
+          </div>
+
+          <div class="tab-panel" role="tabpanel" id="panel-particles" aria-labelledby="tab-particles" tabindex="0">
+            <button class="shot media-xl" type="button" data-lightbox="assets/particles.png" data-caption="Particle viewer">
+              <img src="assets/particles.png" alt="The particle viewer: a list of particles and a live scene" width="1440" height="900" loading="lazy">
+            </button>
+            <div class="panel-copy">
+              <h3>Particles, moving, in a little scene.</h3>
+              <ul class="checks">
+                <li>Night, day or under water, from ¼× to 2× speed</li>
+                <li>Your pack's textures or the game's, side by side</li>
+                <li>Old single sheets: see and draw only the cells a particle uses</li>
+              </ul>
+            </div>
+          </div>
+
+          <div class="tab-panel" role="tabpanel" id="panel-export" aria-labelledby="tab-export" tabindex="0">
+            <button class="shot media-xl" type="button" data-lightbox="assets/export.png" data-caption="Pack and export">
+              <img src="assets/export.png" alt="The Pack and export screen with checks and export options" width="1440" height="900" loading="lazy">
+            </button>
+            <div class="panel-copy">
+              <h3>Checked, exported, installed.</h3>
+              <ul class="checks">
+                <li>Install straight into Minecraft's <code>resourcepacks</code> folder</li>
+                <li>Smaller PNG files with exactly the same pixels</li>
+                <li>A 1920×1080 <strong>showcase image</strong> and page text for CurseForge or Modrinth</li>
+                <li><strong>Compare with another pack</strong> and copy what you tick</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Tools grid -->
+    <section class="section section-tint" id="tools" aria-labelledby="tools-title">
+      <div class="wrap">
+        <header class="center-head reveal">
+          <p class="eyebrow">More in the box</p>
+          <h2 id="tools-title">Small tools that save whole evenings.</h2>
+        </header>
+        <ul class="tool-grid">
+          <li class="tool reveal">
+            <span class="tool-icon ti-scene" aria-hidden="true"></span>
+            <h3>Scene, in 3D</h3>
+            <p>A house, a 4×4 wall to check seams, a garden, or your own scene up to 8×8×4. Day, sunset or night, block light 0–15 and ambient occlusion.</p>
+          </li>
+          <li class="tool reveal">
+            <span class="tool-icon ti-variety" aria-hidden="true"></span>
+            <h3>Variety</h3>
+            <p><strong>Random variants</strong> with weights, built into the game. <strong>Connected textures</strong> for OptiFine or Continuity, with a live preview.</p>
+          </li>
+          <li class="tool reveal">
+            <span class="tool-icon ti-palette" aria-hidden="true"></span>
+            <h3>Pack palette</h3>
+            <p>One palette for the whole pack. Snap every drawn colour to it, and get a warning for colours that slipped outside.</p>
+          </li>
+          <li class="tool reveal">
+            <span class="tool-icon ti-recolour" aria-hidden="true"></span>
+            <h3>Recolour and variants</h3>
+            <p>Shift a whole set of textures at once with previews and Undo. Turn oak planks into spruce, birch, cherry…</p>
+          </li>
+          <li class="tool reveal">
+            <span class="tool-icon ti-team" aria-hidden="true"></span>
+            <h3>Made for teams</h3>
+            <p>Notes, tags and who does each texture. Share the to-do list grouped by name; restore any earlier version.</p>
+          </li>
+          <li class="tool reveal">
+            <span class="tool-icon ti-upscale" aria-hidden="true"></span>
+            <h3>Higher resolutions</h3>
+            <p>Packs from 16× to 256×, with a smooth Scale2x or Scale3x start so you are not redrawing from a blur.</p>
+          </li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- How it works -->
+    <section class="section" id="how" aria-labelledby="how-title">
+      <div class="wrap">
+        <header class="center-head reveal">
+          <p class="eyebrow">How it works</p>
+          <h2 id="how-title">Three steps to a pack you can play.</h2>
+        </header>
+        <ol class="steps">
+          <li class="step reveal">
+            <button class="shot" type="button" data-lightbox="assets/start.png" data-caption="Start screen: create or open a pack">
+              <img src="assets/start.png" alt="The start screen: create a pack with a name, game version and resolution" width="1440" height="900" loading="lazy">
+            </button>
+            <span class="step-num" aria-hidden="true">1</span>
+            <h3>Pick your game version</h3>
+            <p>Blockwright finds Minecraft on your computer. Choose a version, a resolution and a folder.</p>
+          </li>
+          <li class="step reveal">
+            <button class="shot" type="button" data-lightbox="assets/browser.png" data-caption="Texture browser">
+              <img src="assets/browser.png" alt="The texture browser with a texture selected" width="1440" height="900" loading="lazy">
+            </button>
+            <span class="step-num" aria-hidden="true">2</span>
+            <h3>Draw or import</h3>
+            <p>Double-click a texture to redraw it, or bring in a folder of PNGs. <kbd>Ctrl</kbd>+<kbd>S</kbd> and it is in your pack.</p>
+          </li>
+          <li class="step reveal">
+            <button class="shot" type="button" data-lightbox="assets/export.png" data-caption="Pack and export">
+              <img src="assets/export.png" alt="The export screen with all checks green" width="1440" height="900" loading="lazy">
+            </button>
+            <span class="step-num" aria-hidden="true">3</span>
+            <h3>Export and install</h3>
+            <p>Make the checks green, export, and turn it on in Options → Resource Packs.</p>
+          </li>
+        </ol>
+      </div>
+    </section>
+
+    <!-- Download: dark, plan-style cards -->
+    <section class="download" id="download" aria-labelledby="download-title">
+      <div class="wrap">
+        <header class="center-head reveal">
+          <p class="eyebrow eyebrow-light">Get started</p>
+          <h2 id="download-title">Get Blockwright.</h2>
+          <p class="center-lead">Free, for Windows 10 and 11. You also need Minecraft Java Edition with the official launcher.</p>
+        </header>
+        <div class="plans">
+          <article class="plan plan-featured reveal">
+            <p class="plan-tag">Recommended</p>
+            <div class="plan-head">
+              <img src="assets/icon.png" alt="" width="48" height="48" class="pixel">
+              <div>
+                <h3>Windows installer</h3>
+                <p class="plan-sub">Install for your account, no admin rights</p>
+              </div>
+            </div>
+            <p class="plan-price">Free</p>
+            <ul class="checks">
+              <li>Every screen and tool on this page</li>
+              <li>Minecraft 1.8.9 to the newest version</li>
+              <li>Opens your packs where you left them</li>
+            </ul>
+            <a class="pill pill-blue pill-block" href="https://github.com/AriLeGrand/Blockwright/releases" rel="noopener">Download for Windows</a>
+            <p class="plan-fine">Signing through SignPath Foundation is on its way (<a href="https://github.com/AriLeGrand/Blockwright/blob/main/docs/CODE_SIGNING.md" rel="noopener">code signing policy</a>). Until then, if Windows says the publisher is unknown, click "More info", then "Run anyway".</p>
+          </article>
+          <article class="plan reveal">
+            <div class="plan-head">
+              <span class="plan-glyph" aria-hidden="true">&lt;/&gt;</span>
+              <div>
+                <h3>Build from source</h3>
+                <p class="plan-sub">Rust, Node.js and the MSVC build tools</p>
+              </div>
+            </div>
+            <p class="plan-price">Free</p>
+            <ul class="checks">
+              <li>The same app, built on your computer</li>
+              <li>Every push to main is tested and built on GitHub</li>
+              <li>Open source under the MIT License: change it and contribute</li>
+            </ul>
+            <a class="pill pill-light pill-block" href="https://github.com/AriLeGrand/Blockwright" rel="noopener">Source on GitHub</a>
+            <p class="plan-fine">Uses Microsoft Edge WebView2, already part of Windows 10 and 11.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- FAQ -->
+    <section class="section" id="faq" aria-labelledby="faq-title">
+      <div class="wrap wrap-narrow">
+        <header class="center-head reveal">
+          <h2 id="faq-title">Frequently asked questions.</h2>
+        </header>
+        <div class="faq reveal">
+          <div class="faq-item">
+            <h3><button class="faq-q" type="button" aria-expanded="false" aria-controls="faq-1">Is it free and open source?<span class="faq-mark" aria-hidden="true"></span></button></h3>
+            <div class="faq-a" id="faq-1"><p>Yes. Blockwright is free and open source under the MIT License. Its code is on GitHub: you can build it yourself, change it, and send improvements back.</p></div>
+          </div>
+          <div class="faq-item">
+            <h3><button class="faq-q" type="button" aria-expanded="false" aria-controls="faq-2">Does it include Mojang's textures?<span class="faq-mark" aria-hidden="true"></span></button></h3>
+            <div class="faq-a" id="faq-2"><p>No. Blockwright never ships any of Mojang's files. It reads the textures from the Minecraft you have installed and keeps a copy in its cache on your computer so it can show them. That copy is never put into your pack. The screenshots on this page use a fake demo game, so they contain no Minecraft textures either.</p></div>
+          </div>
+          <div class="faq-item">
+            <h3><button class="faq-q" type="button" aria-expanded="false" aria-controls="faq-3">Which Minecraft versions does it support?<span class="faq-mark" aria-hidden="true"></span></button></h3>
+            <div class="faq-a" id="faq-3"><p>Java Edition from 1.8.9 to the newest release. The app knows each version's pack format and the textures renamed between versions, so it can also export copies of your pack for older versions with the files renamed. A version has to be started once in the launcher so its files are on your computer.</p></div>
+          </div>
+          <div class="faq-item">
+            <h3><button class="faq-q" type="button" aria-expanded="false" aria-controls="faq-4">Do I need OptiFine?<span class="faq-mark" aria-hidden="true"></span></button></h3>
+            <div class="faq-a" id="faq-4"><p>Only for connected textures, which need the OptiFine or Continuity mod. Everything else, random block variants included, works in the plain game.</p></div>
+          </div>
+          <div class="faq-item">
+            <h3><button class="faq-q" type="button" aria-expanded="false" aria-controls="faq-5">Is there a macOS or Linux version?<span class="faq-mark" aria-hidden="true"></span></button></h3>
+            <div class="faq-a" id="faq-5"><p>Not yet. Blockwright runs on Windows 10 and 11 for now.</p></div>
+          </div>
+          <div class="faq-item">
+            <h3><button class="faq-q" type="button" aria-expanded="false" aria-controls="faq-6">Can I keep using my other tools?<span class="faq-mark" aria-hidden="true"></span></button></h3>
+            <div class="faq-a" id="faq-6"><p>Yes. Your pack is a normal folder with <code>pack.mcmeta</code>, <code>pack.png</code> and <code>assets/…</code>. Open a texture in another program, paste through the Windows clipboard, or import PNGs back in. The app's own working files live in <code>.packcreator\</code> inside the pack and are never exported.</p></div>
+          </div>
+        </div>
+        <p class="chapter-cta reveal"><a class="pill pill-dark" href="#download">Download free</a></p>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap footer-inner">
+      <div class="footer-brand">
+        <img src="assets/icon.png" alt="" width="24" height="24" class="pixel">
+        <span>Blockwright</span>
+      </div>
+      <nav aria-label="Footer">
+        <ul class="footer-links">
+          <li><a href="https://github.com/AriLeGrand/Blockwright" rel="noopener">GitHub</a></li>
+          <li><a href="https://github.com/AriLeGrand/Blockwright/releases" rel="noopener">Releases</a></li>
+          <li><a href="https://github.com/AriLeGrand/Blockwright/issues" rel="noopener">Report a problem</a></li>
+          <li><a href="https://github.com/AriLeGrand/Blockwright/blob/main/CONTRIBUTING.md" rel="noopener">Contribute</a></li>
+          <li><a href="https://github.com/AriLeGrand/Blockwright/blob/main/LICENSE" rel="noopener">MIT License</a></li>
+          <li><a href="https://github.com/AriLeGrand/Blockwright/blob/main/docs/CODE_SIGNING.md" rel="noopener">Code signing policy</a></li>
+          <li><a href="#top">Back to top</a></li>
+        </ul>
+      </nav>
+      <p class="disclaimer">Blockwright is not an official Minecraft product. It is not approved by or associated with Mojang or Microsoft. The app never contains or ships Minecraft textures: it reads them from the game installed on your own computer.</p>
+    </div>
+  </footer>
+
+  <dialog class="lightbox" id="lightbox" aria-label="Screenshot viewer">
+    <figure class="lightbox-figure">
+      <img id="lightbox-img" src="" alt="">
+      <figcaption id="lightbox-caption"></figcaption>
+    </figure>
+    <button class="lb-btn lb-close" type="button" data-lb="close" aria-label="Close">&times;</button>
+    <button class="lb-btn lb-prev" type="button" data-lb="prev" aria-label="Previous screenshot">&#8249;</button>
+    <button class="lb-btn lb-next" type="button" data-lb="next" aria-label="Next screenshot">&#8250;</button>
+  </dialog>
+
+  <script src="script.js"></script>
+</body>
+</html>

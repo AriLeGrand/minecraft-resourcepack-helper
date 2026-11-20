@@ -1,0 +1,69 @@
+# Checks and builds the Windows installer on every push to main (and on pull
+# requests to main). The installer is attached to the run as an artifact.
+name: Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Check and build (Windows)
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: app
+
+      - name: Install web dependencies
+        run: npm ci
+
+      - name: Type check, lint and web tests
+        run: npm run check
+
+      - name: Build the web front end
+        run: npm run build
+
+      - name: Rust format
+        run: cargo fmt --all -- --check
+
+      - name: Rust lint
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Rust tests
+        run: cargo test --workspace
+
+      - name: Build the installer
+        run: npx tauri build
+
+      - name: Upload the installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: Blockwright-windows-installer
+          path: app/target/release/bundle/nsis/*.exe
+          if-no-files-found: error

@@ -1,4 +1,4 @@
-//! Pack Creator core.
+//! Blockwright core (the app was first called Pack Creator).
 //!
 //! Everything that must be correct lives here, with unit tests and without any
 //! dependency on the UI: Minecraft versions, pack formats, texture renames,

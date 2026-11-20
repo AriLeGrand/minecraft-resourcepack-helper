@@ -314,6 +314,7 @@ struct SettingsPatch {
     export_only_changed: Option<bool>,
     export_optimize: Option<bool>,
     upscale: Option<Upscale>,
+    welcome_seen: Option<bool>,
 }
 
 fn clean(v: Option<String>) -> Option<String> {
@@ -352,6 +353,9 @@ fn update_settings(
     }
     if let Some(v) = patch.export_optimize {
         inner.settings.export_optimize = v;
+    }
+    if let Some(v) = patch.welcome_seen {
+        inner.settings.welcome_seen = v;
     }
     if let Some(v) = patch.upscale {
         inner.settings.upscale = v;
@@ -1788,7 +1792,7 @@ pub fn run() {
             seam_measure,
         ])
         .run(tauri::generate_context!())
-        .expect("error while running Pack Creator");
+        .expect("error while running Blockwright");
 }
 
 #[cfg(test)]

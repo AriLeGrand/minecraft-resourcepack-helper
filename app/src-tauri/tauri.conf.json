@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Pack Creator",
+  "productName": "Blockwright",
   "version": "0.1.0",
   "identifier": "dev.packcreator.app",
   "build": {
@@ -13,12 +13,13 @@
     "windows": [
       {
         "label": "main",
-        "title": "Pack Creator",
+        "title": "Blockwright",
         "width": 1440,
         "height": 900,
         "minWidth": 1100,
         "minHeight": 680,
-        "backgroundColor": "#111214"
+        "backgroundColor": "#111214",
+        "decorations": false
       }
     ],
     "security": {

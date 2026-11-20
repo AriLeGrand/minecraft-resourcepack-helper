@@ -3,6 +3,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useEffect } from "react";
 import { CompareHost } from "./components/CompareDialog";
 import { CommandPalette, ModalHost, Toasts } from "./components/Overlays";
+import { WelcomeTour } from "./components/WelcomeTour";
 import { NavBar, PackChips, sectionLabel, StatusBar, TopBar } from "./components/Shell";
 import { RecolorHost } from "./components/RecolorDialog";
 import { useEditor } from "./editor/editorStore";
@@ -74,7 +75,7 @@ export function App() {
   }, []);
 
   let content;
-  if (!boot) content = <div className="placeholder">Starting…</div>;
+  if (!boot) content = <><TopBar /><div className="placeholder">Starting…</div></>;
   else if (screen === "settings") content = <Settings />;
   else if (!pack || screen === "home") content = <Welcome />;
   else if (screen === "textures") content = <Browser />;
@@ -95,6 +96,7 @@ export function App() {
       <ModalHost />
       <CommandPalette />
       <RecolorHost />
+      <WelcomeTour />
     </div>
   );
 }

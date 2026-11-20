@@ -1,0 +1,48 @@
+name: Bug report
+description: Something in Blockwright does not work as it should.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting! Please do not attach Minecraft's own textures or game files.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What did you do, what did you expect, and what happened instead?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Create a pack for 1.21.4 at 32×
+        2. Open block/oak_planks in the editor
+        3. …
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Blockwright version
+      description: Shown at the bottom of Settings.
+      placeholder: 0.1.0
+    validations:
+      required: true
+  - type: input
+    id: minecraft
+    attributes:
+      label: Minecraft version of the pack
+      placeholder: 1.21.4
+  - type: input
+    id: windows
+    attributes:
+      label: Windows version
+      placeholder: Windows 11 23H2
+  - type: textarea
+    id: extra
+    attributes:
+      label: Screenshots or error messages
+      description: The text of any error window helps a lot. Remove personal paths if you like.
