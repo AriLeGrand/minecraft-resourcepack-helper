@@ -4,6 +4,7 @@ import { useEditor } from "../editor/editorStore";
 import { formatLabel } from "../lib/logic";
 import { useApp, type Screen } from "../store";
 import { Icon, type IconName } from "./Icon";
+import { WindowControls } from "./WindowControls";
 
 const SECTIONS: { key: Screen; label: string; icon: IconName; needsPack: boolean }[] = [
   { key: "home", label: "Home", icon: "home", needsPack: false },
@@ -26,12 +27,12 @@ export function TopBar({ right, crumbs }: { right?: ReactNode; crumbs?: ReactNod
   const screen = useApp((s) => s.screen);
   const setPalette = useApp((s) => s.setPalette);
   return (
-    <header className="topbar">
-      <div className="crumbs">
-        <Icon name="logo" size={20} color="var(--accent)" />
+    <header className="topbar" data-tauri-drag-region>
+      <div className="crumbs" data-tauri-drag-region>
+        <img className="applogo" src="/logo.png" alt="" width={22} height={22} draggable={false} />
         {crumbs ?? (
           <>
-            <span className="name ellipsis">{pack && screen !== "home" ? pack.project.name : "Pack Creator"}</span>
+            <span className="name ellipsis">{pack && screen !== "home" ? pack.project.name : "Blockwright"}</span>
             {pack && screen !== "home" && (
               <>
                 <span className="sep">/</span>
@@ -41,14 +42,15 @@ export function TopBar({ right, crumbs }: { right?: ReactNode; crumbs?: ReactNod
           </>
         )}
       </div>
-      <div className="topsearch">
+      <div className="topsearch" data-tauri-drag-region>
         <div className="searchbox" onClick={() => setPalette(true)} role="button" aria-label="Search everything">
           <Icon name="search" size={14} width={2} />
           <input readOnly placeholder="Search textures, tools, commands…" onFocus={(e) => { e.target.blur(); setPalette(true); }} />
           <span className="kbd">Ctrl K</span>
         </div>
       </div>
-      <div className="topright">{right}</div>
+      <div className="topright" data-tauri-drag-region>{right}</div>
+      <WindowControls />
     </header>
   );
 }

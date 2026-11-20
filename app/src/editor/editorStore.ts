@@ -844,7 +844,7 @@ export const useEditor = create<EditorState>((set, get) => {
       useApp.getState().setStatus(`Copied ${what}`);
       // also to Windows, so other programs can paste it; the app's own copy is already safe
       void writeSystemImage(clip.buf).then((error) => {
-        if (error) warn(`Copied ${what} inside Pack Creator only: Windows did not take the image (${error}).`);
+        if (error) warn(`Copied ${what} inside Blockwright only: Windows did not take the image (${error}).`);
       });
       return true;
     },

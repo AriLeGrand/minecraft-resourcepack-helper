@@ -26,6 +26,8 @@ export interface Settings {
   export_optimize: boolean;
   /** How a game texture is enlarged when a texture is started from it (32× and more). */
   upscale: Upscale;
+  /** The first-start welcome window was closed. */
+  welcome_seen: boolean;
 }
 
 export interface RecentPack {
@@ -550,6 +552,7 @@ export interface SettingsPatch {
   export_only_changed?: boolean;
   export_optimize?: boolean;
   upscale?: Upscale;
+  welcome_seen?: boolean;
 }
 
 export interface RenamedTexture {

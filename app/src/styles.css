@@ -83,6 +83,18 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--accent); margi
 .searchbox input::placeholder { color: var(--text-2); }
 .kbd { font-size: 11px; border: 1px solid var(--line); border-radius: 4px; padding: 1px 5px; color: var(--text-2); }
 .topright { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+/* own title bar: the window has no Windows frame */
+.topbar { padding-right: 0; user-select: none; }
+.topbar .topright { padding-right: 6px; }
+.applogo { flex: none; display: block; }
+.winctl { display: flex; align-self: stretch; margin-left: 4px; }
+.winctl button {
+  width: 46px; border: 0; border-radius: 0; background: transparent; color: var(--text-2);
+  display: flex; align-items: center; justify-content: center; padding: 0;
+}
+.winctl button:hover { background: #24262c; color: var(--text); }
+.winctl button.close:hover { background: #c42b1c; color: #fff; }
+.winctl svg { shape-rendering: crispEdges; }
 .chip { border: 1px solid var(--line); border-radius: 6px; padding: 5px 10px; color: var(--text-soft); white-space: nowrap; }
 .body { flex: 1; display: flex; min-height: 0; }
 .nav {
@@ -904,3 +916,25 @@ button.pv-frame:hover .pv-thumb { border-color: var(--link); }
 /* the browser header has one more button (Recolour): the search box gives way first */
 .listhead .searchbox { flex: 0 1 220px; min-width: 120px; }
 .listhead > .btn, .listhead > .viewtoggle, .listhead > span.dim { flex: none; white-space: nowrap; }
+
+/* first-start welcome tour */
+.welcome-scrim { z-index: 70; }
+.modal.welcome { width: 520px; padding: 0 0 18px; gap: 12px; overflow: hidden; }
+.modal.welcome > h2, .modal.welcome > p, .modal.welcome > ul, .modal.welcome > .welcome-foot { margin: 0 22px; }
+.modal.welcome > h2 { font-size: 18px; margin-top: 4px; }
+.welcome-hero {
+  height: 132px; display: flex; align-items: center; justify-content: center; border-bottom: 1px solid var(--line);
+  background:
+    linear-gradient(var(--line-soft) 1px, transparent 1px) 0 0 / 16px 16px,
+    linear-gradient(90deg, var(--line-soft) 1px, transparent 1px) 0 0 / 16px 16px,
+    radial-gradient(circle at 50% 60%, rgba(59, 130, 246, 0.25), transparent 65%), var(--bg);
+}
+.welcome-hero img { width: 64px; height: 64px; filter: drop-shadow(0 8px 18px rgba(59, 130, 246, 0.35)); }
+.welcome-points { list-style: none; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.welcome-points li { font-size: 13px; color: var(--text-soft); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; }
+.welcome-points b { color: var(--text); font-weight: 600; margin-right: 4px; }
+.welcome-foot { display: flex; align-items: center; gap: 12px; margin-top: 4px !important; }
+.welcome-foot .buttons { margin: 0 0 0 auto; }
+.welcome-dots { display: flex; gap: 6px; }
+.welcome-dots button { width: 8px; height: 8px; padding: 0; border-radius: 2px; border: 0; background: var(--line-input); }
+.welcome-dots button.on { background: var(--accent); width: 18px; }

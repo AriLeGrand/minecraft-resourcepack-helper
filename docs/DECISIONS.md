@@ -994,3 +994,43 @@ Blocks built from parts (`"multipart"`: fences, walls, panes, redstone…) are l
 
 **D-105 · Copies for other versions keep models and CTM files working.**
 `export::for_version` (called from the export plan for copies only): texture references in the pack's `models/**/*.json` (texture variables, `{"sprite"}` objects, face textures that are paths) and texture paths in OptiFine `.properties` keys `matchTiles` / `tiles` / `connectTiles` follow the renamed textures (`minecraft:block/stone_2` → `minecraft:blocks/stone_2` for 1.8.9). Block state files are left out of a copy on the other side of 1.13 (their states and model names changed; the game would show missing models) and listed as left out. Textures the main version's game does not have (the pack's own new textures, such as variants) are no longer skipped from copies for being absent from the other version. The "file not used by this version" check no longer counts textures named by the pack's own model files.
+
+## Name, icon, title bar, welcome, build, website (2026-11-20)
+
+**D-106 · The app is called Blockwright.** "Pack Creator" was a working name.
+The product name, window title, installer (`Blockwright_0.1.0_x64-setup.exe`)
+and every visible text use the new name. Kept on purpose so nobody loses
+anything: the identifier `dev.packcreator.app` (it decides where settings and
+the cache live), the `.packcreator/` folder inside packs, the
+`PACKCREATOR_*` development variables and the Rust crate names.
+
+**D-107 · Icon.** An original pixel-art design: a blue isometric block whose
+faces are a pixel grid, with a pencil drawing on it. It is drawn by
+`app/src-tauri/icons/source/make_icon.py` (pure Python, 32×32 grid) and every
+size is made with `tauri icon`; the 32, 64, 128 and 256 px PNGs are written
+pixel-exact by the script so they stay sharp. The same image is the logo in
+the top bar (`app/public/logo.png`) and on the website.
+
+**D-108 · Own title bar.** The window has no Windows frame
+(`decorations: false`). The top bar is the title bar: empty parts of it drag
+the window (double-click maximises), and it ends with Minimise, Maximise /
+Restore and Close buttons in the Windows style. Close goes through the normal
+close request, so unsaved textures still ask Save / Discard / Cancel. Window
+permissions added: start-dragging, minimize, toggle-maximize (and the internal
+one for double-click), close, is-maximized.
+
+**D-109 · Welcome tour.** Three pages (what the app does, the three steps,
+good to know) shown at the first start. Closing it in any way (Skip, Get
+started, Escape) saves `welcome_seen` in the settings; Settings has "Show the
+welcome tour" to see it again. People who already used the app see it once
+after updating.
+
+**D-110 · Build workflow.** `.github/workflows/build.yml` runs on pushes and
+pull requests to `main` and by hand: on Windows it runs the web checks and
+tests, `cargo fmt`, `clippy -D warnings`, the Rust tests, then `tauri build`,
+and attaches the installer to the run. It does not publish releases or sign
+the installer.
+
+**D-111 · Website.** A static page in `site/` (HTML, CSS and a small script,
+no build step) presenting the app, with the demo-game screenshots only. It can
+be served by GitHub Pages; that is not set up.

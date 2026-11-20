@@ -130,7 +130,7 @@ export const useApp = create<State>((set, get) => ({
         }
       }
     } catch (e) {
-      get().showError(e, "Pack Creator could not start");
+      get().showError(e, "Blockwright could not start");
     }
   },
 

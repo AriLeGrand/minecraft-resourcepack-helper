@@ -872,7 +872,7 @@ describe("the Windows clipboard", () => {
     ed().copy();
     await ed().paste();
     expect(tab().history.undo.map((c) => c.label)).toEqual(["Paste"]);
-    expect(useApp.getState().toasts.some((t) => t.kind === "warn" && /inside Pack Creator only.*busy/.test(t.text))).toBe(true);
+    expect(useApp.getState().toasts.some((t) => t.kind === "warn" && /inside Blockwright only.*busy/.test(t.text))).toBe(true);
   });
 });
 

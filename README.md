@@ -1,6 +1,8 @@
-# Pack Creator
+# Blockwright
 
-Pack Creator is a desktop app for making **Minecraft Java Edition resource
+<img src="site/assets/icon.png" alt="Blockwright icon" width="96" style="image-rendering: pixelated">
+
+Blockwright is a desktop app for making **Minecraft Java Edition resource
 packs** on Windows. It finds the game on your computer, shows every texture of
 the version you pick, and lets you redraw them in a built-in pixel editor. You
 can animate textures, see blocks in 3D, watch particles move, rework the
@@ -129,11 +131,11 @@ comparison as text.
 
 ## Install
 
-1. Get the installer **`Pack Creator_0.1.0_x64-setup.exe`** (it is built into
+1. Get the installer **`Blockwright_0.1.0_x64-setup.exe`** (it is built into
    `app/target/release/bundle/nsis/` when you build from source, see below).
 2. Run it. Windows may warn that the publisher is unknown, because the
    installer is not signed: click "More info", then "Run anyway".
-3. Start Pack Creator from the Start menu.
+3. Start Blockwright from the Start menu.
 
 You also need:
 
@@ -141,12 +143,12 @@ You also need:
   part of Windows 10 and 11.
 - **Minecraft Java Edition**, installed with the official launcher.
 - **Each version you want to use started once** in the launcher. The game
-  only downloads a version's files when you play it, and Pack Creator reads the
+  only downloads a version's files when you play it, and Blockwright reads the
   textures from those files.
 
 ## Quick start
 
-1. **Start Pack Creator.** It finds your Minecraft folder by itself (you can
+1. **Start Blockwright.** It finds your Minecraft folder by itself (you can
    change it in Settings).
 2. **Create a pack.** Type a name, pick a version and a resolution, then click
    "Create pack". The first time, the app copies that version's textures from
@@ -233,14 +235,26 @@ python tools/demo/make_demo_minecraft.py app/target/devdata/demo/.minecraft
 then choose that folder in Settings (or see `docs/PROGRESS.md`, "How to run",
 for running the app with separate settings).
 
+## Automatic builds
+
+Every push to `main` (and every pull request to it) is checked and built on
+GitHub (`.github/workflows/build.yml`): tests, lint, then the Windows
+installer, which can be downloaded from the run's **Artifacts** on the
+Actions tab.
+
+## Website
+
+`site/` holds the app's presentation page (plain HTML, CSS and JavaScript).
+Open `site/index.html` in a browser, or publish the folder with GitHub Pages.
+
 ## The old Aseprite plugin
 
-Before Pack Creator, this repository was an Aseprite extension called
+Before Blockwright, this repository was an Aseprite extension called
 "Minecraft Resource Pack Helper". Its files (`main.lua`, `modules/`,
 `package.json`) are kept for reference only and are **no longer maintained**.
 
 ## Legal
 
-Pack Creator is not an official Minecraft product. It is not approved by or
+Blockwright is not an official Minecraft product. It is not approved by or
 associated with Mojang or Microsoft. The app never contains or ships Minecraft
 textures: it reads them from the game installed on your own computer.

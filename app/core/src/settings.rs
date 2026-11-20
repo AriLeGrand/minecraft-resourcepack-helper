@@ -39,6 +39,8 @@ pub struct Settings {
     /// How a game texture is enlarged when a texture is started from it at
     /// 32× or more: hard pixels (default) or Scale2x / Scale3x.
     pub upscale: crate::upscale::Upscale,
+    /// The welcome window shown at the first start was closed.
+    pub welcome_seen: bool,
 }
 
 pub fn settings_file(config_dir: &Path) -> PathBuf {

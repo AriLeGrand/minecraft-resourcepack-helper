@@ -4,7 +4,7 @@
 // clipboard plugin, which puts PNG and CF_DIBV5 on the clipboard, so alpha is
 // kept). The app's own clipboard stays the source of truth inside the app: it
 // keeps the exact pixels and where they came from. Paste takes the Windows
-// image only when it is not the one Pack Creator itself put there last.
+// image only when it is not the one Blockwright itself put there last.
 //
 // The choices are pure functions (tested); the plugin calls are thin wrappers.
 import { readImage, writeImage } from "@tauri-apps/plugin-clipboard-manager";
@@ -47,7 +47,7 @@ export type PasteChoice =
 
 /**
  * What Paste uses: the Windows image when there is one and it is not what
- * Pack Creator itself left there (`mine`), else the app's own clipboard.
+ * Blockwright itself left there (`mine`), else the app's own clipboard.
  */
 export function choosePaste(external: Buf | null, mine: Buf | null, internal: Clip | null): PasteChoice {
   if (external && !(internal && sameBuf(external, mine))) return { kind: "external", buf: external };
@@ -85,7 +85,7 @@ export const isNoImage = (e: unknown) => /not available|empty/i.test(errorText(e
 
 // ------------------------------------------------------------ plugin side
 
-/** What Pack Creator last left on the Windows clipboard (null = nothing known). */
+/** What Blockwright last left on the Windows clipboard (null = nothing known). */
 let mine: Buf | null = null;
 /** The last write, so Paste reads the clipboard only after it has landed. */
 let pending: Promise<void> = Promise.resolve();
