@@ -392,11 +392,7 @@ pub fn variant_model(
         .and_then(Value::as_object)
         .cloned()
         .unwrap_or_default();
-    for (var, val) in resolved {
-        if same(val) {
-            textures.insert(var.clone(), Value::from(new_ref));
-        }
-    }
+    let mut own_hit = false;
     for val in textures.values_mut() {
         let hit = match val {
             Value::String(s) => same(s),
@@ -405,6 +401,15 @@ pub fn variant_model(
         };
         if hit {
             *val = Value::from(new_ref);
+            own_hit = true;
+        }
+    }
+    // the texture is set by a parent: override every variable that ends at it
+    if !own_hit {
+        for (var, val) in resolved {
+            if same(val) {
+                textures.insert(var.clone(), Value::from(new_ref));
+            }
         }
     }
     if !textures.is_empty() {
@@ -1300,8 +1305,14 @@ mod tests {
         let out = variant_model(&own, &resolved, "block/stone", "minecraft:block/stone_2");
         assert_eq!(out["parent"], "minecraft:block/cube_all");
         assert_eq!(out["textures"]["all"], "minecraft:block/stone_2");
+        // variables that follow "#all" need no copy
+        assert_eq!(out["textures"].as_object().unwrap().len(), 1);
+        // a texture set only by a parent: every variable ending at it is overridden
+        let own = json!({"parent": "minecraft:block/stone"});
+        let out = variant_model(&own, &resolved, "block/stone", "minecraft:block/stone_2");
+        assert_eq!(out["textures"]["all"], "minecraft:block/stone_2");
         assert_eq!(out["textures"]["particle"], "minecraft:block/stone_2");
-        // a texture set only by a parent is overridden too, others kept, faces with a path replaced
+        // a sprite object, others kept, faces with a path replaced
         let own = json!({"parent": "block/cube_column", "textures": {"end": "blocks/log_oak_top", "side": {"sprite": "blocks/log_oak"}},
             "elements": [{"faces": {"up": {"texture": "blocks/log_oak"}, "down": {"texture": "#end"}}}]});
         let resolved: BTreeMap<String, String> = [
@@ -1315,7 +1326,7 @@ mod tests {
         let out = variant_model(&own, &resolved, "blocks/log_oak", "blocks/log_oak_2");
         assert_eq!(out["textures"]["end"], "blocks/log_oak_top");
         assert_eq!(out["textures"]["side"], "blocks/log_oak_2");
-        assert_eq!(out["textures"]["particle"], "blocks/log_oak_2");
+        assert!(out["textures"].get("particle").is_none());
         assert_eq!(
             out["elements"][0]["faces"]["up"]["texture"],
             "blocks/log_oak_2"

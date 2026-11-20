@@ -11,6 +11,7 @@ const SECTIONS: { key: Screen; label: string; icon: IconName; needsPack: boolean
   { key: "editor", label: "Editor", icon: "editor", needsPack: true },
   { key: "interface", label: "Interface", icon: "interface", needsPack: true },
   { key: "particles", label: "Particles", icon: "particles", needsPack: true },
+  { key: "variety", label: "Variety", icon: "variety", needsPack: true },
   { key: "animation", label: "Animation", icon: "animation", needsPack: true },
   { key: "models", label: "Models (later)", icon: "models", needsPack: true },
   { key: "export", label: "Pack and export", icon: "export", needsPack: true },

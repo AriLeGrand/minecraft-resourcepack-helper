@@ -9,6 +9,7 @@ export type Screen =
   | "editor"
   | "interface"
   | "particles"
+  | "variety"
   | "animation"
   | "models"
   | "export"

@@ -91,10 +91,16 @@ pub fn run_checks(
         (Some(v), Some(ver)) => find_old_names(pack, v, ver),
         _ => Vec::new(),
     };
+    // the pack's own textures that its own models use (random variants) are used too
+    let own = textures_in_pack_models(pack_dir);
     let unknown: Vec<String> = match vanilla {
         Some(v) => pack
             .iter()
-            .filter(|t| v.get(&t.path).is_none() && !old_names.iter().any(|(o, _)| *o == t.path))
+            .filter(|t| {
+                v.get(&t.path).is_none()
+                    && !old_names.iter().any(|(o, _)| *o == t.path)
+                    && !own.contains(&t.path)
+            })
             .map(|t| t.path.clone())
             .collect(),
         None => Vec::new(),
@@ -329,6 +335,54 @@ pub fn apply_fix(
             format!("There is no automatic fix for \"{other}\"."),
         )),
     }
+}
+
+/// Texture paths (without `minecraft:`) named by the pack's own model files.
+fn textures_in_pack_models(pack_dir: &Path) -> std::collections::HashSet<String> {
+    use serde_json::Value;
+    let mut out = std::collections::HashSet::new();
+    let dir = pack_dir.join("assets").join("minecraft").join("models");
+    for e in WalkDir::new(dir).into_iter().filter_map(|e| e.ok()) {
+        if e.path().extension().and_then(|x| x.to_str()) != Some("json") {
+            continue;
+        }
+        let Some(json) = fs::read_to_string(e.path())
+            .ok()
+            .and_then(|t| serde_json::from_str::<Value>(t.trim_start_matches('\u{feff}')).ok())
+        else {
+            continue;
+        };
+        let mut add = |v: &Value| {
+            let s = match v {
+                Value::Object(o) => o.get("sprite").and_then(Value::as_str),
+                other => other.as_str(),
+            };
+            if let Some(s) = s.filter(|s| !s.starts_with('#')) {
+                out.insert(s.strip_prefix("minecraft:").unwrap_or(s).to_owned());
+            }
+        };
+        if let Some(t) = json.get("textures").and_then(Value::as_object) {
+            t.values().for_each(&mut add);
+        }
+        for el in json
+            .get("elements")
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+        {
+            for f in el
+                .get("faces")
+                .and_then(Value::as_object)
+                .into_iter()
+                .flat_map(|f| f.values())
+            {
+                if let Some(t) = f.get("texture") {
+                    add(t);
+                }
+            }
+        }
+    }
+    out
 }
 
 // ---------------------------------------------------------------- export
@@ -1198,6 +1252,30 @@ mod tests {
         // the main export keeps the new names
         assert!(zip_names(Path::new(&out[0].path))
             .contains(&"assets/minecraft/textures/block/short_grass.png".to_owned()));
+    }
+
+    #[test]
+    fn textures_used_by_the_packs_own_models_are_not_unknown() {
+        let f = fixture();
+        put(&f.pack, "block/stone_2", png(32, 32, 5));
+        put(&f.pack, "block/leftover", png(32, 32, 6));
+        let models = f.pack.join("assets/minecraft/models/block");
+        fs::create_dir_all(&models).unwrap();
+        fs::write(
+            models.join("stone_2.json"),
+            r#"{"parent": "minecraft:block/cube_all", "textures": {"all": "minecraft:block/stone_2"}}"#,
+        )
+        .unwrap();
+        let ver = v("1.21.4");
+        let checks = run_checks(
+            &f.pack,
+            &f.project,
+            &scan_pack(&f.pack),
+            Some(&f.index),
+            Some(&ver),
+        );
+        let unknown = checks.iter().find(|c| c.id == "unknown").unwrap();
+        assert_eq!(unknown.paths, ["block/leftover"]);
     }
 
     #[test]

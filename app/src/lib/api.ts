@@ -509,6 +509,69 @@ export interface WhatsNewView {
   millis: number;
 }
 
+// ---- Variety: random variants and connected textures (core/src/variants.rs, ctm.rs)
+
+export interface BlockEntry {
+  name: string;
+  /** Built from parts: random variants are refused. */
+  multipart: boolean;
+  has_variants: boolean;
+  in_pack: boolean;
+}
+
+export interface VariantChoice {
+  weight: number;
+  rotate: boolean;
+}
+
+export interface VariantView {
+  n: number;
+  texture: string;
+  models: string[];
+  weight: number;
+  rotate: boolean;
+  texture_in_pack: boolean;
+}
+
+export interface PreviewEntry {
+  model: string;
+  x: number;
+  y: number;
+  weight: number;
+}
+
+export interface VariantsInfo {
+  block: string;
+  legacy: boolean;
+  keys: string[];
+  textures: string[];
+  texture: string | null;
+  models: string[];
+  original: VariantChoice;
+  variants: VariantView[];
+  has_rotations: boolean;
+  base_from_pack: boolean;
+  blockstate: string | null;
+  preview_key: string;
+  preview: PreviewEntry[];
+}
+
+export interface CtmTile {
+  path: string;
+  file: string;
+  exists: boolean;
+}
+
+export interface CtmInfo {
+  block: string;
+  legacy: boolean;
+  textures: string[];
+  default_match: string;
+  properties: string | null;
+  properties_file: string;
+  tiles: CtmTile[];
+}
+
 export const api = {
   bootstrap: () => invoke<Bootstrap>("bootstrap"),
   updateSettings: (patch: SettingsPatch) => invoke<Bootstrap>("update_settings", { patch }),
@@ -579,6 +642,20 @@ export const api = {
   editPackIcon: () => invoke<void>("edit_pack_icon"),
   runChecks: () => invoke<Check[]>("run_checks"),
   applyFix: (id: string) => invoke<string>("apply_fix", { id }),
+  /** Every block with a block state file (game or pack). */
+  varietyBlocks: (packDir: string) => invoke<BlockEntry[]>("variety_blocks", { packDir }),
+  variantsInfo: (block: string, packDir: string) => invoke<VariantsInfo>("variants_info", { block, packDir }),
+  /** Next random variant: texture copy, models and block state written; returns the new texture. */
+  variantsAdd: (block: string, texture: string, packDir: string) =>
+    invoke<{ info: VariantsInfo; texture: string }>("variants_add", { block, texture, packDir }),
+  /** `n` 1 is the original. */
+  variantsSet: (block: string, n: number, weight: number, rotate: boolean, packDir: string) =>
+    invoke<VariantsInfo>("variants_set", { block, n, weight, rotate, packDir }),
+  variantsRemove: (block: string, n: number, packDir: string) => invoke<VariantsInfo>("variants_remove", { block, n, packDir }),
+  ctmInfo: (block: string, packDir: string) => invoke<CtmInfo>("ctm_info", { block, packDir }),
+  ctmCreate: (block: string, texture: string, faces: string, matchBlocks: string, packDir: string) =>
+    invoke<CtmInfo>("ctm_create", { block, texture, faces, matchBlocks, packDir }),
+  ctmRemove: (block: string, packDir: string) => invoke<CtmInfo>("ctm_remove", { block, packDir }),
   exportPack: (request: { folder: boolean; install: boolean; only_changed: boolean; also: string[] }) =>
     invoke<{ outputs: ExportOutput[]; pack: PackState }>("export_pack", { request }),
 };
@@ -600,6 +677,8 @@ export const images = {
   vanillaFull: (dirName: string, tex: string) => img(`vanilla/${dirName}/full/${tex}`),
   packFull: (tex: string, stamp: number) => `${img(`pack/full/${tex}`)}?v=${stamp}`,
   packIcon: (stamp: number) => `${img("pack/icon")}?v=${stamp}`,
+  /** A connected-texture tile by its editor path (`:optifine/ctm/glass/0`). */
+  packOptifine: (editorPath: string, stamp: number) => `${img(`pack/optifine/${editorPath.replace(/^:optifine\//, "")}`)}?v=${stamp}`,
   recentIcon: (dir: string) => `${img("packicon")}?dir=${encodeURIComponent(dir)}`,
   /** A file of the last batch-import scan (small thumbnail). */
   batchThumb: (id: number, scan: number) => `${img(`batch/${id}`)}?s=${scan}`,
