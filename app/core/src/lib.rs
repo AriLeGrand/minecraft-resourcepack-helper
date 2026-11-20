@@ -30,6 +30,10 @@ pub mod textures;
 pub mod version;
 pub mod whats_new;
 pub mod workfile;
+// Publishing and comparing: smaller PNG files, showcase image, compare with another pack.
+pub mod compare;
+pub mod pngopt;
+pub mod showcase;
 
 pub use error::{CoreError, Result};
 pub use pack_format::PackFormat;

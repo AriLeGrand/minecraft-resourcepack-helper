@@ -22,6 +22,8 @@ export interface Settings {
   export_kind_folder: boolean;
   export_install: boolean;
   export_only_changed: boolean;
+  /** "Make PNG files smaller (same pixels)". */
+  export_optimize: boolean;
 }
 
 export interface RecentPack {
@@ -259,6 +261,42 @@ export interface ExportOutput {
   renamed: number;
   skipped: string[];
   installed_to: string | null;
+  /** PNG bytes in the pack, and as written (smaller with "Make PNG files smaller"). */
+  png_bytes_before: number;
+  png_bytes_after: number;
+}
+
+// ---- compare with another pack (core/src/compare.rs)
+
+export type CompareStatus = "only_mine" | "only_theirs" | "different" | "same";
+
+export interface CompareRow {
+  id: number;
+  /** The texture in the open pack's version (`null` when their file matches none). */
+  path: string | null;
+  /** Their file, relative to assets/minecraft/textures, without ".png". */
+  theirs: string | null;
+  renamed_from: string | null;
+  status: CompareStatus;
+  their_size: [number, number] | null;
+  my_size: [number, number] | null;
+  their_mcmeta: boolean;
+  my_mcmeta: boolean;
+  /** Same pixels, different .mcmeta. */
+  mcmeta_differs: boolean;
+  in_game: boolean;
+  /** Another of their files is used for this texture (this one is not). */
+  shadowed_by: string | null;
+}
+
+export interface Comparison {
+  source: string;
+  name: string;
+  description: string | null;
+  format: PackFormat | null;
+  rows: CompareRow[];
+  skipped_big: number;
+  truncated: boolean;
 }
 
 // ---- editor (raw RGBA pixels as base64; PNG coding happens in Rust)
@@ -506,6 +544,7 @@ export interface SettingsPatch {
   export_kind_folder?: boolean;
   export_install?: boolean;
   export_only_changed?: boolean;
+  export_optimize?: boolean;
 }
 
 export interface RenamedTexture {
@@ -633,8 +672,15 @@ export const api = {
   notesSet: (path: string, note: TextureNote, packDir: string) => invoke<TextureNote>("notes_set", { path, note, packDir }),
   textureHistory: (path: string, packDir: string) => invoke<HistoryVersion[]>("texture_history", { path, packDir }),
   restoreVersion: (path: string, id: string, packDir: string) => invoke<{ kept: string | null }>("restore_version", { path, id, packDir }),
-  exportPack: (request: { folder: boolean; install: boolean; only_changed: boolean; also: string[] }) =>
+  exportPack: (request: { folder: boolean; install: boolean; only_changed: boolean; also: string[]; optimize_png?: boolean }) =>
     invoke<{ outputs: ExportOutput[]; pack: PackState }>("export_pack", { request }),
+  /** Writes the showcase image (raw RGBA, base64) as a PNG; only .png paths. Returns the file size. */
+  saveShowcase: (path: string, width: number, height: number, rgba: string) =>
+    invoke<number>("save_showcase", { path, width, height, rgba }),
+  /** Compares the open pack with a .zip or a folder. Writes nothing in either pack. */
+  comparePacks: (source: string, packDir: string) => invoke<Comparison>("compare_packs", { source, packDir }),
+  /** "Copy theirs into my pack" for rows of the last comparison (byte for byte, old files to the trash). */
+  compareCopy: (ids: number[], packDir: string) => invoke<BatchItemResult[]>("compare_copy", { ids, packDir }),
 };
 
 /** Turns anything thrown by a command into a `CoreError`. */
@@ -659,4 +705,6 @@ export const images = {
   batchThumb: (id: number, scan: number) => `${img(`batch/${id}`)}?s=${scan}`,
   /** An earlier version of the texture whose history was listed last. */
   historyVersion: (id: string, tex: string) => img(`history/${id}/${tex}`),
+  /** The other pack's PNG of a row of the last comparison (full size). */
+  compareTheirs: (id: number, stamp: number) => `${img(`compare/${id}`)}?s=${stamp}`,
 };

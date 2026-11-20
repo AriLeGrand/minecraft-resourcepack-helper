@@ -1,6 +1,7 @@
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useEffect } from "react";
+import { CompareHost } from "./components/CompareDialog";
 import { CommandPalette, ModalHost, Toasts } from "./components/Overlays";
 import { NavBar, PackChips, sectionLabel, StatusBar, TopBar } from "./components/Shell";
 import { useEditor } from "./editor/editorStore";
@@ -86,6 +87,7 @@ export function App() {
   return (
     <div className="app">
       {content}
+      <CompareHost />
       <Toasts />
       <ModalHost />
       <CommandPalette />

@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useEditor } from "../editor/editorStore";
 import { TOOLS } from "../editor/tools";
+import { openCompare } from "./CompareDialog";
 import { baseName, CATEGORIES, categoryLabel, matchesSearch, searchWords } from "../lib/logic";
 import { useApp, type Screen } from "../store";
 import { Icon } from "./Icon";
@@ -130,6 +131,7 @@ export function CommandPalette() {
         });
       }
       commands.push({ label: "Show textures changed since export", kind: "Filter", run: () => { app.setFilters({ category: "all", status: "changed", only: null }); app.go("textures"); } });
+      commands.push({ label: "Compare with another pack…", kind: "Command", run: openCompare });
       commands.push({ label: "Close pack", kind: "Command", run: () => void app.closePack() });
     }
     const words = searchWords(q);

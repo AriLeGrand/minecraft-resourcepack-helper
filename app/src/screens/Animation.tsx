@@ -549,10 +549,11 @@ export function Animation() {
   // tool (tools/shot.mjs), so it can hand a path straight to the import.
   useEffect(() => {
     if (!import.meta.env.DEV) return;
-    const w = window as unknown as { __packCreatorDev?: { importStrip: (p: string) => Promise<void> } };
-    w.__packCreatorDev = { importStrip: loadStrip };
+    const w = window as unknown as { __packCreatorDev?: { importStrip?: (p: string) => Promise<void> } };
+    // other development hooks (compare) live in the same object
+    w.__packCreatorDev = { ...w.__packCreatorDev, importStrip: loadStrip };
     return () => {
-      delete w.__packCreatorDev;
+      delete w.__packCreatorDev?.importStrip;
     };
   }, [loadStrip]);
 

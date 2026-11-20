@@ -13,6 +13,8 @@
 //!   version of the texture the inspector listed last, only from the open
 //!   pack's `.packcreator/history` and `.packcreator/trash`, see
 //!   `history::version_file`)
+//! * `pcimg://localhost/compare/<row id>` (the other pack's PNG of a row of
+//!   the last "Compare with another pack", full size)
 
 use crate::AppState;
 use packcreator_core::extract::vanilla_dir;
@@ -104,6 +106,15 @@ fn resolve(app: &AppHandle, path: &str, query: Option<&str>) -> Option<PathBuf> 
             }
             let pack = inner.pack.as_ref()?;
             history::version_file(&pack.dir, tex, id).ok()
+        }
+        "compare" => {
+            // only their file of a row of the last comparison, for the open pack
+            let id: usize = parts.next()?.parse().ok()?;
+            let session = inner.compare.as_ref()?;
+            if inner.pack.as_ref()?.dir != session.pack_dir {
+                return None;
+            }
+            session.rows.get(id)?.0.clone()
         }
         _ => None,
     }
