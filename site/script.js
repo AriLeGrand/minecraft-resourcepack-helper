@@ -31,7 +31,7 @@
       toggle.focus();
     }
   });
-  window.matchMedia("(min-width: 761px)").addEventListener("change", function (mq) {
+  window.matchMedia("(min-width: 901px)").addEventListener("change", function (mq) {
     if (mq.matches) setMenu(false);
   });
 
