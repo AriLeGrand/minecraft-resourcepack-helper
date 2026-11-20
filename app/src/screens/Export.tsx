@@ -144,9 +144,9 @@ export function Export() {
           .filter((o) => o.skipped.length)
           .map((o) => `${o.version}: ${o.skipped.slice(0, 6).join(", ")}${o.skipped.length > 6 ? ` and ${o.skipped.length - 6} more` : ""}`);
         ask({
-          title: `${skipped} texture${skipped === 1 ? " was" : "s were"} left out`,
+          title: `${skipped} file${skipped === 1 ? " was" : "s were"} left out`,
           text: lines.join("\n"),
-          hint: "This is expected: a texture is left out when it does not exist in that version, or when it is identical to the game's.",
+          hint: "This is expected: a texture is left out when it does not exist in that version, or when it is identical to the game's; a block state file is left out of a copy on the other side of 1.13.",
           buttons: [{ label: "OK", primary: true }],
         });
       }

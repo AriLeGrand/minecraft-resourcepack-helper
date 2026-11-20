@@ -334,6 +334,8 @@ export function fileLabel(path: string): string {
 /** Where saving writes, relative to the pack's `assets/minecraft` folder (the icon: to the pack folder). */
 export function targetLabel(doc: EditorDoc): string {
   if (doc.path === PACK_ICON) return "pack.png";
+  // connected-texture tiles live outside textures/ (see core workfile::OPTIFINE_PREFIX)
+  if (doc.path.startsWith(":optifine/")) return `${doc.path.slice(1)}.png`;
   const name = doc.path.slice(doc.path.lastIndexOf("/") + 1);
   return `textures/${doc.path}.png${isAnimated(doc) ? ` + ${name}.png.mcmeta` : ""}`;
 }

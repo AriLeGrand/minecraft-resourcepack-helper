@@ -1307,6 +1307,38 @@ def block_models(new):
     return models
 
 
+def blockstates(new):
+    """Block state files (same JSON shapes as the game: "variants", and one
+    "multipart" block from 1.9 on). Before 1.13 model names have no folder."""
+    m = (lambda name: "minecraft:block/" + name) if new else (lambda name: name)
+    one = (lambda name: {"variants": {"": {"model": m(name)}}}) if new else (lambda name: {"variants": {"normal": {"model": m(name)}}})
+    out = {}
+    simple = ["cobblestone", "dirt", "sand", "glass", "oak_planks", "prismarine", "sea_lantern", "bricks" if new else "brick"]
+    if new:
+        simple += ["stone", "andesite", "granite", "diorite", "deepslate", "oak_leaves"]
+    for name in simple:
+        out[name] = one(name)
+    if not new:
+        # 1.8.9: one block "stone" with a state per kind
+        out["stone"] = {"variants": {f"variant={k}": {"model": k} for k in ("stone", "granite", "diorite", "andesite")}}
+        out["leaves_oak"] = one("leaves_oak")
+    out["oak_log"] = {"variants": {
+        "axis=y": {"model": m("oak_log")},
+        "axis=z": {"model": m("oak_log"), "x": 90},
+        "axis=x": {"model": m("oak_log"), "x": 90, "y": 90},
+    }}
+    grass = m("grass_block" if new else "grass_normal")
+    out["grass_block" if new else "grass"] = {"variants": {
+        "snowy=false" if new else "snowy=false": [{"model": grass}, {"model": grass, "y": 90}, {"model": grass, "y": 180}, {"model": grass, "y": 270}],
+    }}
+    if new:
+        out["oak_fence"] = {"multipart": [
+            {"apply": {"model": m("oak_planks")}},
+            {"when": {"north": "true"}, "apply": {"model": m("oak_planks"), "uvlock": True}},
+        ]}
+    return out
+
+
 def jar_files(new):
     """All files of one fake jar: path inside the jar -> bytes."""
     files = {}
@@ -1407,6 +1439,8 @@ def jar_files(new):
 
     for name, model in block_models(new).items():
         put_json(f"assets/minecraft/models/block/{name}.json", model)
+    for name, state in blockstates(new).items():
+        put_json(f"assets/minecraft/blockstates/{name}.json", state)
 
     if new:
         put_json(

@@ -12,6 +12,7 @@ import { Export } from "./screens/Export";
 import { Interface } from "./screens/Interface";
 import { Particles } from "./screens/Particles";
 import { Scene } from "./screens/Scene";
+import { Variety } from "./screens/Variety";
 import { Settings } from "./screens/Settings";
 import { Welcome } from "./screens/Welcome";
 import { useApp, type Screen } from "./store";
@@ -82,6 +83,7 @@ export function App() {
   else if (screen === "export") content = <Export />;
   else if (screen === "particles") content = <Particles />;
   else if (screen === "interface") content = <Interface />;
+  else if (screen === "variety") content = <Variety />;
   else content = <ComingLater screen={screen} />;
 
   return (

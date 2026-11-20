@@ -10,6 +10,7 @@ export type Screen =
   | "scene"
   | "interface"
   | "particles"
+  | "variety"
   | "animation"
   | "models"
   | "export"

@@ -6,6 +6,7 @@
 //! * `pcimg://localhost/vanilla/<version folder>/full/<texture path>`
 //! * `pcimg://localhost/pack/full/<texture path>`
 //! * `pcimg://localhost/pack/icon`
+//! * `pcimg://localhost/pack/optifine/<path>` (connected-texture tiles)
 //! * `pcimg://localhost/packicon?dir=<pack folder>` (recent packs: `pack.png` only)
 //! * `pcimg://localhost/batch/<row id>` (the files of the last batch-import
 //!   scan only, as a small thumbnail)
@@ -78,6 +79,10 @@ fn resolve(app: &AppHandle, path: &str, query: Option<&str>) -> Option<PathBuf> 
             let rest = parts.next()?;
             if rest == "icon" {
                 return Some(pack.dir.join("pack.png"));
+            }
+            // connected-texture tiles: `pack/optifine/ctm/<block>/<n>`
+            if let Some(of) = rest.strip_prefix("optifine/") {
+                return packcreator_core::workfile::optifine_png(&pack.dir, of).ok();
             }
             let tex = rest.strip_prefix("full/")?;
             texture_file(&pack.dir, tex).ok()

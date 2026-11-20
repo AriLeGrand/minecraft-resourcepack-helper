@@ -6,6 +6,7 @@
 //! files, packs, import and export.
 
 pub mod batch;
+pub mod ctm;
 pub mod error;
 pub mod export;
 pub mod extract;
@@ -27,6 +28,7 @@ pub mod scene;
 pub mod settings;
 pub mod share;
 pub mod textures;
+pub mod variants;
 pub mod version;
 pub mod whats_new;
 pub mod workfile;

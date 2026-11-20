@@ -138,7 +138,8 @@ fn models_dir(root: &Path) -> PathBuf {
     root.join("assets").join("minecraft").join("models")
 }
 
-fn model_file(root: &Path, name: &str) -> PathBuf {
+/// File of a model (`block/stone`) inside a root that contains `assets/`.
+pub fn model_file(root: &Path, name: &str) -> PathBuf {
     let mut p = models_dir(root);
     for seg in name.split('/') {
         p.push(seg);
@@ -539,6 +540,16 @@ fn rank(label: &str, base: &str) -> (u32, String) {
 /// their particle are left out.
 pub fn models_for_texture(pack: Option<&Path>, vanilla: &Path, texture: &str) -> Vec<ModelChoice> {
     let texture = texture.strip_prefix("minecraft:").unwrap_or(texture);
+    let cube = || {
+        vec![ModelChoice {
+            name: CUBE.to_owned(),
+            label: "Cube".to_owned(),
+        }]
+    };
+    // not a texture path (a connected-textures tile such as ":optifine/ctm/glass/0")
+    if !is_safe_texture_path(texture) {
+        return cube();
+    }
     let base = texture.rsplit('/').next().unwrap_or(texture);
     let mut names: Vec<String> = Vec::new();
     let mut seen = HashSet::new();
@@ -571,10 +582,7 @@ pub fn models_for_texture(pack: Option<&Path>, vanilla: &Path, texture: &str) ->
         found.push((r, key, name));
     }
     found.sort();
-    let mut out = vec![ModelChoice {
-        name: CUBE.to_owned(),
-        label: "Cube".to_owned(),
-    }];
+    let mut out = cube();
     out.extend(
         found
             .into_iter()

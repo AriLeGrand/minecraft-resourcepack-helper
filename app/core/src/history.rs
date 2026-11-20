@@ -15,7 +15,7 @@
 use crate::error::{CoreError, IoCtx, Result};
 use crate::pack::{modified_ms, now_ms, PROJECT_DIR};
 use crate::textures::{is_safe_texture_path, png_dimensions, texture_file};
-use crate::workfile::ICON_PATH;
+use crate::workfile::{optifine_png, ICON_PATH, OPTIFINE_PREFIX};
 use serde::Serialize;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -64,6 +64,9 @@ fn current_file(pack_dir: &Path, tex: &str) -> Result<PathBuf> {
     if tex == ICON_PATH {
         return Ok(pack_dir.join("pack.png"));
     }
+    if let Some(rest) = tex.strip_prefix(OPTIFINE_PREFIX) {
+        return optifine_png(pack_dir, rest);
+    }
     texture_file(pack_dir, tex)
 }
 
@@ -73,10 +76,15 @@ pub fn history_dir(pack_dir: &Path, tex: &str) -> Result<PathBuf> {
     if tex == ICON_PATH {
         return Ok(root.join("history-icon"));
     }
+    // connected-texture tiles (`:optifine/ctm/glass/0`) have their own folder
+    let (root, tex) = match tex.strip_prefix(OPTIFINE_PREFIX) {
+        Some(rest) => (root.join("history-optifine"), rest),
+        None => (root.join("history"), tex),
+    };
     if !is_safe_texture_path(tex) {
         return Err(bad_path(tex));
     }
-    let mut p = root.join("history");
+    let mut p = root;
     for seg in tex.split('/') {
         p.push(seg);
     }
