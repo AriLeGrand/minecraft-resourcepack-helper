@@ -18,6 +18,7 @@ use packcreator_core::pack::{self, PackSummary, Project};
 use packcreator_core::particle_list;
 use packcreator_core::particles::ParticleSheet;
 use packcreator_core::rows::{self, NameEra, TextureRow};
+use packcreator_core::scene;
 use packcreator_core::settings::{self, RecentPack, Settings};
 use packcreator_core::textures::{TextureEntry, VanillaIndex};
 use packcreator_core::whats_new::{self, VersionDiff};
@@ -867,6 +868,40 @@ fn models_for_texture(
     Ok(models::models_for_texture(Some(&pack), &vanilla, &path))
 }
 
+// ---- Scene screen (package B) ----
+
+/// The blocks of a scene, each resolved to the models of its default state.
+#[tauri::command(async)]
+fn scene_blocks(
+    state: State<AppState>,
+    ids: Vec<String>,
+    pack_dir: String,
+) -> Result<Vec<scene::SceneBlock>> {
+    let (pack, vanilla) = model_roots(&state, &pack_dir)?;
+    Ok(scene::scene_blocks(Some(&pack), &vanilla, &ids))
+}
+
+/// Every block the scene can place (blockstate names of the game and the pack).
+#[tauri::command(async)]
+fn scene_block_list(state: State<AppState>, pack_dir: String) -> Result<Vec<String>> {
+    let (pack, vanilla) = model_roots(&state, &pack_dir)?;
+    Ok(scene::list_blocks(Some(&pack), &vanilla))
+}
+
+/// The custom scene saved in `.packcreator/scene.json`, if any.
+#[tauri::command(async)]
+fn scene_load(state: State<AppState>, pack_dir: String) -> Result<Option<scene::SceneFile>> {
+    let (pack, _) = model_roots(&state, &pack_dir)?;
+    scene::load_scene(&pack)
+}
+
+/// Saves the custom scene into `.packcreator/scene.json`.
+#[tauri::command(async)]
+fn scene_save(state: State<AppState>, scene: scene::SceneFile, pack_dir: String) -> Result<()> {
+    let (pack, _) = model_roots(&state, &pack_dir)?;
+    scene::save_scene(&pack, &scene)
+}
+
 /// Every particle of the pack's version, for the particle viewer.
 #[tauri::command(async)]
 fn particle_list(state: State<AppState>, pack_dir: String) -> Result<particle_list::ParticleList> {
@@ -1234,6 +1269,10 @@ pub fn run() {
             read_image_raw,
             block_model,
             models_for_texture,
+            scene_blocks,
+            scene_block_list,
+            scene_load,
+            scene_save,
             particle_list,
             particle_add_frame,
             gui_overview,

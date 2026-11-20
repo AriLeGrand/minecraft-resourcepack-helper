@@ -7,6 +7,7 @@ const PATHS = {
   interface: "M4 5h16v14H4zM4 9h16M8 13h8M8 16h5",
   particles: "M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5L18 18M6 18l2.5-2.5M15.5 8.5L18 6",
   animation: "M4 5h16v14H4zM8 5v14M16 5v14M4 9h4M4 15h4M16 9h4M16 15h4",
+  scene: "M3 20h18M5 20v-8l7-5 7 5v8M10 20v-5h4v5",
   models: "M12 3l8 4.5v9L12 21l-8-4.5v-9zM12 12l8-4.5M12 12v9M12 12L4 7.5",
   export: "M12 3v12M7 10l5 5 5-5M5 21h14",
   settings:

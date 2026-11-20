@@ -729,3 +729,40 @@ button.pv-frame:hover .pv-thumb { border-color: var(--link); }
 .gi-actions { display: flex; gap: 8px; margin-top: 4px; }
 .gi-actions .btn { height: 36px; }
 .gi-actions .btn.primary { flex: 1; }
+
+/* ---------- scene (package B) ---------- */
+.bp-light { position: absolute; left: 6px; right: 6px; top: 6px; display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: center; padding: 4px; background: rgba(17, 18, 20, 0.88); border: 1px solid var(--line-input); border-radius: 6px; z-index: 1; }
+.bp-seg { display: flex; gap: 2px; }
+.bp-seg button { font-size: 10px; padding: 2px 6px; border: 0; border-radius: 4px; background: transparent; color: var(--text-2); }
+.bp-seg button.on { background: #2c2d33; color: var(--text); font-weight: 600; }
+.bp-level { display: flex; align-items: center; gap: 6px; flex: 1; min-width: 120px; font-size: 10px; color: var(--text-soft); }
+.bp-level input { flex: 1; min-width: 60px; accent-color: var(--accent); }
+.sc-list { flex-basis: 220px; }
+.sc-listhint { font-size: 11px; line-height: 1.4; padding: 0 8px; }
+.sc-level input { width: 110px; accent-color: var(--accent); }
+.sc-levelval { min-width: 64px; font-size: 11px; color: var(--text-2); }
+.sc-cam { margin-left: auto; }
+.sc-stage { position: relative; flex: 1; min-height: 0; }
+.sc-view { position: absolute; inset: 0; background: #0b0f1e; }
+.sc-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; cursor: grab; }
+.sc-canvas:active { cursor: grabbing; }
+.sc-hint { position: absolute; left: 12px; bottom: 10px; font-size: 11px; color: rgba(255, 255, 255, 0.8); background: rgba(0, 0, 0, 0.4); padding: 4px 8px; border-radius: 4px; pointer-events: none; }
+.sc-live { position: absolute; left: 12px; top: 10px; font-size: 11px; color: #e6d3a3; background: rgba(29, 26, 16, 0.85); border: 1px solid #4a3d16; padding: 4px 8px; border-radius: 4px; pointer-events: none; }
+.sc-side { flex-basis: 320px; }
+.sc-selname { font-size: 13px; color: var(--text); overflow-wrap: anywhere; }
+.sc-texlist { display: flex; flex-direction: column; gap: 6px; }
+.sc-texrow { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.sc-texname { flex: 1; min-width: 0; font-size: 11px; color: var(--text-soft); }
+.sc-thumb { display: block; flex: none; object-fit: cover; object-position: top; image-rendering: pixelated; background: var(--canvas); border: 1px solid var(--line); border-radius: 3px; }
+.sc-tag { font-size: 10px; padding: 1px 6px; border-radius: 8px; background: var(--accent-soft); color: var(--link); }
+.sc-tag.warn { background: var(--warn-bg); color: var(--warn); }
+.sc-sizes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.sc-size { display: flex; flex-direction: column; gap: 3px; font-size: 10px; color: var(--text-2); }
+.sc-size input { height: 28px; padding: 0 6px; background: var(--bg); border: 1px solid var(--line-input); border-radius: 5px; color: var(--text); font-size: 12px; min-width: 0; }
+.sc-grid { display: grid; gap: 2px; align-self: center; user-select: none; }
+.sc-cell { width: 26px; height: 26px; padding: 1px; display: flex; align-items: center; justify-content: center; border: 1px solid var(--line); border-radius: 3px; background: var(--canvas); color: var(--text-2); }
+.sc-cell.air { background: var(--bg); border-style: dashed; border-color: var(--line-soft); }
+.sc-cell:hover { border-color: var(--link); }
+.sc-cell.sel { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.sc-cell .sc-thumb { border: 0; border-radius: 2px; }
+.sc-initials { font-size: 9px; font-family: var(--mono); }

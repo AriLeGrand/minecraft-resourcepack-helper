@@ -10,6 +10,7 @@ import { Editor } from "./screens/Editor";
 import { Export } from "./screens/Export";
 import { Interface } from "./screens/Interface";
 import { Particles } from "./screens/Particles";
+import { Scene } from "./screens/Scene";
 import { Settings } from "./screens/Settings";
 import { Welcome } from "./screens/Welcome";
 import { useApp, type Screen } from "./store";
@@ -75,6 +76,7 @@ export function App() {
   else if (!pack || screen === "home") content = <Welcome />;
   else if (screen === "textures") content = <Browser />;
   else if (screen === "editor") content = <Editor />;
+  else if (screen === "scene") content = <Scene />;
   else if (screen === "animation") content = <Animation />;
   else if (screen === "export") content = <Export />;
   else if (screen === "particles") content = <Particles />;
