@@ -1,260 +1,194 @@
-# Blockwright
+<p align="center">
+  <img src="site/assets/icon.png" alt="Blockwright icon: a blue pixel-art block with a pencil" width="112">
+</p>
 
-<img src="site/assets/icon.png" alt="Blockwright icon" width="96" style="image-rendering: pixelated">
+<h1 align="center">Blockwright</h1>
 
-Blockwright is a desktop app for making **Minecraft Java Edition resource
-packs** on Windows. It finds the game on your computer, shows every texture of
-the version you pick, and lets you redraw them in a built-in pixel editor. You
-can animate textures, see blocks in 3D, watch particles move, rework the
-interface (buttons, hotbar, hearts…) and export a pack that is ready to use,
-also for older versions of the game. You do not need Aseprite or any other
-program.
+<p align="center">
+  <b>Make Minecraft look like yours.</b><br>
+  A free Windows app for making Minecraft Java Edition resource packs:<br>
+  every texture of your game, a pixel editor made for blocks, and a pack that is ready to play.
+</p>
 
-![The editor with the 3D block preview](docs/screenshots/editor.png)
+<p align="center">
+  <a href="https://github.com/AriLeGrand/minecraft-resourcepack-helper/actions/workflows/build.yml"><img src="https://github.com/AriLeGrand/minecraft-resourcepack-helper/actions/workflows/build.yml/badge.svg" alt="Build status"></a>
+</p>
 
-*The screenshots use a fake demo game made by `tools/demo/make_demo_minecraft.py`,
-so they contain no Minecraft textures.*
+<p align="center">
+  <a href="#install">Install</a> ·
+  <a href="#quick-start">Quick start</a> ·
+  <a href="#features">Features</a> ·
+  <a href="#where-your-files-go">Your files</a> ·
+  <a href="#building-from-source">Build from source</a> ·
+  <a href="docs/LIMITATIONS.md">Limitations</a>
+</p>
 
-## What each screen does
+![The Blockwright editor with the live 3D block preview](docs/screenshots/editor.png)
 
-**Start.** Create a pack (name, game version, resolution 16× to 256×,
-folder), reopen a recent pack, open a pack folder or import a `.zip`. The app
-shows the Minecraft versions installed on your computer.
+<sub>All screenshots use a fake demo game made by `tools/demo/make_demo_minecraft.py`, so they contain no Minecraft textures.</sub>
 
-![Start screen](docs/screenshots/start.png)
+## Why Blockwright
 
-**Textures.** Every texture of the version, by category (blocks, items, GUI,
-entities, particles…), with search and filters (to do, done, changed since
-export, animated, wrong size). The inspector shows the game's texture next to
-yours, the block models that use it and its name in older and newer versions.
-From here you can edit a texture, import an image (kept pixel for pixel),
-open it in another program, or revert it.
-"Share list" turns the list into a to-do list you can send to friends or a
-team: a checklist for Discord, GitHub or Notion, plain text, or a spreadsheet
-file, for the current view or the whole pack, copied or saved as a file.
-"Batch import…" (or dropping PNG files or a folder on the window) brings in a
-whole folder at once: every PNG is matched to its texture, by its path in a
-pack, its folder and name, or its file name, with old and newer names
-translated to the pack's version (`planks_oak.png` becomes `block/oak_planks`
-in a 1.21 pack). You review the list (new, replaces, same pixels, unknown,
-"choose one" for names used twice, duplicates, wrong size, animation strips),
-then import the ticked files in one go, unchanged; replaced files go to the
-pack's trash.
-"What's new since…" compares the pack's game version with another installed
-one (older or newer): which textures are new, which Mojang redrew (and which
-of those your pack already has, tagged "redrawn by Mojang", with both game
-versions side by side in the inspector), which were renamed and which were
-removed. Names are followed through the rename table, so a texture that was
-only renamed is not counted as new. Each list can be shown and shared like any
-other view; the comparison is cached, so the second time is instant.
-
-![Texture browser](docs/screenshots/browser.png)
-
-**Editor.** A pixel editor in the style of Aseprite: pencil, eraser, bucket,
-line, shapes, selections, move, gradient, text, symmetry, tiled mode, layers,
-a faint vanilla reference layer, a palette taken from the game's texture, and
-undo / redo. The preview shows the texture tiled, as it is, animated, or on a
-3D block (cube, stairs, slab, plants…) that updates while you draw.
-
-**Animation.** Frames with their own durations, onion skin, playback at the
-game's speed, smooth frames ("interpolate"), a custom frame order and import
-of a vertical strip. The app writes the `.mcmeta` file for you and shows it.
-
-![Animation screen](docs/screenshots/animation.png)
-
-**Particles.** All particles of the version in a small live scene (night,
-day, under water; ¼× to 2× speed; your pack or the game's). For old versions
-that keep all particles on one sheet, the app shows which cells belong to a
-particle and lets you draw only on those cells.
-
-![Particle viewer](docs/screenshots/particles.png)
-
-**Interface.** The game's screens (pause menu, inventory, HUD, title screen,
-recipe book, advancements, boss bars) put together from your pack's pieces at
-GUI scale 1×, 2× or 3×. Click a piece to select it, double-click to draw on it,
-and choose how it stretches (Stretch, Tile or Nine-slice with borders).
-Versions before 1.20.2 keep pieces inside shared images; the app shows each
-piece's rectangle and lets you draw only inside it.
-
-![Interface editor](docs/screenshots/interface.png)
-
-**Pack and export.** Pack icon (draw or import), name, description with `§`
-colour codes, checks with one-click fixes, and export as a `.zip` or a folder.
-It can also install the pack into Minecraft's `resourcepacks` folder and make
-copies for older versions, with the files renamed automatically.
-
-![Pack and export](docs/screenshots/export.png)
-
-**Drawing helpers.** A pack palette shared by every texture (built in the
-editor's palette panel, with "Snap to pack palette" to keep every drawn colour
-inside it and an export check for colours outside it); "Recolour…" in the
-texture browser (or Ctrl+K) to shift hue, saturation, brightness or contrast,
-or map colours, for a whole set of textures at once, with before/after
-previews and Undo; "Make variants…" in the inspector to recolour a texture to
-look like the rest of its family (oak planks → spruce, birch, cherry…
-planks); a smooth Scale2x / Scale3x start for 32× packs and up (Settings); and
-a seam warning in the Tiled preview and the export checks when a block
-texture's edges show.
-
-**Scene** shows a small diorama of blocks in 3D with your pack's textures (the
-game's where the pack has none), including unsaved changes from any open
-editor tab: a little house, a 4 × 4 wall of one block to check tiling and
-seams, a garden, or your own scene of up to 8 × 8 × 4 blocks painted layer by
-layer and saved with the pack. Choose day, sunset or night and a block light
-level 0–15 (the game's brightness curve), turn ambient occlusion on or off,
-orbit, pan, zoom or look from eye height. Click a block to see its textures and
-open them in the editor. The editor and animation 3D previews have the same
-time-of-day and light controls.
-
-**Organising a pack** (texture browser): write a note, tags ("needs redo",
-"waiting feedback"…) and who does it for each texture in the inspector; filter
-the list by tag, by person ("Mine", "Unassigned", a name) or "Has a note";
-share the to-do list grouped by person. The inspector's **History** shows the
-earlier versions of a texture (every editor save, import, batch import and
-revert keeps the old file) and restores any of them, undoably. A Progress
-card in the side bar opens a summary: percent done overall and per category,
-textures saved today and this week, and how many changed since the last
-export.
-
-**Pack and export** also makes the PNG files of an export smaller without
-changing a single pixel (option "Make PNG files smaller (same pixels)"), draws
-a 1920×1080 **showcase image** of the pack (icon, coloured description and up
-to 24 textures with hard pixels) and writes the **page text** for CurseForge or
-Modrinth (Markdown with versions, counts, features and install steps).
-**Compare with another pack…** (also in Ctrl+K) lists what differs from
-another pack's .zip or folder, even one made for another Minecraft version,
-shows theirs, yours and the game's texture side by side, copies the textures
-you tick into your pack (old files kept in the trash), and shares the
-comparison as text.
-
-**Variety** — two tabs. *Random variants* (built into the game, no mod): pick a block (search; blocks built from parts are refused), "Add a variant" copies its texture to `<name>_2` and opens it in the editor, writes the variant model and the block state; set each look's weight (1–100) and "turn at random"; a 3D 3×3 patch shows a seeded random pick ("Shuffle"); removing a variant moves its files to the trash. *Connected textures* (needs the OptiFine or Continuity mod): pick a block (glass, bookshelves, planks), "Make the 5 tiles" writes OptiFine's compact tiles and `.properties` file; click a tile to draw it; a live 2D preview shows a 4×4 wall and an L shape joined the way the mod joins them.
+- **Every texture, already there.** Blockwright finds Minecraft on your computer and lists every texture of the version you pick, with its status: to do, done, changed since export.
+- **Draw without leaving the app.** A pixel editor in the style of Aseprite, with a live 3D block, animation, the game's screens and particles. No other program needed.
+- **Any version, 1.8.9 to the newest.** It knows each version's pack format and every texture that was renamed, and can export copies of your pack for older versions.
+- **Your work is safe.** Nothing is written until you save, imported images are never resized or changed, and every texture you replace can be restored.
+- **No Mojang files inside.** Textures are read from your own game and stay in the app's cache. They are never shipped with the app or put into your pack.
 
 ## Install
 
-1. Get the installer **`Blockwright_0.1.0_x64-setup.exe`** (it is built into
-   `app/target/release/bundle/nsis/` when you build from source, see below).
-2. Run it. Windows may warn that the publisher is unknown, because the
-   installer is not signed: click "More info", then "Run anyway".
-3. Start Blockwright from the Start menu.
+1. Get the installer **`Blockwright_0.1.0_x64-setup.exe`**: from the
+   [Releases](https://github.com/AriLeGrand/minecraft-resourcepack-helper/releases) page,
+   from the **Artifacts** of the latest [Build run](https://github.com/AriLeGrand/minecraft-resourcepack-helper/actions/workflows/build.yml),
+   or by [building it yourself](#building-from-source).
+2. Run it. It installs for your account only, without admin rights. The installer is not signed yet, so
+   Windows may say the publisher is unknown: click **More info**, then **Run anyway**.
+3. Start **Blockwright** from the Start menu. A short welcome tour shows the basics the first time.
 
 You also need:
 
-- **Windows 10 or 11.** The app uses Microsoft Edge WebView2, which is already
-  part of Windows 10 and 11.
-- **Minecraft Java Edition**, installed with the official launcher.
-- **Each version you want to use started once** in the launcher. The game
-  only downloads a version's files when you play it, and Blockwright reads the
-  textures from those files.
+| | |
+|---|---|
+| **Windows 10 or 11** | 64-bit. The app uses Microsoft Edge WebView2, which is part of Windows. |
+| **Minecraft Java Edition** | Installed with the official launcher. |
+| **Each version you want to use started once** | The launcher only downloads a version's files when you play it, and Blockwright reads the textures from them. |
 
 ## Quick start
 
-1. **Start Blockwright.** It finds your Minecraft folder by itself (you can
-   change it in Settings).
-2. **Create a pack.** Type a name, pick a version and a resolution, then click
-   "Create pack". The first time, the app copies that version's textures from
-   the game (a few seconds).
-3. **Find a texture.** In Textures, pick a category or type in the search
-   field. Click a row to compare the game's texture with yours.
-4. **Draw.** Double-click the texture (or click "Edit texture"). Draw, then
-   press **Ctrl+S** to save it into your pack.
-5. **Animate (optional).** Click "Open animation view", add frames, set their
-   durations and press play. Ctrl+S saves the image and its `.mcmeta`.
-6. **Export.** Open "Pack and export", check that the checks are green, tick
-   "Install into Minecraft's resourcepacks folder" if you like, and click
-   "Export pack".
-7. **Play.** In Minecraft, open Options → Resource Packs and turn your pack on.
+1. **Create a pack.** Type a name, pick a game version and a resolution (16× to 256×), and click **Create pack**. The first time, the app copies that version's textures from the game (a few seconds).
+2. **Find a texture.** In **Textures**, pick a category or search. Click a row to compare the game's texture with yours.
+3. **Draw.** Double-click the texture, draw, and press **Ctrl+S** to save it into your pack.
+4. **Export.** Open **Pack and export**, make the checks green, tick *Install into Minecraft's resourcepacks folder* if you like, and click **Export pack**.
+5. **Play.** In Minecraft, open *Options → Resource Packs* and turn your pack on.
+
+Press **Ctrl+K** anywhere to search textures, screens and commands.
+
+## Features
+
+### Textures
+
+Every texture of the version, by category (blocks, items, GUI, entities, particles…), with search and filters. The inspector shows the game's texture next to yours, the block models that use it, and its name in older and newer versions.
+
+- **Import** an image, kept pixel for pixel, or **open it** in your usual editor (Aseprite, Paint.NET…). The app refreshes when you save there.
+- **Batch import** a whole folder (or drop PNGs on the window). Every file is matched to its texture, old names are translated (`planks_oak.png` becomes `block/oak_planks` in a 1.21 pack), and you review the list before anything is written.
+- **What's new since…** compares your version with another installed one: new textures, textures Mojang redrew, renamed and removed ones.
+- **Notes, tags and "assigned to"** on every texture, with filters by tag or person, and a **Progress** card (percent done overall and per category).
+- **Share list** turns any view into a to-do list for Discord, GitHub or Notion, plain text or a spreadsheet, optionally grouped by person.
+- **History** keeps every earlier version of a texture and restores any of them.
+
+![Texture browser](docs/screenshots/browser.png)
+
+### Editor
+
+Pencil, eraser, bucket, line, shapes, selections, move, gradient, text, symmetry and tiled mode, with layers, undo and a faint vanilla reference layer. The preview shows the texture tiled, as it is, animated, or on a 3D block (cube, stairs, slab, plants…) that updates while you draw.
+
+- A **pack palette** shared by every texture, with *Snap to pack palette* and an export check for colours outside it.
+- **Recolour** a whole set of textures at once (hue, saturation, brightness, contrast or colour mapping) with previews and Undo.
+- **Make variants** of a texture's family: oak planks into spruce, birch, cherry…
+- A **seam check** when a block texture's edges show in the tiled preview.
+- A smooth **Scale2x / Scale3x** start for 32× packs and up (Settings).
+- Copy and paste with other programs through the Windows clipboard.
+
+### Animation
+
+Frames with their own durations, onion skin, playback at the game's speed, smooth frames (*interpolate*), a custom frame order and import of a vertical strip. The `.mcmeta` file is written for you.
+
+![Animation screen](docs/screenshots/animation.png)
+
+### Scene
+
+A small diorama in 3D with your pack's textures, including unsaved edits: a little house, a 4×4 wall to check seams, a garden, or your own scene of up to 8×8×4 blocks, saved with the pack. Day, sunset or night, block light 0–15 like the game, and ambient occlusion. Click a block to open its textures.
+
+### Interface
+
+The game's screens (pause menu, inventory, HUD, title screen, recipe book, advancements, boss bars) put together from your pack's pieces at GUI scale 1×, 2× or 3×. Click a piece to select it, double-click to draw on it, and choose how it stretches: *Stretch*, *Tile* or *Nine-slice*. Before 1.20.2, where pieces share one image, you draw only inside each piece's rectangle.
+
+![Interface editor](docs/screenshots/interface.png)
+
+### Particles
+
+All particles of the version in a live scene (night, day, under water; ¼× to 2× speed; your pack or the game's). For old versions with a single particle sheet, you see and draw only the cells a particle uses.
+
+![Particle viewer](docs/screenshots/particles.png)
+
+### Variety
+
+- **Random variants**, built into the game: give a block several looks with weights (1–100) and an optional random turn. A 3D patch shows a random pick.
+- **Connected textures** for the OptiFine or Continuity mod: the 5 compact tiles and the `.properties` file, with a live preview of how they join.
+
+### Pack and export
+
+Pack icon, name, description with `§` colour codes, and checks with one-click fixes. Export as a `.zip` or a folder.
+
+- **Install** straight into Minecraft's `resourcepacks` folder.
+- **Copies for older versions**, with every file renamed.
+- **Smaller PNG files** with exactly the same pixels.
+- A 1920×1080 **showcase image** and **page text** for CurseForge or Modrinth.
+- **Compare with another pack**, side by side with yours and the game's, and copy the textures you tick.
+
+![Pack and export](docs/screenshots/export.png)
 
 ## Where your files go
 
-- **Your pack folder** (by default `Documents\Minecraft Packs\<pack name>`):
-  a normal resource pack with `pack.mcmeta`, `pack.png` and `assets/…`. You can
-  open it in any other program.
-- **`.packcreator\` inside the pack**: the app's working files (layers, frames,
-  palette, and a `trash` folder with the old version of anything you replaced).
-  This folder is **never exported**.
-- **Exports**: an `export` folder next to the pack (you can change it in
-  Settings), and, if you ask, Minecraft's `resourcepacks` folder.
-- **App cache** (`%LOCALAPPDATA%\dev.packcreator.app`): the textures copied
-  from your installed game, so the app can show them. They stay on your
-  computer and are never put into your pack or shipped with the app. You can
-  delete this folder at any time; the app copies them again when needed.
-- **Settings and recent packs**: `%APPDATA%\dev.packcreator.app\settings.json`.
+| What | Where |
+|---|---|
+| **Your pack** | A normal resource pack folder (by default `Documents\Minecraft Packs\<pack name>`) with `pack.mcmeta`, `pack.png` and `assets/…`. Open it in any program. |
+| **The app's working files** | `.packcreator\` inside the pack: project settings, layers and frames, notes, the scene, the history of replaced textures and a `trash` folder. **Never exported.** |
+| **Exports** | An `export` folder next to the pack (change it in Settings) and, if you ask, Minecraft's `resourcepacks` folder. |
+| **Game textures** | `%LOCALAPPDATA%\dev.packcreator.app`: copied from your installed game so the app can show them. Never put into your pack; safe to delete at any time. |
+| **Settings and recent packs** | `%APPDATA%\dev.packcreator.app\settings.json` |
+
+The app was first called *Pack Creator*; the folder names above keep that name so nothing moves when you update.
 
 ## Known limitations
 
-See [docs/LIMITATIONS.md](docs/LIMITATIONS.md) for what is not finished yet
-and the list of ideas for later.
+Blockwright is a preview. Windows only for now; the installer is not signed; several features (connected textures, the newest pack formats) are checked against the game's files but not yet in the game itself. The full list, and the ideas for later, are in [docs/LIMITATIONS.md](docs/LIMITATIONS.md).
 
 ## Building from source
 
-You need:
+You need **Rust** (stable, MSVC toolchain, via [rustup](https://rustup.rs)), **Node.js** 20 or newer with npm, and the **Microsoft C++ Build Tools** (*Desktop development with C++* in the Visual Studio Installer).
 
-- **Rust** (stable, MSVC toolchain), installed with [rustup](https://rustup.rs);
-- **Node.js** 20 or newer (LTS) with npm;
-- **Microsoft C++ Build Tools** ("Desktop development with C++" in the Visual
-  Studio Installer);
-- **WebView2** (already part of Windows 10 and 11).
-
-Then, in a terminal:
-
-```
+```powershell
 cd app
-npm install            # once
-npm run tauri dev      # run the app (the first build takes a few minutes)
-npx tauri build        # Windows installer in target/release/bundle/nsis/
+npm install          # once
+npm run tauri dev    # run the app (the first build takes a few minutes)
+npx tauri build      # installer in app/target/release/bundle/nsis/
 ```
 
-Tests and checks (run them before each commit):
+Checks to run before each commit:
 
-```
+```powershell
 cd app
 cargo fmt --all --check
-cargo clippy --all-targets -- -D warnings
-cargo test
-npm run check          # typecheck + lint + front-end tests
-npm run build          # front-end production build
+cargo clippy --workspace --all-targets -- -D warnings
+cargo test --workspace
+npm run check        # type check, lint and front-end tests
+npm run build        # front-end production build
 ```
 
-The project is laid out like this:
+Every push and pull request to `main` runs the same checks on GitHub and builds the installer ([`.github/workflows/build.yml`](.github/workflows/build.yml)).
 
-- `app/core`: the Rust logic (game versions, extraction, packs, `.mcmeta`
-  files, renames, export), with its tests and data tables in `app/core/data`;
-- `app/src-tauri`: the desktop shell (commands, image protocol, file watcher);
-- `app/src`: the user interface (React and TypeScript);
-- `docs/`: design, decisions (`DECISIONS.md`), progress (`PROGRESS.md`),
-  checked game facts and the mockups;
-- `tools/`: developer scripts (research on game files, screenshots of the
-  running app, and the demo game used for the README screenshots).
+To try the app without your real game, make the demo game and choose its folder in Settings:
 
-To make the demo game and run the app on it instead of your real game:
-
-```
+```powershell
 python tools/demo/make_demo_minecraft.py app/target/devdata/demo/.minecraft
 ```
 
-then choose that folder in Settings (or see `docs/PROGRESS.md`, "How to run",
-for running the app with separate settings).
+### Project layout
 
-## Automatic builds
-
-Every push to `main` (and every pull request to it) is checked and built on
-GitHub (`.github/workflows/build.yml`): tests, lint, then the Windows
-installer, which can be downloaded from the run's **Artifacts** on the
-Actions tab.
-
-## Website
-
-`site/` holds the app's presentation page (plain HTML, CSS and JavaScript).
-Open `site/index.html` in a browser, or publish the folder with GitHub Pages.
+| Folder | What is in it |
+|---|---|
+| `app/core` | The Rust logic (game versions, extraction, packs, `.mcmeta`, renames, export…) with its tests; data tables in `app/core/data`. |
+| `app/src-tauri` | The desktop shell: commands, image protocol, file watcher, window. |
+| `app/src` | The interface (React and TypeScript). |
+| `site/` | The presentation website (plain HTML, CSS and JavaScript); see [site/README.md](site/README.md). |
+| `docs/` | [Decisions](docs/DECISIONS.md), [progress](docs/PROGRESS.md), [limitations](docs/LIMITATIONS.md), [checked game facts](docs/research/domain-facts.md), design and mockups. |
+| `tools/` | Developer scripts: game-file research, app screenshots and the demo game. |
 
 ## The old Aseprite plugin
 
-Before Blockwright, this repository was an Aseprite extension called
-"Minecraft Resource Pack Helper". Its files (`main.lua`, `modules/`,
-`package.json`) are kept for reference only and are **no longer maintained**.
+Before Blockwright, this repository was an Aseprite extension called *Minecraft Resource Pack Helper*. Its files (`main.lua`, `modules/`, `package.json`) are kept for reference only and are **no longer maintained**.
 
 ## Legal
 
-Blockwright is not an official Minecraft product. It is not approved by or
-associated with Mojang or Microsoft. The app never contains or ships Minecraft
-textures: it reads them from the game installed on your own computer.
+Blockwright is not an official Minecraft product. It is not approved by or associated with Mojang or Microsoft. The app never contains or ships Minecraft textures: it reads them from the game installed on your own computer.
