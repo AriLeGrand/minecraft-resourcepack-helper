@@ -43,8 +43,9 @@
    [Releases](https://github.com/AriLeGrand/minecraft-resourcepack-helper/releases) page,
    from the **Artifacts** of the latest [Build run](https://github.com/AriLeGrand/minecraft-resourcepack-helper/actions/workflows/build.yml),
    or by [building it yourself](#building-from-source).
-2. Run it. It installs for your account only, without admin rights. The installer is not signed yet, so
-   Windows may say the publisher is unknown: click **More info**, then **Run anyway**.
+2. Run it. It installs for your account only, without admin rights. Until signing is approved (see the
+   [code signing policy](#code-signing-policy)), Windows may say the publisher is unknown: click
+   **More info**, then **Run anyway**.
 3. Start **Blockwright** from the Start menu. A short welcome tour shows the basics the first time.
 
 You also need:
@@ -186,6 +187,19 @@ python tools/demo/make_demo_minecraft.py app/target/devdata/demo/.minecraft
 | `site/` | The presentation website (plain HTML, CSS and JavaScript); see [site/README.md](site/README.md). |
 | `docs/` | [Decisions](docs/DECISIONS.md), [progress](docs/PROGRESS.md), [limitations](docs/LIMITATIONS.md), [checked game facts](docs/research/domain-facts.md), design and mockups. |
 | `tools/` | Developer scripts: game-file research, app screenshots and the demo game. |
+
+## Code signing policy
+
+Free code signing provided by [SignPath.io](https://signpath.io), certificate
+by [SignPath Foundation](https://signpath.org) (applied for: until it is
+approved, releases are unsigned). Releases are built from the tagged source
+by GitHub Actions and signed only after an approver approves them. Team roles,
+the privacy statement and the setup are in
+[docs/CODE_SIGNING.md](docs/CODE_SIGNING.md).
+
+**Privacy:** Blockwright does not send any information to other computers
+unless you ask it to. It reads Minecraft's textures from your own computer and
+only opens web pages when you click a link.
 
 ## Contributing
 

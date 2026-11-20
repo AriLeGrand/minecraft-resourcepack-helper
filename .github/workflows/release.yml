@@ -1,0 +1,104 @@
+# Publishes a release when a version tag (v0.1.0, v0.2.0…) is pushed.
+# Builds the Windows installer on a GitHub-hosted runner, has it signed by
+# SignPath (once SignPath is set up, see docs/CODE_SIGNING.md) and attaches it
+# to a GitHub Release. Without SignPath settings the installer is published
+# unsigned, as before.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write   # create the release
+  actions: read     # SignPath reads the workflow run and its artifact
+
+jobs:
+  release:
+    name: Build, sign and publish (Windows)
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: app
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check the tag matches the app version
+        run: |
+          version=$(node -p "require('./src-tauri/tauri.conf.json').version")
+          if [ "${GITHUB_REF_NAME}" != "v${version}" ]; then
+            echo "::error::Tag ${GITHUB_REF_NAME} does not match the app version ${version} in app/src-tauri/tauri.conf.json"
+            exit 1
+          fi
+          echo "VERSION=${version}" >> "$GITHUB_ENV"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install web dependencies
+        run: npm ci
+
+      - name: Build the installer
+        run: npx tauri build
+
+      - name: Upload the unsigned installer
+        id: unsigned
+        uses: actions/upload-artifact@v4
+        with:
+          name: Blockwright-unsigned
+          path: app/target/release/bundle/nsis/*.exe
+          if-no-files-found: error
+
+      - name: Is SignPath set up?
+        id: signpath
+        env:
+          TOKEN: ${{ secrets.SIGNPATH_API_TOKEN }}
+          ORG: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+        run: |
+          if [ -n "$TOKEN" ] && [ -n "$ORG" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::SignPath is not set up yet: this release is published unsigned. See docs/CODE_SIGNING.md."
+          fi
+
+      - name: Sign with SignPath (waits for a team member to approve)
+        if: steps.signpath.outputs.enabled == 'true'
+        uses: signpath/github-action-submit-signing-request@v3
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG }}
+          github-artifact-id: ${{ steps.unsigned.outputs.artifact-id }}
+          wait-for-completion: true
+          wait-for-completion-timeout-in-seconds: 3600
+          output-artifact-directory: app/target/signed
+
+      - name: Publish the GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SIGNED: ${{ steps.signpath.outputs.enabled }}
+        run: |
+          if [ "$SIGNED" = "true" ]; then
+            files=$(ls target/signed/*.exe)
+            note="Signed by SignPath Foundation (free code signing provided by SignPath.io)."
+          else
+            files=$(ls target/release/bundle/nsis/*.exe)
+            note="This installer is not signed yet: Windows may say the publisher is unknown. Click More info, then Run anyway."
+          fi
+          gh release create "$GITHUB_REF_NAME" $files \
+            --title "Blockwright $VERSION" \
+            --notes "$note" \
+            --generate-notes \
+            --verify-tag

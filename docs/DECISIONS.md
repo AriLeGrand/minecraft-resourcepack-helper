@@ -1040,3 +1040,15 @@ and the plugin's `package.json` were kept unchanged as a reference while
 Blockwright replaced them (a rule of the original brief). The owner asked to
 remove what the project no longer needs, and chose to remove them
 (2026-11-20). They remain in the git history.
+
+**D-113 · Signing through SignPath Foundation, on tagged releases.** The owner
+chose SignPath Foundation (free for open-source projects). Its rules shape the
+setup: the project must already be released, every signing is approved by
+hand, builds must run on GitHub-hosted runners from the tagged source, and the
+README and website must carry a "Code signing policy" with roles and a privacy
+statement. So signing happens in a new Release workflow (push of a `v*` tag
+that matches the app version), not on every push to `main`. Until the
+SignPath secret and variables exist, the workflow publishes the installer
+unsigned with a warning. Only the installer is signed (SignPath cannot reach
+inside the NSIS installer); Windows checks the downloaded file's publisher.
+Details and setup steps: `docs/CODE_SIGNING.md`.
