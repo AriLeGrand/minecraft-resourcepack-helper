@@ -1,14 +1,16 @@
 // Screen 2: texture browser, layout "list + compare".
+import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { open } from "@tauri-apps/plugin-dialog";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Icon } from "../components/Icon";
 import { NavBar, PackChips, StatusBar, TopBar } from "../components/Shell";
 import { useEditor } from "../editor/editorStore";
-import { api, images, type TextureDetail, type TextureRow } from "../lib/api";
+import { api, images, type BatchScan, type TextureDetail, type TextureRow } from "../lib/api";
 import {
   baseName, CATEGORIES, categoryLabel, countRows, dayLabel, filterRows, folderOf, matchesElsewhere, timeLabel,
   virtualWindow,
 } from "../lib/logic";
+import { BatchImportDialog } from "../components/BatchImportDialog";
 import { ShareDialog } from "../components/ShareDialog";
 import { useApp } from "../store";
 
@@ -87,6 +89,58 @@ export function Browser() {
   };
 
   const [sharing, setSharing] = useState(false);
+  const [batch, setBatch] = useState<{ scan: BatchScan; stamp: number } | null>(null);
+  const [dragging, setDragging] = useState(false);
+  const scanPaths = async (paths: string[]) => {
+    const app = useApp.getState();
+    if (paths.length === 0 || app.busy) return;
+    app.setBusy({ text: "Matching the images to the textures…", done: 0, total: 0 });
+    try {
+      const scan = await api.batchScan(paths, pack.dir);
+      if (scan.rows.length === 0) {
+        app.toast("No PNG files there. Batch import takes PNG files (and their .mcmeta files).", "warn");
+      } else {
+        setBatch({ scan, stamp: Date.now() });
+      }
+    } catch (e) {
+      app.showError(e, "The images could not be read");
+    } finally {
+      app.setBusy(null);
+    }
+  };
+  const pickFolder = async () => {
+    const dir = await open({ directory: true, title: "Folder with the PNG files to import" });
+    if (typeof dir === "string") await scanPaths([dir]);
+  };
+  // dropping PNG files or a folder anywhere on the window
+  const scanRef = useRef(scanPaths);
+  scanRef.current = scanPaths;
+  const batchOpen = batch !== null || sharing;
+  useEffect(() => {
+    if (batchOpen) return;
+    let unlisten: (() => void) | null = null;
+    let gone = false;
+    getCurrentWebview()
+      .onDragDropEvent((e) => {
+        const p = e.payload;
+        if (p.type === "enter") setDragging(p.paths.length > 0);
+        else if (p.type === "leave") setDragging(false);
+        else if (p.type === "drop") {
+          setDragging(false);
+          void scanRef.current(p.paths);
+        }
+      })
+      .then((u) => {
+        if (gone) u();
+        else unlisten = u;
+      })
+      .catch(() => {});
+    return () => {
+      gone = true;
+      unlisten?.();
+      setDragging(false);
+    };
+  }, [batchOpen]);
   const title = filters.only ? "Selected textures" : filters.category === "all" ? "All textures" : categoryLabel(filters.category);
   const total = filters.category === "all" ? rows.length : counts.byCategory[filters.category] ?? 0;
   const done = filters.category === "all"
@@ -145,6 +199,9 @@ export function Browser() {
                 onChange={(e) => setFilters({ search: e.target.value, only: null })}
               />
             </label>
+            <button className="btn" onClick={() => void pickFolder()} disabled={rows.length === 0 || !!busy} title="Import a folder of PNG files: each one is matched to its texture (you can also drop files or a folder on the window)">
+              <span className="row" style={{ gap: 6 }}><Icon name="folder" size={14} width={2} />Batch import…</span>
+            </button>
             <button className="btn" onClick={() => setSharing(true)} disabled={rows.length === 0} title="Share the to-do list (copy or save as a file)">
               <span className="row" style={{ gap: 6 }}><Icon name="share" size={14} width={2} />Share list</span>
             </button>
@@ -156,7 +213,7 @@ export function Browser() {
 
           {filters.only && (
             <div className="notice">
-              Showing the {filters.only.length} texture{filters.only.length === 1 ? "" : "s"} from the check.
+              Showing the {filters.only.length} texture{filters.only.length === 1 ? "" : "s"} {filters.onlyLabel ?? "from the check"}.
               <a onClick={() => setFilters({ only: null })}>Show everything</a>
             </div>
           )}
@@ -222,6 +279,13 @@ export function Browser() {
         <Inspector row={selectedRow} now={now} />
       </div>
       {sharing && <ShareDialog visible={visible} all={rows} viewTitle={title} onClose={() => setSharing(false)} />}
+      {batch && <BatchImportDialog scan={batch.scan} scanStamp={batch.stamp} onClose={() => setBatch(null)} />}
+      {dragging && (
+        <div className="droptarget">
+          <div>Drop to import into {pack.project.name}</div>
+          <div className="dim">PNG files or a folder: each image is matched to its texture, then you review the list.</div>
+        </div>
+      )}
       <StatusBar>
         {summary && <span>{summary.done} / {summary.total} textures done</span>}
       </StatusBar>

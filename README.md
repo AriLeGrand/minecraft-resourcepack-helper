@@ -30,6 +30,14 @@ open it in another program, or revert it.
 "Share list" turns the list into a to-do list you can send to friends or a
 team: a checklist for Discord, GitHub or Notion, plain text, or a spreadsheet
 file, for the current view or the whole pack, copied or saved as a file.
+"Batch import…" (or dropping PNG files or a folder on the window) brings in a
+whole folder at once: every PNG is matched to its texture, by its path in a
+pack, its folder and name, or its file name, with old and newer names
+translated to the pack's version (`planks_oak.png` becomes `block/oak_planks`
+in a 1.21 pack). You review the list (new, replaces, same pixels, unknown,
+"choose one" for names used twice, duplicates, wrong size, animation strips),
+then import the ticked files in one go, unchanged; replaced files go to the
+pack's trash.
 
 ![Texture browser](docs/screenshots/browser.png)
 

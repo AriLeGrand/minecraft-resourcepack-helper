@@ -4,6 +4,7 @@
 mod images;
 mod watch;
 
+use packcreator_core::batch::{self, BatchItem, BatchScan, ItemResult};
 use packcreator_core::error::{CoreError, Result};
 use packcreator_core::export::{self, AltTarget, Check, ExportKind, ExportOptions, ExportOutput};
 use packcreator_core::extract;
@@ -42,6 +43,15 @@ pub struct Inner {
     pub indexes: HashMap<String, Arc<VanillaIndex>>,
     pub pack: Option<OpenPack>,
     pub watcher: Option<watch::PackWatcher>,
+    /// The last batch-import scan: the only files the batch commands and the
+    /// `pcimg://localhost/batch/<id>` route may read.
+    pub batch: Option<BatchSession>,
+}
+
+pub struct BatchSession {
+    pub pack_dir: PathBuf,
+    /// Per row id: the source file and the textures it may become.
+    pub rows: Vec<(PathBuf, Vec<String>)>,
 }
 
 #[derive(Default)]
@@ -613,6 +623,93 @@ fn own_pack<'a>(inner: &'a Inner, pack_dir: &str) -> Result<&'a OpenPack> {
     Ok(p)
 }
 
+/// Batch import, step 1: matches every PNG of `paths` (a folder, or dropped
+/// files and folders) to a texture of the pack's version. Nothing is written. The rows are remembered so that only
+/// these files can be shown or imported afterwards.
+#[tauri::command(async)]
+fn batch_scan(state: State<AppState>, paths: Vec<String>, pack_dir: String) -> Result<BatchScan> {
+    let (dir, resolution, version_dir) = {
+        let inner = state.lock();
+        let p = own_pack(&inner, &pack_dir)?;
+        (
+            p.dir.clone(),
+            p.project.resolution,
+            p.project.version_dir.clone(),
+        )
+    };
+    let (index, mc) = {
+        let mut inner = state.lock();
+        let (_, mc) = inner.pack_version()?;
+        let index = inner.index(&version_dir).ok_or_else(|| {
+            CoreError::new(
+                "not_extracted",
+                "The game textures for this version are not extracted yet.",
+            )
+        })?;
+        (index, mc)
+    };
+    let sources: Vec<PathBuf> = paths.iter().map(PathBuf::from).collect();
+    let scan = batch::scan(&sources, &dir, &index, mc.as_ref(), resolution)?;
+    let mut inner = state.lock();
+    own_pack(&inner, &pack_dir)?;
+    inner.batch = Some(BatchSession {
+        pack_dir: dir,
+        rows: scan
+            .rows
+            .iter()
+            .map(|r| {
+                let targets = r.candidates.iter().map(|c| c.path.clone()).collect();
+                (PathBuf::from(&r.source), targets)
+            })
+            .collect(),
+    });
+    Ok(scan)
+}
+
+/// Batch import, step 2: imports the accepted rows of the last scan. Each
+/// item gets its own result; a failure does not stop the others.
+#[tauri::command(async)]
+fn batch_import(
+    state: State<AppState>,
+    items: Vec<BatchItem>,
+    pack_dir: String,
+) -> Result<Vec<ItemResult>> {
+    let (dir, work, mut refused) = {
+        let inner = state.lock();
+        let p = own_pack(&inner, &pack_dir)?;
+        let session = inner
+            .batch
+            .as_ref()
+            .filter(|b| b.pack_dir == p.dir)
+            .ok_or_else(|| CoreError::new("no_scan", "Scan the folder again, then import."))?;
+        let mut work = Vec::new();
+        let mut refused = Vec::new();
+        for it in items {
+            match session.rows.get(it.id) {
+                Some((src, targets)) if targets.contains(&it.target) => {
+                    work.push((it.id, src.clone(), it.target, it.frames))
+                }
+                _ => refused.push(ItemResult {
+                    id: it.id,
+                    target: it.target,
+                    ok: false,
+                    replaced: false,
+                    wrote_mcmeta: false,
+                    unchanged: false,
+                    error: Some(CoreError::new(
+                        "bad_item",
+                        "This file was not matched to that texture by the scan.",
+                    )),
+                }),
+            }
+        }
+        (p.dir.clone(), work, refused)
+    };
+    let mut out = batch::import_all(&dir, &work);
+    out.append(&mut refused);
+    Ok(out)
+}
+
 /// Opens a texture (or the pack icon) in the built-in editor. Nothing is
 /// written until it is saved.
 #[tauri::command(async)]
@@ -1080,6 +1177,8 @@ pub fn run() {
             run_checks,
             apply_fix,
             export_pack,
+            batch_scan,
+            batch_import,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Pack Creator");

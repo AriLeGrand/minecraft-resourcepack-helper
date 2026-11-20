@@ -5,6 +5,7 @@
 //! the legacy particle sheet, jar extraction, the texture index, `.mcmeta`
 //! files, packs, import and export.
 
+pub mod batch;
 pub mod error;
 pub mod export;
 pub mod extract;

@@ -161,6 +161,62 @@ export interface ImportResult {
   wrote_mcmeta: boolean;
 }
 
+// ---- batch import (core/src/batch.rs)
+
+export type BatchStatus = "new" | "replaces" | "same" | "unknown" | "ambiguous";
+export type BatchRule = "pack_path" | "texture_path" | "file_name" | "none";
+
+export interface BatchCandidate {
+  path: string;
+  /** The pack already has a file for it. */
+  in_pack: boolean;
+}
+
+export interface BatchRow {
+  id: number;
+  /** Path relative to the chosen folder, with "/". */
+  rel: string;
+  source: string;
+  target: string | null;
+  candidates: BatchCandidate[];
+  renamed_from: string | null;
+  rule: BatchRule;
+  status: BatchStatus;
+  duplicate: boolean;
+  width: number;
+  height: number;
+  expected: [number, number] | null;
+  wrong_size: boolean;
+  has_mcmeta: boolean;
+  strip_frames: number | null;
+  frames_default: boolean;
+  accept: boolean;
+  problem: string | null;
+}
+
+export interface BatchScan {
+  folder: string;
+  rows: BatchRow[];
+  truncated: boolean;
+  skipped_pack: boolean;
+}
+
+export interface BatchItem {
+  id: number;
+  target: string;
+  frames: boolean;
+}
+
+export interface BatchItemResult {
+  id: number;
+  target: string;
+  ok: boolean;
+  replaced: boolean;
+  wrote_mcmeta: boolean;
+  unchanged: boolean;
+  error: CoreError | null;
+}
+
 export interface Check {
   id: string;
   ok: boolean;
@@ -468,6 +524,10 @@ export const api = {
   readImageRaw: (path: string) => invoke<RawImage>("read_image_raw", { path }),
   reveal: (path: string) => invoke<void>("reveal", { path }),
   saveShareList: (path: string, text: string) => invoke<void>("save_share_list", { path, text }),
+  /** Matches every PNG of a folder (or dropped files and folders) to the pack's textures. Writes nothing. */
+  batchScan: (paths: string[], packDir: string) => invoke<BatchScan>("batch_scan", { paths, packDir }),
+  /** Imports accepted rows of the last scan; one result per item, failures do not stop the rest. */
+  batchImport: (items: BatchItem[], packDir: string) => invoke<BatchItemResult[]>("batch_import", { items, packDir }),
   revertTexture: (path: string) => invoke<boolean>("revert_texture", { path }),
   setPackIcon: (source: string) => invoke<void>("set_pack_icon", { source }),
   editPackIcon: () => invoke<void>("edit_pack_icon"),
@@ -486,7 +546,7 @@ export function toError(e: unknown): CoreError {
   return { kind: "error", message: String(e), hint: null };
 }
 
-// Image URLs served by the Rust `pcimg` protocol (cache and open pack only).
+// Image URLs served by the Rust `pcimg` protocol (cache, open pack, last batch scan only).
 const img = (path: string) => convertFileSrc(path, "pcimg");
 
 export const images = {
@@ -495,4 +555,6 @@ export const images = {
   packFull: (tex: string, stamp: number) => `${img(`pack/full/${tex}`)}?v=${stamp}`,
   packIcon: (stamp: number) => `${img("pack/icon")}?v=${stamp}`,
   recentIcon: (dir: string) => `${img("packicon")}?dir=${encodeURIComponent(dir)}`,
+  /** A file of the last batch-import scan (small thumbnail). */
+  batchThumb: (id: number, scan: number) => `${img(`batch/${id}`)}?s=${scan}`,
 };

@@ -87,6 +87,23 @@ are the places where the app is less complete or less certain than it looks.
   this piece" limits drawing to the piece only when the pack's image is a whole
   multiple of 256 pixels wide (D-071).
 
+## Batch import
+
+- Only PNG files are taken (the single "Import image" also converts JPEG, BMP
+  and GIF). At most 5000 files per scan (D-075).
+- Only textures of the pack's version are matched: a file the version does not
+  have (an OptiFine / CTM file, a modded texture) is listed as unknown and not
+  imported.
+- A file whose name the game uses twice (for example `button.png`) needs a
+  choice; two files for the same texture need a pick. Another target cannot be
+  typed in for a duplicate: rename the file or use "Import image" on the
+  texture.
+- A tall image without an `.mcmeta` gets frame time 2 when "frames?" is
+  ticked; replacing a texture keeps the pack's existing `.mcmeta` unless the
+  imported file has its own (as the single import does).
+- The summary chips at the top count the scan's statuses, not the picks made
+  afterwards.
+
 ## Platform
 
 - Built and tested on Windows 10/11 only.

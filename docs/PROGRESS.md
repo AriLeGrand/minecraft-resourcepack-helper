@@ -19,6 +19,18 @@ front-end tests, typecheck and lint clean.
 Possible next steps (not started): the items in `docs/LIMITATIONS.md` "Later",
 checking a 1.21.9+ pack in-game (D-005), opening a pull request to `main`.
 
+After the final stage (2026-11-20): **batch import** (D-075). "Batch import…"
+in the texture browser, or PNG files / a folder dropped on the window:
+`core/src/batch.rs` (9 tests on synthetic files) matches every PNG, commands
+`batch_scan` / `batch_import` (`own_pack`), `pcimg://localhost/batch/<id>`
+thumbnails for the last scan only, review dialog
+`components/BatchImportDialog.tsx` with `lib/batch.ts` (8 tests). Checked in
+`tauri dev` on the demo game with `app/target/devdata/demo/batch-test/`
+(generated synthetic files): 13 files matched, 9 imported, every imported PNG
+and `.mcmeta` byte-identical to its source, replaced files in the trash, a
+texture with unsaved editor changes skipped. Screenshot
+`app/target/devdata/screenshots/12-batch-import.png` (git-ignored).
+
 Done in the final stage:
 - `README.md` rewritten for Pack Creator (what it is, screens, install, quick
   start, where files go, building from source, the old plugin, not affiliated

@@ -204,7 +204,8 @@ export const useApp = create<State>((set, get) => ({
   },
 
   select: (selected) => set({ selected }),
-  setFilters: (f) => set({ filters: { ...get().filters, ...f } }),
+  // a new `only` list without its own label gets the default notice
+  setFilters: (f) => set({ filters: { ...get().filters, ...("only" in f && !("onlyLabel" in f) ? { onlyLabel: undefined } : {}), ...f } }),
   setView: (view) => set({ view }),
 
   toast: (text, kind = "ok", action) => {

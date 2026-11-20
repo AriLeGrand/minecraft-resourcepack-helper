@@ -569,3 +569,30 @@ version then wrongly reported success. Saving goes through Rust
 (`core/src/share.rs`), which only writes `.md`, `.txt` or `.csv` files.
 Formatting is pure TypeScript (`src/lib/share.ts`, tested), since it is
 presentation, not pack data.
+
+**D-075 · Batch import: matching rules, review, and what it may read.** A
+folder (or files and folders dropped on the browser) is scanned in Rust
+(`core/src/batch.rs`): PNG files only, hidden folders and the pack itself left
+out, at most 5000 files. The target is decided in this order: a path containing
+`assets/minecraft/textures/` (a pack or an export), then a texture path inside
+the relative path (`block/x.png`, `blocks/x.png`, `gui/…`; the first folders
+are those of the version's names), then the file name against the version's
+texture list (unique = match, several = the user picks). Old and newer names
+come from the rename table: every texture's `history` gives the names it had in
+other versions, so `planks_oak.png` finds `block/oak_planks` in a 1.21 pack and
+`item/red_dye.png` finds `items/dye_powder_red` in a 1.8.9 pack ("renamed
+from …"). Each row has a status (new, replaces, same pixels, unknown, choose)
+plus warnings (duplicate target, wrong size for the pack resolution, frames?).
+"Same pixels" compares decoded pixels, not bytes, and is unticked by default;
+two files for one texture start unticked and ticking one unticks the other.
+Importing copies each PNG byte for byte through `import::import_image` (never
+resized), copies a `<name>.png.mcmeta` next to it byte for byte, moves replaced
+files (PNG and `.mcmeta`) to `.packcreator/trash`, skips files identical to
+the pack, and carries on after a failure with one result per file. A texture
+with unsaved changes in an editor tab is never replaced: the row is skipped and
+the reason shown. The scan's file list is kept in Rust: `batch_import` only
+takes row ids of the last scan with one of that row's matched textures, and the
+`pcimg://localhost/batch/<id>` route serves only those files (as a small
+thumbnail), so the web view still cannot read arbitrary files. Both commands
+check `own_pack`. Dropping uses Tauri's window drag-drop event, so dragging
+inside the page (HTML drag and drop) stays unused.

@@ -25,6 +25,8 @@ export interface Filters {
   search: string;
   /** When set (from a check's "Show" button), only these textures are listed. */
   only: string[] | null;
+  /** What `only` came from, for the notice ("from the check", "just imported"). */
+  onlyLabel?: string;
 }
 
 export const defaultFilters: Filters = {
