@@ -1,0 +1,318 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Pack Creator: editor</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#8fb2ff}a:hover{color:#b8ceff}
+</style>
+</helmet>
+<div style="width: 100%; min-height: 900px; box-sizing: border-box; background: #111214; color: #ececf0; font-family: Inter, system-ui, sans-serif; font-size: 13px; display: flex; flex-direction: column">
+
+  <header style="display: flex; flex-wrap: wrap; align-items: center; gap: 16px; padding: 0 14px; min-height: 44px; background: #18191c; border-bottom: 1px solid #2a2b30">
+    <div style="display: flex; align-items: center; gap: 10px">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#5b8cff" stroke-width="1.6" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9zM12 12l8-4.5M12 12v9M12 12L4 7.5"></path></svg>
+      <span style="font-weight: 600">Deep Sea Pack</span>
+      <span style="color: #6b6c74">/</span>
+      <span style="color: #9b9ca4">block</span>
+      <span style="color: #6b6c74">/</span>
+      <span style="font-family: 'JetBrains Mono', monospace; font-size: 12px">prismarine.png</span>
+      <span style="width: 7px; height: 7px; border-radius: 50%; background: #f5a524" aria-label="Unsaved changes"></span>
+    </div>
+    <div style="flex: 1; display: flex; justify-content: center; min-width: 200px">
+      <label style="display: flex; align-items: center; gap: 8px; width: 100%; max-width: 380px; height: 30px; padding: 0 10px; background: #111214; border: 1px solid #2a2b30; border-radius: 6px; color: #9b9ca4">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9b9ca4" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-4-4"></path></svg>
+        <input type="text" aria-label="Search everything" placeholder="Search textures, tools, commands…" style="flex: 1; min-width: 0; background: transparent; border: 0; color: #ececf0; font: inherit; font-size: 12px; outline: none">
+        <span style="font-size: 11px; border: 1px solid #2a2b30; border-radius: 4px; padding: 1px 5px">Ctrl K</span>
+      </label>
+    </div>
+    <div style="display: flex; align-items: center; gap: 8px; font-size: 12px">
+      <button type="button" aria-label="Undo" style="width: 30px; height: 30px; border-radius: 6px; border: 1px solid #2a2b30; background: transparent; display: flex; align-items: center; justify-content: center"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#c4c5cc" stroke-width="2" aria-hidden="true"><path d="M9 14L4 9l5-5M4 9h10a6 6 0 0 1 0 12h-3"></path></svg></button>
+      <button type="button" aria-label="Redo" style="width: 30px; height: 30px; border-radius: 6px; border: 1px solid #2a2b30; background: transparent; display: flex; align-items: center; justify-content: center"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#c4c5cc" stroke-width="2" aria-hidden="true"><path d="M15 14l5-5-5-5M20 9H10a6 6 0 0 0 0 12h3"></path></svg></button>
+      <span style="border: 1px solid #2a2b30; border-radius: 6px; padding: 5px 10px; color: #c4c5cc">Java 1.21.4</span>
+      <button type="button" style="font: inherit; font-weight: 600; font-size: 12px; height: 30px; padding: 0 14px; border-radius: 6px; border: 0; background: #5b8cff; color: #0a1630">Save to pack  Ctrl S</button>
+    </div>
+  </header>
+
+  <div style="flex: 1; display: flex; flex-wrap: wrap; min-height: 0">
+    <nav aria-label="Sections" style="flex: 0 0 52px; background: #18191c; border-right: 1px solid #2a2b30; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px 0">
+      <sc-for list="{{nav}}" as="n" hint-placeholder-count="7">
+        <a href="#" aria-label="{{n.label}}" title="{{n.label}}" style="width: 36px; height: 36px; border-radius: 8px; display: flex; align-items: center; justify-content: center; {{n.style}}">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="{{n.stroke}}" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{n.d}}"></path></svg>
+        </a>
+      </sc-for>
+    </nav>
+
+    <div style="flex: 0 0 80px; background: #151619; border-right: 1px solid #2a2b30; padding: 10px 8px; box-sizing: border-box; display: flex; flex-direction: column; gap: 12px">
+      <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px">
+        <sc-for list="{{tools}}" as="t" hint-placeholder-count="20">
+          <button type="button" aria-label="{{t.label}}" title="{{t.label}}" onClick="{{t.pick}}" style="width: 30px; height: 30px; border-radius: 6px; display: flex; align-items: center; justify-content: center; padding: 0; {{t.btnStyle}}">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="{{t.stroke}}" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{t.d}}"></path></svg>
+          </button>
+        </sc-for>
+      </div>
+      <div style="height: 1px; background: #2a2b30"></div>
+      <div style="position: relative; width: 52px; height: 52px; margin: 0 auto">
+        <div style="position: absolute; right: 0; bottom: 0; width: 30px; height: 30px; background: #2e5e55; border: 1px solid #6b6c74; border-radius: 5px"></div>
+        <div style="position: absolute; left: 0; top: 0; width: 30px; height: 30px; background: #7fc3b4; border: 2px solid #ececf0; border-radius: 5px"></div>
+      </div>
+    </div>
+
+    <main style="flex: 999 1 480px; min-width: 0; display: flex; flex-direction: column; background: #0d0e10">
+      <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 16px; padding: 0 14px; min-height: 38px; border-bottom: 1px solid #2a2b30; background: #151619; font-size: 12px; color: #c4c5cc">
+        <span style="font-weight: 600; color: #ececf0">{{toolLabel}}</span>
+        <span style="width: 1px; height: 16px; background: #2a2b30"></span>
+        <span style="display: flex; align-items: center; gap: 6px">Size <span style="background: #111214; border: 1px solid #34353b; border-radius: 4px; padding: 2px 8px">1 px</span></span>
+        <span style="display: flex; align-items: center; gap: 6px">Ink <span style="background: #111214; border: 1px solid #34353b; border-radius: 4px; padding: 2px 8px">Simple ▾</span></span>
+        <span style="display: flex; align-items: center; gap: 6px">Opacity <span style="background: #111214; border: 1px solid #34353b; border-radius: 4px; padding: 2px 8px">100%</span></span>
+        <label style="display: flex; align-items: center; gap: 5px"><input type="checkbox" checked="checked"> Pixel-perfect</label>
+        <label style="display: flex; align-items: center; gap: 5px"><input type="checkbox"> Symmetry</label>
+        <label style="display: flex; align-items: center; gap: 5px"><input type="checkbox" checked="checked"> Tiled</label>
+        <label style="display: flex; align-items: center; gap: 5px"><input type="checkbox" checked="checked"> Onion skin</label>
+      </div>
+      <div style="flex: 1; position: relative; display: flex; align-items: center; justify-content: center; padding: 24px; min-height: 540px">
+        <div style="position: relative; padding: 1px; background: #050506; box-shadow: 0 0 0 1px #2a2b30, 0 20px 50px rgba(0,0,0,0.5)">
+          <div style="display: grid; grid-template-columns: repeat(32, 15px); grid-auto-rows: 15px; gap: 1px; background: #0f2722">
+            <sc-for list="{{canvasPx}}" as="p" hint-placeholder-count="1024"><div style="background: {{p.c}}"></div></sc-for>
+          </div>
+          <div style="position: absolute; left: 193px; top: 113px; width: 13px; height: 13px; border: 1px solid #ffffff; box-shadow: 0 0 0 1px #000000"></div>
+        </div>
+        <div style="position: absolute; right: 14px; bottom: 12px; display: flex; gap: 4px; background: #18191c; border: 1px solid #2a2b30; border-radius: 6px; padding: 3px; font-size: 11px; color: #c4c5cc">
+          <span style="padding: 3px 8px">−</span><span style="padding: 3px 8px">1600%</span><span style="padding: 3px 8px">+</span><span style="padding: 3px 8px; border-left: 1px solid #2a2b30">Fit</span>
+        </div>
+      </div>
+    </main>
+
+    <aside style="flex: 0 0 300px; border-left: 1px solid #2a2b30; background: #151619; display: flex; flex-direction: column">
+      <section style="padding: 12px 14px; border-bottom: 1px solid #2a2b30; display: flex; flex-direction: column; gap: 10px">
+        <div style="display: flex; justify-content: space-between; align-items: center">
+          <h2 style="margin: 0; font-size: 11px; font-weight: 600; letter-spacing: 0.06em; color: #8b8c94">PREVIEW</h2>
+          <div role="tablist" aria-label="Preview mode" style="display: flex; gap: 2px; background: #111214; border: 1px solid #2a2b30; border-radius: 6px; padding: 2px">
+            <sc-for list="{{previewTabs}}" as="tb" hint-placeholder-count="4">
+              <button type="button" role="tab" onClick="{{tb.pick}}" style="font: inherit; font-size: 11px; padding: 3px 8px; border: 0; border-radius: 4px; {{tb.style}}">{{tb.label}}</button>
+            </sc-for>
+          </div>
+        </div>
+        <div style="height: 214px; display: flex; align-items: center; justify-content: center; background: radial-gradient(circle at 50% 40%, #1d2026, #111214); border: 1px solid #2a2b30; border-radius: 8px">
+          <sc-if value="{{show3d}}" hint-placeholder-val="{{true}}">
+            <div style="width: 200px; height: 200px; display: flex; align-items: center; justify-content: center">
+              <div style="position: relative; width: 96px; height: 96px; transform-style: preserve-3d; transform: rotateX(-30deg) rotateY(-45deg)">
+                <div style="position: absolute; inset: 0; transform: translateZ(48px); display: grid; grid-template-columns: repeat(16, minmax(0, 1fr))">
+                  <sc-for list="{{facePx}}" as="p" hint-placeholder-count="256"><div style="background: {{p.c}}"></div></sc-for>
+                  <div style="position: absolute; inset: 0; background: rgba(0,0,0,0.18)"></div>
+                </div>
+                <div style="position: absolute; inset: 0; transform: rotateY(90deg) translateZ(48px); display: grid; grid-template-columns: repeat(16, minmax(0, 1fr))">
+                  <sc-for list="{{facePx}}" as="p" hint-placeholder-count="256"><div style="background: {{p.c}}"></div></sc-for>
+                  <div style="position: absolute; inset: 0; background: rgba(0,0,0,0.38)"></div>
+                </div>
+                <div style="position: absolute; inset: 0; transform: rotateX(90deg) translateZ(48px); display: grid; grid-template-columns: repeat(16, minmax(0, 1fr))">
+                  <sc-for list="{{facePx}}" as="p" hint-placeholder-count="256"><div style="background: {{p.c}}"></div></sc-for>
+                </div>
+              </div>
+            </div>
+          </sc-if>
+          <sc-if value="{{showTiled}}" hint-placeholder-val="{{false}}">
+            <div style="display: grid; grid-template-columns: repeat(48, 4px); grid-auto-rows: 4px">
+              <sc-for list="{{tiledPx}}" as="p" hint-placeholder-count="2304"><div style="background: {{p.c}}"></div></sc-for>
+            </div>
+          </sc-if>
+          <sc-if value="{{showOriginal}}" hint-placeholder-val="{{false}}">
+            <div style="display: flex; gap: 14px; align-items: center">
+              <div style="display: flex; flex-direction: column; align-items: center; gap: 6px">
+                <div style="width: 112px; height: 112px; display: grid; grid-template-columns: repeat(16, minmax(0, 1fr))">
+                  <sc-for list="{{vanillaPx}}" as="p" hint-placeholder-count="256"><div style="background: {{p.c}}"></div></sc-for>
+                </div>
+                <div style="font-size: 11px; color: #9b9ca4">Vanilla 16×16</div>
+              </div>
+              <div style="display: flex; flex-direction: column; align-items: center; gap: 6px">
+                <div style="width: 112px; height: 112px; display: grid; grid-template-columns: repeat(16, minmax(0, 1fr))">
+                  <sc-for list="{{facePx}}" as="p" hint-placeholder-count="256"><div style="background: {{p.c}}"></div></sc-for>
+                </div>
+                <div style="font-size: 11px; color: #3ecf8e">Yours 32×32</div>
+              </div>
+            </div>
+          </sc-if>
+          <sc-if value="{{showGame}}" hint-placeholder-val="{{false}}">
+            <div style="display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 12px; text-align: center">
+              <div style="display: grid; grid-template-columns: repeat(32, 4px); grid-auto-rows: 4px">
+                <sc-for list="{{canvasPx}}" as="p" hint-placeholder-count="1024"><div style="background: {{p.c}}"></div></sc-for>
+              </div>
+              <div style="font-size: 11px; color: #9b9ca4">Plays at in-game speed · 2 ticks per frame</div>
+            </div>
+          </sc-if>
+        </div>
+      </section>
+      <section style="padding: 12px 14px; border-bottom: 1px solid #2a2b30; display: flex; flex-direction: column; gap: 10px">
+        <div style="display: flex; justify-content: space-between; align-items: center">
+          <h2 style="margin: 0; font-size: 11px; font-weight: 600; letter-spacing: 0.06em; color: #8b8c94">PALETTE</h2>
+          <span style="font-size: 11px; color: #c4c5cc; border: 1px solid #2a2b30; border-radius: 4px; padding: 2px 6px">From vanilla ▾</span>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 3px">
+          <sc-for list="{{palette}}" as="s" hint-placeholder-count="24"><div style="aspect-ratio: 1; border-radius: 3px; background: {{s.c}}; {{s.ring}}"></div></sc-for>
+        </div>
+        <div style="display: flex; justify-content: space-between; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #c4c5cc"><span>#7FC3B4</span><span style="color: #9b9ca4">H168 S35 V76</span></div>
+      </section>
+      <section style="padding: 12px 14px; display: flex; flex-direction: column; gap: 4px">
+        <div style="display: flex; justify-content: space-between; align-items: center; padding-bottom: 6px">
+          <h2 style="margin: 0; font-size: 11px; font-weight: 600; letter-spacing: 0.06em; color: #8b8c94">LAYERS</h2>
+          <button type="button" aria-label="Add layer" style="width: 24px; height: 24px; border-radius: 4px; border: 1px solid #2a2b30; background: transparent; color: #c4c5cc; padding: 0">+</button>
+        </div>
+        <div style="display: flex; align-items: center; gap: 10px; padding: 7px 8px; border-radius: 6px; background: #1c2a45; font-size: 12px">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#c4c5cc" stroke-width="2" aria-hidden="true"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12zM12 9a3 3 0 1 0 0 6a3 3 0 1 0 0-6z"></path></svg>Highlights<span style="margin-left: auto; font-size: 11px; color: #9b9ca4">Normal · 100%</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 10px; padding: 7px 8px; border-radius: 6px; font-size: 12px">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#c4c5cc" stroke-width="2" aria-hidden="true"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12zM12 9a3 3 0 1 0 0 6a3 3 0 1 0 0-6z"></path></svg>Base<span style="margin-left: auto; font-size: 11px; color: #9b9ca4">Normal · 100%</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 10px; padding: 7px 8px; border-radius: 6px; font-size: 12px; color: #9b9ca4">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6b6c74" stroke-width="2" aria-hidden="true"><path d="M3 3l18 18M10.6 5.1A10 10 0 0 1 12 5c6 0 10 7 10 7a17 17 0 0 1-3 3.7M6.6 6.6C3.8 8.4 2 12 2 12s4 7 10 7a9.6 9.6 0 0 0 5.4-1.6"></path></svg>Vanilla reference<span style="margin-left: auto; font-size: 11px">Locked · 30%</span>
+        </div>
+      </section>
+    </aside>
+  </div>
+
+  <div style="border-top: 1px solid #2a2b30; background: #151619; display: flex; flex-wrap: wrap">
+    <div style="flex: 0 0 212px; padding: 8px 12px; border-right: 1px solid #2a2b30; box-sizing: border-box; display: flex; flex-direction: column; gap: 4px">
+      <div style="display: flex; align-items: center; gap: 4px; height: 28px">
+        <button type="button" aria-label="Previous frame" style="width: 28px; height: 26px; border-radius: 5px; border: 1px solid #2a2b30; background: transparent; color: #c4c5cc; padding: 0">‹</button>
+        <button type="button" aria-label="Play" style="width: 36px; height: 26px; border-radius: 5px; border: 0; background: #5b8cff; color: #0a1630; padding: 0">▶</button>
+        <button type="button" aria-label="Next frame" style="width: 28px; height: 26px; border-radius: 5px; border: 1px solid #2a2b30; background: transparent; color: #c4c5cc; padding: 0">›</button>
+        <span style="margin-left: 6px; font-size: 11px; color: #9b9ca4">3 / 6 · 2 ticks</span>
+      </div>
+      <div style="font-size: 12px; height: 26px; display: flex; align-items: center">Highlights</div>
+      <div style="font-size: 12px; height: 26px; display: flex; align-items: center">Base</div>
+    </div>
+    <div style="flex: 999 1 400px; padding: 8px 12px; display: flex; flex-direction: column; gap: 4px; overflow: hidden">
+      <div style="display: flex; gap: 4px; height: 28px; align-items: center; font-size: 11px; color: #9b9ca4">
+        <sc-for list="{{frames}}" as="f" hint-placeholder-count="6"><div style="width: 34px; text-align: center; padding: 3px 0; border-radius: 4px; {{f.headStyle}}">{{f.n}}</div></sc-for>
+        <div style="width: 34px; text-align: center">+</div>
+        <div style="margin-left: 12px; padding: 3px 8px; border-radius: 4px; background: #2b2442; color: #cbbcff">loop · 1–6</div>
+        <a href="Animation.dc.html" style="margin-left: auto; font-size: 11px">Open animation view</a>
+      </div>
+      <div style="display: flex; gap: 4px; height: 26px">
+        <sc-for list="{{frames}}" as="f" hint-placeholder-count="6"><div style="width: 34px; display: flex; align-items: center; justify-content: center; border-radius: 4px; {{f.cellStyle}}"><span style="width: 7px; height: 7px; border-radius: 50%; background: #c4c5cc"></span></div></sc-for>
+      </div>
+      <div style="display: flex; gap: 4px; height: 26px">
+        <sc-for list="{{frames}}" as="f" hint-placeholder-count="6"><div style="width: 34px; display: flex; align-items: center; justify-content: center; border-radius: 4px; {{f.cellStyle}}"><span style="width: 7px; height: 7px; border-radius: 50%; background: #c4c5cc"></span></div></sc-for>
+      </div>
+    </div>
+  </div>
+
+  <footer style="display: flex; flex-wrap: wrap; gap: 16px; align-items: center; padding: 4px 14px; min-height: 24px; background: #18191c; border-top: 1px solid #2a2b30; font-size: 11px; color: #9b9ca4">
+    <span>x 12 · y 7</span>
+    <span>32×32 · 6 frames · RGBA</span>
+    <span style="color: #f5a524">Unsaved changes</span>
+    <span style="margin-left: auto; font-family: 'JetBrains Mono', monospace">→ textures/block/prismarine.png + prismarine.png.mcmeta</span>
+  </footer>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { tool: 'pencil', preview: '3d' };
+  }
+  renderVals() {
+    var self = this;
+    var navDefs = [
+      ['home', 'Home', 'M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z'],
+      ['tex', 'Textures', 'M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z'],
+      ['edit', 'Editor', 'M4 20l4-1L19 8l-3-3L5 16l-1 4zM14 7l3 3'],
+      ['anim', 'Animation', 'M4 5h16v14H4zM8 5v14M16 5v14M4 9h4M4 15h4M16 9h4M16 15h4'],
+      ['model', 'Models (later)', 'M12 3l8 4.5v9L12 21l-8-4.5v-9zM12 12l8-4.5M12 12v9M12 12L4 7.5'],
+      ['pack', 'Pack and export', 'M12 3v12M7 10l5 5 5-5M5 21h14'],
+      ['set', 'Settings', 'M12 9a3 3 0 1 0 0 6a3 3 0 1 0 0-6zM12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1']
+    ];
+    var nav = navDefs.map(function (d) {
+      var on = d[0] === 'edit';
+      return { label: d[1], d: d[2], stroke: on ? '#ececf0' : '#8b8c94', style: on ? 'background: #26272c; box-shadow: inset 2px 0 0 #5b8cff;' : '' };
+    });
+    function rng(seed) { var s = (seed * 9301 + 49297) % 233280; return function () { s = (s * 9301 + 49297) % 233280; return s / 233280; }; }
+    var teal = ['#2e5e55', '#3c7468', '#4f8f82', '#63a597', '#7fc3b4'];
+    function prism(n, seed) {
+      var r = rng(seed), cells = {}, out = [], cs = n / 8;
+      for (var i = 0; i < n * n; i++) {
+        var x = i % n, y = Math.floor(i / n);
+        var key = Math.floor(x / (cs * 2)) + ',' + Math.floor(y / (cs * 2));
+        if (cells[key] === undefined) { cells[key] = 1 + Math.floor(r() * 3); }
+        var k = cells[key] + (r() < 0.25 ? 1 : 0) - (r() < 0.15 ? 1 : 0);
+        if (x % (cs * 4) === 0 || y % (cs * 4) === 0) { k = 0; }
+        if (k < 0) k = 0; if (k > 4) k = 4;
+        out.push({ c: teal[k] });
+      }
+      return out;
+    }
+    var canvasPx = prism(32, 11);
+    var facePx = [];
+    for (var y = 0; y < 16; y++) { for (var x = 0; x < 16; x++) { facePx.push(canvasPx[(y * 2) * 32 + x * 2]); } }
+    var vanillaPx = prism(16, 3);
+    var tiledPx = [];
+    for (var ty = 0; ty < 48; ty++) { for (var tx = 0; tx < 48; tx++) { tiledPx.push(facePx[(ty % 16) * 16 + (tx % 16)]); } }
+
+    var toolDefs = [
+      ['marquee', 'Rectangle select (M)', 'M4 4h4M12 4h4M20 4v4M20 12v4M20 20h-4M12 20H8M4 20v-4M4 12V8'],
+      ['lasso', 'Lasso (Q)', 'M12 4c5 0 8 2.5 8 5.5S16 15 12 15s-8-2.5-8-5.5S7 4 12 4zM7 14c-1 2 0 4 2 5l-1 2'],
+      ['wand', 'Magic wand (W)', 'M4 20L15 9M14 3v2M19 8h2M17 5l1.5-1.5M18 11l1.5 1.5'],
+      ['move', 'Move (V)', 'M12 3v18M3 12h18M12 3l-3 3M12 3l3 3M12 21l-3-3M12 21l3-3M3 12l3-3M3 12l3 3M21 12l-3-3M21 12l-3 3'],
+      ['pencil', 'Pencil (B)', 'M4 20l4-1L19 8l-3-3L5 16l-1 4zM14 7l3 3'],
+      ['spray', 'Spray (Shift+B)', 'M9 10h6v10H9zM10 10V7h4v3M17 5h1M19 3h1M19 7h1'],
+      ['eraser', 'Eraser (E)', 'M8 20h12M5 15l9-9 5 5-7 7H8z'],
+      ['picker', 'Eyedropper (I)', 'M4 20l2-1 8-8-2-2-8 8-1 2zM13 7l4-4 4 4-4 4'],
+      ['bucket', 'Paint bucket (G)', 'M5 11l7-7 7 7-7 7zM5 11h14M20 15c0 1.5 1 2.5 1 3.5a1 1 0 0 1-2 0c0-1 1-2 1-3.5'],
+      ['gradient', 'Gradient (Shift+G)', 'M4 4h16v16H4zM4 20L20 4'],
+      ['line', 'Line (L)', 'M5 19L19 5'],
+      ['curve', 'Curve (Shift+L)', 'M4 18C8 4 16 20 20 6'],
+      ['rect', 'Rectangle (U)', 'M5 6h14v12H5z'],
+      ['ellipse', 'Ellipse (Shift+U)', 'M4 12a8 6 0 1 0 16 0a8 6 0 1 0-16 0'],
+      ['polygon', 'Contour / polygon (D)', 'M12 4l8 6-3 10H7L4 10z'],
+      ['shade', 'Shading ink (Shift+S)', 'M12 4a8 8 0 1 0 0 16zM12 4a8 8 0 0 1 0 16'],
+      ['blur', 'Blur / jumble (R)', 'M12 4c3 4 6 7 6 10a6 6 0 0 1-12 0c0-3 3-6 6-10z'],
+      ['text', 'Text (T)', 'M5 6V4h14v2M12 4v16M9 20h6'],
+      ['hand', 'Hand (H)', 'M8 13V6a1.5 1.5 0 0 1 3 0v5M11 11V4.5a1.5 1.5 0 0 1 3 0V11M14 11V6a1.5 1.5 0 0 1 3 0v7c0 4-3 7-6 7s-5-2-7-5l-1-2a1.5 1.5 0 0 1 2.5-1.5L8 13'],
+      ['zoom', 'Zoom (Z)', 'M10 4a6 6 0 1 0 0 12a6 6 0 1 0 0-12zM14.5 14.5L20 20']
+    ];
+    var currentLabel = 'Pencil';
+    var tools = toolDefs.map(function (d) {
+      var on = self.state.tool === d[0];
+      if (on) { currentLabel = d[1].replace(/ \(.*\)$/, ''); }
+      return {
+        label: d[1], d: d[2], stroke: on ? '#0a1630' : '#c4c5cc',
+        btnStyle: on ? 'background: #5b8cff; border: 1px solid #5b8cff;' : 'background: transparent; border: 1px solid transparent;',
+        pick: function () { self.setState({ tool: d[0] }); }
+      };
+    });
+    var tabDefs = [['3d', '3D'], ['tiled', 'Tiled'], ['original', 'Original'], ['game', 'Animated']];
+    var previewTabs = tabDefs.map(function (d) {
+      var on = self.state.preview === d[0];
+      return { label: d[1], style: on ? 'background: #2c2d33; color: #ececf0;' : 'background: transparent; color: #9b9ca4;', pick: function () { self.setState({ preview: d[0] }); } };
+    });
+    var palColors = ['#0f2722', '#1d3f38', '#2e5e55', '#3c7468', '#4f8f82', '#63a597', '#7fc3b4', '#a8d6c3', '#d8ecd8', '#f4fbf6', '#c98b3f', '#8a5a2b',
+      '#243b33', '#335247', '#3b5c4f', '#58a08f', '#6bb3a2', '#5aa39a', '#8fb3aa', '#bcd3cc', '#dfe9e3', '#6f9e8a', '#cfc8b8', '#000000'];
+    var palette = palColors.map(function (c) { return { c: c, ring: c === '#7fc3b4' ? 'box-shadow: 0 0 0 2px #ececf0;' : '' }; });
+    var frames = [];
+    for (var f = 1; f <= 6; f++) {
+      frames.push({
+        n: f,
+        headStyle: f === 3 ? 'background: #5b8cff; color: #0a1630; font-weight: 600;' : '',
+        cellStyle: f === 3 ? 'background: #1c2a45; border: 1px solid #5b8cff;' : 'background: #1b1c20; border: 1px solid #2a2b30;'
+      });
+    }
+    return {
+      nav: nav, tools: tools, toolLabel: currentLabel, previewTabs: previewTabs,
+      show3d: this.state.preview === '3d', showTiled: this.state.preview === 'tiled',
+      showOriginal: this.state.preview === 'original', showGame: this.state.preview === 'game',
+      canvasPx: canvasPx, facePx: facePx, vanillaPx: vanillaPx, tiledPx: tiledPx,
+      palette: palette, frames: frames
+    };
+  }
+}
+</script>
+</body>
+</html>
